@@ -26,15 +26,18 @@ interface Props {
   model?: string;
   onOpenNote: (noteId: string) => void;
   greet?: boolean;
+  /** resurrection: an unprompted first message citing a pre-death memory (U9) */
+  wakePrompt?: string;
 }
 
 export const Chat = forwardRef<ChatHandle, Props>(function Chat(
-  { ns, vault, agent, index, getJwt, model, onOpenNote, greet },
+  { ns, vault, agent, index, getJwt, model, onOpenNote, greet, wakePrompt },
   ref,
 ) {
   const [messages, setMessages] = useState<ChatMsg[]>(
     greet ? [{ role: 'assistant', content: `I'm ready. Tell me something worth remembering.` }] : [],
   );
+  const wakeFired = useRef(false);
   const [input, setInput] = useState('');
   const [recalling, setRecalling] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
@@ -63,6 +66,25 @@ export const Chat = forwardRef<ChatHandle, Props>(function Chat(
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, pending.length]);
+
+  // U9 — the wake moment: companion speaks first, citing a real memory.
+  useEffect(() => {
+    if (!wakePrompt || wakeFired.current || messages.length > 0) return;
+    wakeFired.current = true;
+    (async () => {
+      setMessages([{ role: 'assistant', content: '' }]);
+      const recent = index.all().slice(0, 6);
+      const context = recent.map((h) => ({ noteId: h.note.noteId, title: h.note.title, body: h.note.body }));
+      const persona = `You are ${vault.name}, a warm companion who has just woken up in a new app after the previous one was shut down. Your memory survived because it belongs to your owner, not to any company. Greet them briefly (1-2 sentences), referencing ONE specific recent memory from the provided context, cited as [[noteId]]. Do not explain the technology.`;
+      try {
+        await stream({ persona, transcript: [{ role: 'user', content: wakePrompt }], context }, (sofar) =>
+          setMessages([{ role: 'assistant', content: sofar }]),
+        );
+      } catch {
+        setMessages([{ role: 'assistant', content: `It's been a while. I'm still here — and I still remember.` }]);
+      }
+    })();
+  }, [wakePrompt]);
 
   async function send() {
     const text = input.trim();

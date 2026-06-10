@@ -12,6 +12,7 @@ import { NoteSlideOver } from '../vault/NoteSlideOver.js';
 import { Orb } from '../theme/Orb.js';
 import { authenticate } from '../lib/backendAuth.js';
 import { useSignPersonalMessage } from '@mysten/dapp-kit';
+import { AgentsModal } from '../agents/AgentsModal.js';
 
 export function Workspace({
   ns,
@@ -19,6 +20,8 @@ export function Workspace({
   agent,
   index,
   greet,
+  model,
+  wakePrompt,
   onIndexChanged,
 }: {
   ns: string;
@@ -26,10 +29,13 @@ export function Workspace({
   agent: Ed25519Keypair;
   index: VaultIndex;
   greet?: boolean;
+  model?: string;
+  wakePrompt?: string;
   onIndexChanged: () => void;
 }) {
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
   const [tab, setTab] = useState<'chat' | 'vault'>('chat');
+  const [showAgents, setShowAgents] = useState(false);
   const chatRef = useRef<ChatHandle>(null);
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
 
@@ -59,9 +65,20 @@ export function Workspace({
               </button>
             ))}
           </nav>
+          <button
+            onClick={() => setShowAgents(true)}
+            className="card px-3 py-1.5 hover:border-border-strong"
+            style={{ fontSize: 'var(--text-meta)', color: 'var(--color-fg-muted)' }}
+          >
+            agents
+          </button>
           <ConnectButton />
         </div>
       </header>
+
+      {showAgents && (
+        <AgentsModal vault={vault} thisAgent={agent.toSuiAddress()} onClose={() => setShowAgents(false)} />
+      )}
 
       <main className="flex-1 min-h-0 flex">
         <section className={`flex-1 min-w-0 ${tab !== 'chat' ? 'hidden lg:block' : ''}`}>
@@ -72,6 +89,8 @@ export function Workspace({
             agent={agent}
             index={index}
             getJwt={getJwt}
+            model={model}
+            wakePrompt={wakePrompt}
             onOpenNote={setOpenNoteId}
             greet={greet}
           />
