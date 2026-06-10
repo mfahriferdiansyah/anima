@@ -12,6 +12,7 @@ export interface McpConfig {
   ownerAddress: string;
   agentName: string; // note attribution (`author` in frontmatter)
   cacheDir: string; // disposable local index cache
+  presenceUrl?: string; // optional ws:// canvas-presence relay — agent appears on the canvas
 }
 
 const HEX_ID = /^0x[0-9a-fA-F]{1,64}$/;
@@ -37,5 +38,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     ownerAddress: ownerAddress!,
     agentName: env.ANIMA_AGENT_NAME?.trim() || 'mcp-agent',
     cacheDir: env.ANIMA_CACHE_DIR?.trim() || join(homedir(), '.anima-mcp'),
+    presenceUrl: env.ANIMA_PRESENCE_URL?.trim() || undefined,
   };
 }

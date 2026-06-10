@@ -22,6 +22,7 @@ import (
 	"github.com/mfahriferdiansyah/anima/backend/internal/chat"
 	"github.com/mfahriferdiansyah/anima/backend/internal/llm"
 	"github.com/mfahriferdiansyah/anima/backend/internal/middleware"
+	"github.com/mfahriferdiansyah/anima/backend/internal/presence"
 )
 
 type config struct {
@@ -86,6 +87,9 @@ func main() {
 
 	r.Get("/auth/nonce", authSvc.HandleNonce)
 	r.Post("/auth/verify", authSvc.HandleVerify)
+
+	// ephemeral multiplayer-canvas relay — zero persistence (custody invariant)
+	r.Get("/presence", presence.NewHub().ServeHTTP)
 
 	r.Group(func(r chi.Router) {
 		r.Use(authSvc.Middleware)

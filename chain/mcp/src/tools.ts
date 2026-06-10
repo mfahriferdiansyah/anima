@@ -5,6 +5,7 @@
  */
 import { NoAccessError, serializeNote, type IndexedNote } from '../../core/src/index.js';
 import { FundingError, PairingError, pairingMessage, type VaultClient } from './vaultClient.js';
+import type { Presence } from './presence.js';
 
 type ToolResult = {
   content: { type: 'text'; text: string }[];
@@ -57,15 +58,39 @@ export async function recallTool(client: VaultClient, args: { query: string }): 
 export async function rememberTool(
   client: VaultClient,
   args: { title: string; body: string; tags?: string[] },
+  presence?: Presence,
 ): Promise<ToolResult> {
   try {
+    presence?.writing(true);
     const { note, result } = await client.write(args);
+    presence?.noteCreated(note.noteId);
     return text(
       `Remembered "${note.title}" as note ${note.noteId} (author: ${note.author}).\n` +
         `Stored on Walrus: quilt ${result.quiltBlobId}, blob object ${result.blobObjectId} (owned by the vault wallet).`,
     );
   } catch (e) {
     return errorResult(e, client);
+  } finally {
+    presence?.writing(false);
+  }
+}
+
+export async function placeNoteTool(
+  client: VaultClient,
+  args: { noteId: string; x: number; y: number },
+  presence?: Presence,
+): Promise<ToolResult> {
+  try {
+    presence?.writing(true);
+    const layout = await client.place(args.noteId, args.x, args.y);
+    presence?.noteCreated(args.noteId); // canvas peers refresh and see the move
+    return text(
+      `Placed ${args.noteId} at (${args.x}, ${args.y}). Canvas layout now covers ${Object.keys(layout).length} note(s).`,
+    );
+  } catch (e) {
+    return errorResult(e, client);
+  } finally {
+    presence?.writing(false);
   }
 }
 

@@ -10,11 +10,15 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { loadConfig } from './config.js';
 import { VaultClient } from './vaultClient.js';
-import { listNotesTool, readNoteTool, recallTool, rememberTool } from './tools.js';
+import { Presence } from './presence.js';
+import { listNotesTool, placeNoteTool, readNoteTool, recallTool, rememberTool } from './tools.js';
 
 let client: VaultClient;
+let presence: Presence;
 try {
-  client = new VaultClient(loadConfig());
+  const cfg = loadConfig();
+  client = new VaultClient(cfg);
+  presence = new Presence(cfg);
 } catch (e) {
   console.error(e instanceof Error ? e.message : String(e));
   process.exit(1);
@@ -56,7 +60,22 @@ server.registerTool(
       tags: z.array(z.string()).optional().describe('Topic tags'),
     },
   },
-  (args) => rememberTool(client, args),
+  (args) => rememberTool(client, args, presence),
+);
+
+server.registerTool(
+  'place_note',
+  {
+    title: 'Place a note on the canvas',
+    description:
+      "Position a note on the owner's multiplayer memory canvas at (x, y). Updates the durable canvas layout (a Walrus write — takes 10-20 seconds).",
+    inputSchema: {
+      noteId: z.string().describe('The note id (ULID) from recall or list_notes'),
+      x: z.number().describe('Canvas x coordinate'),
+      y: z.number().describe('Canvas y coordinate'),
+    },
+  },
+  (args) => placeNoteTool(client, args, presence),
 );
 
 server.registerTool(

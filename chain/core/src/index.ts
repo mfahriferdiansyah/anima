@@ -12,3 +12,4 @@ export { VaultIndex } from './vaultIndex.js';
 export * from './funding.js';
 export { exportVaultZip } from './exportVault.js';
 export * from './vault.js';
+export * from './canvas.js';

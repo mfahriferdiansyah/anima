@@ -11,6 +11,7 @@ import {
   createSuiClient, nodeFetchWithLongConnect,
   SealVault, writeTurn, readAll, listVaultQuilts, readVault,
   VaultIndex, newNote, preflight,
+  loadLayout, saveLayout, type CanvasLayout,
   type QuiltDeps, type IndexedNote, type Note, type WriteResult,
 } from '../../core/src/index.js';
 import type { McpConfig } from './config.js';
@@ -89,6 +90,25 @@ export class VaultClient {
     this.#fetchedAt = Date.now(); // the write-through index IS fresh as of this write
     this.#saveCache();
     return { note, result };
+  }
+
+  /** place_note: position a note on the multiplayer canvas (updates the layout note). */
+  async place(noteId: string, x: number, y: number): Promise<CanvasLayout> {
+    const index = await this.#freshIndex();
+    if (!index.get(noteId)) throw new Error(`Note ${noteId} not found in the vault — list_notes to see valid ids.`);
+
+    const pf = await preflight((await this.#connect()).suiClient, this.agentAddress);
+    if (!pf.ok) {
+      throw new FundingError(
+        `Agent address ${this.agentAddress} cannot afford the layout write — fund it with testnet SUI/WAL and retry.`,
+      );
+    }
+    const layout = loadLayout(index);
+    layout[noteId] = { x, y };
+    await saveLayout(this.#deps!, index, layout, this.#cfg.agentName);
+    this.#fetchedAt = Date.now();
+    this.#saveCache();
+    return layout;
   }
 
   async #connect(): Promise<QuiltDeps> {
