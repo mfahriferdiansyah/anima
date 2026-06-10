@@ -152,7 +152,7 @@ Market context: AI companions are a paid category ($221M consumer spend through 
 **Architecture (hybrid, user-chosen):**
 - `frontend/` React + Vite + TS + dapp-kit + Tailwind — wallet, chat, vault UI. Coolify app 1.
 - `backend/` Go (chi) — chat orchestration, LLM calls, distiller prompts, auth. Coolify app 2.
-- `chain/` TS pnpm workspace — `core/` (shared Walrus quilts + Seal + vault logic), `service/` (HTTP chain-service; Coolify app 3), `mcp/` (`anima-mcp`, stdio, runs user-side via npx — NOT hosted; it decrypts with the user's session).
+- `chain/` TS pnpm workspace — `core/` (shared Walrus quilts + Seal + vault logic), `mcp/` (`anima-mcp`, stdio, runs user-side via npx — NOT hosted; it decrypts with the user's session). [HTTP chain-service CUT at plan time, user-confirmed: an encrypted pass-through duplicates Walrus's own relay/aggregator, and a signing service would custody blobs — chain logic runs only where the user's keys live. Coolify = 2 apps.]
 - `contract/` — the only Move: Seal `seal_approve` access policy (owner + valid session).
 - Deploy: Coolify, watched-path redeploys on main; each app has its own Dockerfile.
 
