@@ -24,3 +24,6 @@ contract/build/
 .DS_Store
 .idea/
 .vscode/
+
+# spike artifacts (testnet keys — never commit keys)
+chain/core/.spike-keys.json
