@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "anima": {
+      "command": "npx",
+      "args": ["-y", "tsx", "chain/mcp/src/index.ts"],
+      "env": {
+        "ANIMA_AGENT_KEY": "REPLACE — generate + register in the ANIMA app (Settings → Connect external agent); never commit a real key",
+        "ANIMA_VAULT_ID": "REPLACE — your vault object id, shown on the same pairing screen",
+        "ANIMA_OWNER_ADDRESS": "REPLACE — the wallet address that owns the vault",
+        "ANIMA_AGENT_NAME": "claude-code"
+      },
+      "timeout": 120000
+    }
+  }
+}

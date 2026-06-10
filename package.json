@@ -9,6 +9,7 @@
     "seed": "tsx scripts/seed.ts",
     "test:chain": "vitest run --dir chain",
     "mcp:dev": "tsx chain/mcp/src/index.ts",
+    "mcp:smoke": "tsx chain/mcp/src/smoke.ts",
     "spike:core": "tsx chain/core/src/spike-core.ts"
   },
   "dependencies": {
