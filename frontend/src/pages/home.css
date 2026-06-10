@@ -1,0 +1,50 @@
+/* ============ home (U5): hero strip + graph preview + quick starts + recents ============
+   White cards on the white shell page, kit shadows carrying the separation
+   (the kit's .stage / .tree / .note treatment). Tokens only. */
+
+.home{max-width:860px;display:flex;flex-direction:column;gap:24px;}
+.hcard{background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-soft);}
+.hlabel{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--gray-600);margin-bottom:10px;}
+
+/* hero strip: orb + greeting + activity line + ask row */
+.hhero{padding:26px 28px;}
+.hhero-top{display:flex;align-items:center;gap:16px;}
+.hgreet{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:26px;letter-spacing:-.02em;line-height:1.15;}
+.hactivity{font-size:13.5px;color:var(--gray-600);margin-top:3px;}
+.hactivity .glyph{color:var(--orange-500);margin-right:6px;}
+.hactivity a{color:var(--blue-600);font-weight:600;text-decoration:none;}
+.hactivity a:hover{text-decoration:underline;}
+
+/* ask row: the kit .cinput recipe lifted out of the chat frame (no top hairline) */
+.hask{display:flex;gap:9px;margin-top:18px;}
+.hask input{flex:1;min-width:0;border:none;outline:none;background:var(--gray-100);border-radius:999px;padding:11px 18px;font-family:'Inter',sans-serif;font-size:13.5px;}
+.hask input:focus{box-shadow:0 0 0 1.5px var(--blue-600);background:#fff;}
+.hask button{border:none;cursor:pointer;width:40px;height:40px;border-radius:50%;background:var(--blue-600);color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;transition:transform var(--motion-duration-fast) ease,background var(--motion-duration-base) ease;flex:none;}
+.hask button:hover{transform:translateY(-1.5px);background:var(--blue-700);}
+.hask button:active{transform:scale(.9);}
+.hask button[disabled]{opacity:.45;pointer-events:none;}
+.hask button:focus-visible{outline:2.5px solid var(--blue-600);outline-offset:2px;}
+
+/* graph preview: hover-only, any click opens the canvas */
+.hgraph{height:280px;position:relative;overflow:hidden;cursor:pointer;}
+.hgraph canvas{display:block;}
+.hgraph-hint{position:absolute;right:14px;bottom:12px;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;color:var(--gray-600);background:rgba(255,255,255,.92);border-radius:999px;padding:4px 12px;box-shadow:var(--shadow-softer);pointer-events:none;}
+
+/* quick-start row: three card-buttons with the .btn hover lift */
+.hquick{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+.hqcard{background:#fff;border:none;border-radius:16px;box-shadow:var(--shadow-softer);padding:16px 18px;text-align:left;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:7px;font-family:'Inter',sans-serif;color:var(--ink-900);transition:transform var(--motion-duration-fast) ease,box-shadow var(--motion-duration-fast) ease;}
+.hqcard:hover{transform:translateY(-2px);box-shadow:var(--shadow-soft);}
+.hqcard:active{transform:translateY(0);}
+.hqcard:focus-visible{outline:2.5px solid var(--blue-600);outline-offset:2px;}
+.hqcard svg{width:18px;height:18px;color:var(--blue-600);}
+.hqcard .qt{font-weight:700;font-size:14px;}
+.hqcard .qd{font-size:12.5px;color:var(--gray-600);line-height:1.45;}
+
+/* recents: kit .trow treatment in a card */
+.hrecents{padding:8px;}
+.hrow{display:flex;align-items:center;gap:8px;width:100%;border:none;background:transparent;cursor:pointer;padding:9px 12px;border-radius:9px;font-family:'Inter',sans-serif;font-size:13.5px;color:var(--ink-900);text-align:left;transition:background var(--motion-duration-fast) ease;}
+.hrow:hover{background:var(--gray-100);}
+.hrow:focus-visible{outline:2.5px solid var(--blue-600);outline-offset:1px;}
+.hrow .ht{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.hrow .hg{color:var(--orange-500);flex:none;font-size:12px;}
+.hrow .hage{margin-left:auto;flex:none;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--gray-600);}
