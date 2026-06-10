@@ -1,0 +1,26 @@
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# node
+node_modules/
+dist/
+.pnpm-store/
+*.tsbuildinfo
+
+# go
+backend/bin/
+backend/tmp/
+
+# move
+contract/build/
+
+# local caches (retrieval index is disposable — canonical memory lives on Walrus)
+.cache/
+*.index
+
+# os/editor
+.DS_Store
+.idea/
+.vscode/
