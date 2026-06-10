@@ -1,0 +1,21 @@
+{
+  "funding": "ok",
+  "write": {
+    "ms": 10147,
+    "blobId": "N3WqO-1357KzxUzU-F46AIUHndvFkahZM2BNTRp6oa0",
+    "quiltPatchIds": [
+      "N3WqO-1357KzxUzU-F46AIUHndvFkahZM2BNTRp6oa0BAQACAA",
+      "N3WqO-1357KzxUzU-F46AIUHndvFkahZM2BNTRp6oa0BAgADAA"
+    ]
+  },
+  "read": {
+    "ms": 1157,
+    "identical": true
+  },
+  "optionA": "FAILED: Invalid user signature: Required Signature from 0x41af880776e8f2bccddce6920fb5f160aa33abd5d96963c4bc41ebaec5aded39 is absent [\"0x041b88fe027ebf92220d642bb934e7e2cd4d8a49b2013bc4941385dc583baf70\"]",
+  "optionB": {
+    "transferred": true,
+    "walletDeleted": true
+  },
+  "postDeleteRead": "served-from-cache"
+}

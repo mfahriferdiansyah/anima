@@ -1,0 +1,13 @@
+{
+  "packageId": "0xdd5609e700b89eae1c11948e89bc45c506ee3a3a1a025d4eaad964c7203108d4",
+  "vaultId": "0x9819ad4c8503b347b1b631bdc597326b01deb26fa5294c6088f48241ddff0a52",
+  "keystone": {
+    "ok": true,
+    "text": "keystone proof: anima memory",
+    "ms": 712
+  },
+  "outsiderDenied": true,
+  "ownerOk": true,
+  "revokedCachedStillServes": false,
+  "revokedFreshDenied": true
+}

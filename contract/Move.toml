@@ -1,0 +1,6 @@
+[package]
+name = "anima"
+edition = "2024.beta"
+
+[addresses]
+anima = "0x0"
