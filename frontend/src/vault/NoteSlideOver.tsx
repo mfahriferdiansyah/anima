@@ -5,7 +5,7 @@
  */
 import { useState } from 'react';
 import type { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { editedNote, writeTurn, type VaultInfo, type VaultIndex } from '@core/index.js';
+import { editedNote, writeTurn, ensureAgentWal, type VaultInfo, type VaultIndex } from '@core/index.js';
 import { getSuiClient, getSealVault, persistIndex } from '../lib/chain.js';
 
 export function NoteSlideOver({
@@ -43,6 +43,7 @@ export function NoteSlideOver({
       onChanged();
       setEditing(false);
       // then persist to Walrus silently (new version, new quilt)
+      await ensureAgentWal(suiClient, agent).catch(() => void 0);
       const result = await writeTurn(deps, [v2]);
       index.upsert(v2, {
         quiltPatchId: result.perNote[0].quiltPatchId,

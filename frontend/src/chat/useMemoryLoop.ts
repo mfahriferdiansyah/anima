@@ -7,7 +7,7 @@
 import { useCallback, useRef, useState } from 'react';
 import type { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import {
-  newNote, writeTurn, preflight, type Note, type VaultInfo, VaultIndex,
+  newNote, writeTurn, preflight, ensureAgentWal, type Note, type VaultInfo, VaultIndex,
 } from '@core/index.js';
 import { getSuiClient, getSealVault, persistIndex } from '../lib/chain.js';
 import type { PendingNote } from './NoteToast.js';
@@ -43,6 +43,8 @@ export function useMemoryLoop(opts: {
       };
       try {
         setStates(notes, 'encrypting');
+        // self-heal: paired devices get SUI from the wallet but must swap their own WAL
+        await ensureAgentWal(suiClient, opts.agent).catch(() => void 0);
         // preflight (edge #7): surface top-up instead of a mysterious failure
         const pf = await preflight(suiClient, opts.agent.toSuiAddress());
         setLowBalance(!pf.ok);

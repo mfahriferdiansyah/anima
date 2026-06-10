@@ -43,6 +43,20 @@ export async function faucetSui(addr: string): Promise<void> {
   await requestSuiFromFaucetV2({ host: getFaucetHost(chainConfig.network as 'testnet'), recipient: addr });
 }
 
+/**
+ * Self-healing storage budget: if the agent has SUI but no WAL, silently
+ * exchange a little (agent signs — no popup). Returns true if a swap ran.
+ * Fixes the paired-device path where the wallet funds SUI only.
+ */
+export async function ensureAgentWal(suiClient: any, agent: Signer): Promise<boolean> {
+  const addr = agent.toSuiAddress();
+  const [sui, wal] = await Promise.all([suiBalance(suiClient, addr), walBalance(suiClient, addr)]);
+  if (wal.balance >= MIN_AGENT_WAL) return false;
+  if (sui < 250_000_000n) return false; // not enough to swap and keep gas — preflight banner handles it
+  await exchangeSuiForWal(suiClient, agent, 150_000_000n);
+  return true;
+}
+
 /** Programmatic `walrus get-wal`: swap SUI 1:1 for WAL via the official exchange. */
 export async function exchangeSuiForWal(suiClient: any, signer: Signer, amountMist: bigint): Promise<string> {
   const exId = TESTNET_WALRUS_PACKAGE_CONFIG.exchangeIds![0];

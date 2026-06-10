@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 import type { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import {
-  buildForgetPlan, buildDeleteQuiltsTx, writeTurn,
+  buildForgetPlan, buildDeleteQuiltsTx, writeTurn, ensureAgentWal,
   type VaultInfo, type VaultIndex,
 } from '@core/index.js';
 import { getSuiClient, getSealVault, persistIndex } from '../lib/chain.js';
@@ -42,6 +42,7 @@ export function ForgetDialog({
       // 1) survivors first — silent agent write
       if (plan.survivors.length > 0) {
         setPhase('rewriting');
+        await ensureAgentWal(suiClient, agent).catch(() => void 0);
         const result = await writeTurn(deps, plan.survivors);
         for (const [i, n] of plan.survivors.entries()) {
           index.upsert(n, {
