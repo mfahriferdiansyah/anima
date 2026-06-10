@@ -22,17 +22,10 @@
 .shell-addr{font-size:12.5px;color:var(--gray-600);}
 .shell-page{flex:1;padding:28px 32px;overflow:auto;}
 
-/* placeholder pages (replaced in U4-U10) */
+/* placeholder pages (replaced in U5-U10) */
 .page-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:22px;letter-spacing:-.01em;}
 .page-note{display:block;margin-top:10px;font-size:12.5px;color:var(--gray-600);}
 .empty .btn{margin-top:16px;}
-.land-mark{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:26px;letter-spacing:-.02em;}
-.land-mark .star{color:var(--orange-500);font-size:.62em;vertical-align:.32em;}
-
-/* session gate placeholder (U4 replaces its internals) */
-.gate{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
-.gate-phase{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:19px;}
-.gate-detail{font-size:13.5px;color:var(--gray-600);}
 
 /* write toasts live bottom-left so the orb corner stays free (U1 handoff note) */
 #toaststack{right:auto;left:20px;}

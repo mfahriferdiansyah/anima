@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { Link, Navigate, Route, Routes, useParams } from 'react-router-dom';
-import { BRAND_NAME } from '@/brand';
+import { Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { startSession, useVaultSession } from '@/hooks/useVaultSession';
-import type { SessionState } from '@/hooks/useVaultSession';
+import { Landing } from '@/pages/Landing';
+import { SessionGate } from '@/pages/SessionStates';
 import { AppShell } from './AppShell';
 
 /** Placeholder page body: real pages land in U4-U10. */
@@ -21,44 +21,12 @@ function PlaceholderPage({ name, blurb, children }: { name: string; blurb: strin
   );
 }
 
-function LandingPlaceholder() {
-  return (
-    <div className="gate">
-      <div className="land-mark">
-        {BRAND_NAME}
-        <span className="star" aria-hidden="true">✦</span>
-      </div>
-      <div className="empty">
-        <div className="et">Landing</div>
-        <div className="ed">The cold open arrives in a later unit. Your memories, your keys, your companion.</div>
-        <Link className="btn btn-primary" to="/app">
-          Open the workspace
-        </Link>
-      </div>
-    </div>
-  );
-}
-
 function NotesPlaceholder() {
   const { noteId } = useParams();
   return (
     <PlaceholderPage name="Notes" blurb="The note tree and the editor frame arrive here.">
       {noteId ? <span className="mono page-note">Selected note: {noteId}</span> : null}
     </PlaceholderPage>
-  );
-}
-
-type GateSession = Exclude<SessionState, { phase: 'ready' } | { phase: 'disconnected' }>;
-
-/** Session-state placeholder: U4 replaces the internals, the contract is the phase switch in AppGate. */
-function SessionGate({ session }: { session: GateSession }) {
-  const detail = session.phase === 'rebuilding' ? `quilt ${session.done} of ${session.total}` : null;
-  return (
-    <div className="gate" role="status">
-      <span className="spin" aria-hidden="true">✦</span>
-      <div className="gate-phase">{session.phase}</div>
-      {detail ? <div className="gate-detail mono">{detail}</div> : null}
-    </div>
   );
 }
 
@@ -90,7 +58,7 @@ function AppGate() {
 export function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<LandingPlaceholder />} />
+      <Route path="/" element={<Landing />} />
       <Route path="/app" element={<AppGate />}>
         <Route index element={<PlaceholderPage name="Home" blurb="The living dashboard arrives here: greeting, graph preview, quick starts and recents." />} />
         <Route path="companion" element={<PlaceholderPage name="Companion" blurb="The full conversation surface arrives here." />} />
