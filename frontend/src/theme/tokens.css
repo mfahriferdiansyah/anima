@@ -1,0 +1,72 @@
+/* ANIMA theme — clean futurist (Linear/Geist discipline) with ONE living element (the orb).
+   Committed values per plan: near-black canvas, hairline borders, 3-size type scale. */
+@import 'tailwindcss';
+
+@theme {
+  /* canvas + surfaces */
+  --color-canvas: #0a0a0b;
+  --color-surface: #111113;
+  --color-surface-2: #18181b;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.16);
+
+  /* text */
+  --color-fg: #ededef;
+  --color-fg-muted: #8b8b93;
+  --color-fg-faint: #5b5b63;
+
+  /* the soul accent (violet → cyan) — used SPARINGLY */
+  --color-soul-violet: #8b5cf6;
+  --color-soul-cyan: #22d3ee;
+  --color-danger: #f87171;
+  --color-ok: #34d399;
+
+  /* type scale (3 sizes + weights) */
+  --text-title: 1.125rem; /* 18px, weight 600 */
+  --text-body: 0.875rem; /* 14px, weight 400 */
+  --text-meta: 0.75rem; /* 12px, weight 400, muted */
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+html.dark body {
+  background: var(--color-canvas);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* the breathing orb — pulse keyframes (calm: 4s breathe; recall: 1.2s pulse) */
+@keyframes orb-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+@keyframes orb-recall {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 24px rgba(139, 92, 246, 0.35); }
+  50% { transform: scale(1.18); box-shadow: 0 0 48px rgba(34, 211, 238, 0.5); }
+}
+@keyframes orb-wake {
+  0% { transform: scale(0.6); opacity: 0.2; filter: blur(4px); }
+  60% { transform: scale(1.15); opacity: 1; filter: blur(0); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.orb {
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 35%, var(--color-soul-cyan), var(--color-soul-violet) 70%);
+  animation: orb-breathe 4s ease-in-out infinite;
+}
+.orb--recall { animation: orb-recall 1.2s ease-in-out infinite; }
+.orb--wake { animation: orb-wake 1.4s ease-out forwards; }
+
+/* note glow when cited */
+.note-glow { box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.5), 0 0 24px rgba(139, 92, 246, 0.15); }
+
+/* hairline card */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
