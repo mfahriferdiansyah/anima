@@ -13,6 +13,7 @@ import { Orb } from '../theme/Orb.js';
 import { authenticate } from '../lib/backendAuth.js';
 import { useSignPersonalMessage } from '@mysten/dapp-kit';
 import { AgentsModal } from '../agents/AgentsModal.js';
+import { CanvasView } from '../canvas/CanvasView.js';
 
 export function Workspace({
   ns,
@@ -34,7 +35,7 @@ export function Workspace({
   onIndexChanged: () => void;
 }) {
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
-  const [tab, setTab] = useState<'chat' | 'vault'>('chat');
+  const [tab, setTab] = useState<'chat' | 'canvas' | 'vault'>('chat');
   const [showAgents, setShowAgents] = useState(false);
   const chatRef = useRef<ChatHandle>(null);
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
@@ -54,14 +55,14 @@ export function Workspace({
         </div>
         <div className="flex items-center gap-3">
           <nav className="card flex p-0.5" style={{ fontSize: 'var(--text-meta)' }}>
-            {(['chat', 'vault'] as const).map((t) => (
+            {(['chat', 'canvas', 'vault'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
                 className="px-3 py-1.5 rounded-lg"
                 style={tab === t ? { background: 'var(--color-surface-2)', fontWeight: 600 } : { color: 'var(--color-fg-muted)' }}
               >
-                {t === 'chat' ? 'companion' : 'vault'}
+                {t === 'chat' ? 'companion' : t}
               </button>
             ))}
           </nav>
@@ -81,6 +82,12 @@ export function Workspace({
       )}
 
       <main className="flex-1 min-h-0 flex">
+        {tab === 'canvas' ? (
+          <section className="flex-1 min-w-0">
+            <CanvasView ns={ns} vault={vault} agent={agent} index={index} onOpenNote={setOpenNoteId} />
+          </section>
+        ) : (
+        <>
         <section className={`flex-1 min-w-0 ${tab !== 'chat' ? 'hidden lg:block' : ''}`}>
           <Chat
             ref={chatRef}
@@ -108,6 +115,8 @@ export function Workspace({
             scrubTranscript={(titles) => chatRef.current?.scrubFromTranscript(titles)}
           />
         </aside>
+        </>
+        )}
       </main>
 
       {openNoteId && (
