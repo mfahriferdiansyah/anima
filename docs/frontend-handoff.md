@@ -86,6 +86,19 @@ Every hook's return shape is plain data — mock with fixtures:
 - peers: 2-3 fake peers with sin/cos cursor motion; one `kind:'agent'`, `writing:true`
 Then integration = me replacing fixture imports with the real hooks (≈ a day).
 
+## IA decisions (user-confirmed 2026-06-10)
+
+- **Onboarding = one modal ceremony**: connect → name companion → PTB signature
+  → auth message signature chained in the same gesture (silent WAL swap behind a
+  "preparing…" state). Two signatures total, once ever.
+- **Login**: autoConnect; JWT re-auth = one message signature when expired;
+  fresh device = one-button "pair this device" modal.
+- **Settings holds standing state**: agents & devices (pair/REVOKE), balances +
+  top-up, export vault, danger-zone copy. **Forget stays contextual** (select
+  memories in vault/note views → enumerate → wallet confirm); **unpublish stays
+  on the note's share panel**. Rule: destructive = wallet signature = shared
+  "danger" visual language, wherever it appears.
+
 ## Non-negotiables for any skin (the pitch depends on them)
 1. Write-state visibility (encrypting→certifying→certified+provenance link) — judges probe it.
 2. Wallet-gate ONLY on destructive ops (forget/revoke/unpublish) — celebrate the asymmetry in copy.
