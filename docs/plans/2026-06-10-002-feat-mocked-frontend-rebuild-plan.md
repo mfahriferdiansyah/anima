@@ -1,7 +1,7 @@
 ---
 title: "feat: Mocked frontend rebuild (kit-faithful React app)"
 type: feat
-status: active
+status: completed
 date: 2026-06-10
 origin: docs/brainstorms/2026-06-10-frontend-surface-map-requirements.md
 ---
