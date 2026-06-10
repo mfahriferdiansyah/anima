@@ -7,6 +7,7 @@ import type { ToastItem } from '@/components/ToastStack';
 import { createNote, saveNote, useVault } from '@/hooks/useVault';
 import type { Note } from '@/hooks/useVault';
 import { clearSuggestion, useAgentTimeline } from '@/hooks/useAgentTimeline';
+import { ShareDialog } from './ShareDialog';
 
 /* ---------- markdown-lite: fixture bodies -> kit-classed blocks ---------- */
 
@@ -253,6 +254,7 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
   const [pop, setPop] = useState<{ prefix: string; left: number; top: number } | null>(null);
   const [popIndex, setPopIndex] = useState(0);
   const [fading, setFading] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const blocks = useMemo(() => parseBlocks(note.body), [note.body]);
@@ -465,9 +467,6 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
     saveNote(note.noteId, { title, body });
   };
 
-  // TODO(U8): replace this stub with the share dialog.
-  const share = () => pushInfo('Sharing is not built yet', 'The share dialog lands in the next build');
-
   /* ----- agent suggestion block (never auto-applies, P5) ----- */
 
   const targeted = suggestion && suggestion.targetNoteId === note.noteId ? suggestion : null;
@@ -637,7 +636,7 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
             <span>rev {note.version}</span>
           )}
           <span className="edactions">
-            <Button variant="quiet" size="sm" onClick={share}>
+            <Button variant="quiet" size="sm" onClick={() => setSharing(true)}>
               Share
             </Button>
             <Button variant="primary" size="sm" onClick={save}>
@@ -723,6 +722,13 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
           </button>
         </div>
       ) : null}
+
+      <ShareDialog
+        open={sharing}
+        onClose={() => setSharing(false)}
+        noteId={note.noteId}
+        title={note.title || 'Untitled note'}
+      />
 
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
