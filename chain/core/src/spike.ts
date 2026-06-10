@@ -37,7 +37,7 @@ const suiClient = new SuiJsonRpcClient({
         undiciFetch(url, {
           ...init,
           dispatcher: new Agent({ connectTimeout: 60_000 }),
-        })) as typeof globalThis.fetch,
+        })) as unknown as typeof globalThis.fetch,
     },
   }),
 );

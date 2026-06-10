@@ -7,9 +7,18 @@ module anima::vault;
 use std::string::String;
 use sui::vec_set::{Self, VecSet};
 use sui::bcs;
+use sui::event;
 
 const ENoAccess: u64 = 1;
 const ENotOwner: u64 = 2;
+
+/// Emitted at creation — the discovery handle for resurrection:
+/// a fresh client finds the wallet's vault by querying this event type.
+public struct VaultCreated has copy, drop {
+    vault_id: ID,
+    owner: address,
+    name: String,
+}
 
 public struct Vault has key {
     id: UID,
@@ -31,6 +40,7 @@ public fun create_vault(name: String, first_agent: address, ctx: &mut TxContext)
         agents,
     };
     let id = object::id(&vault);
+    event::emit(VaultCreated { vault_id: id, owner: ctx.sender(), name: vault.name });
     transfer::share_object(vault);
     id
 }

@@ -1,6 +1,6 @@
 {
   "network": "testnet",
-  "packageId": "0x693365cd04974baaa216434c8bb29dcddad2a8750ef5f66af62acb545f30ba35",
+  "packageId": "0x52e02b193cb65c96f1545f6b4cff944f316f406931a550b7d13d40b4ff06e298",
   "vaultModule": "vault",
   "keyServers": [
     { "objectId": "0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75", "weight": 1 },

@@ -8,17 +8,20 @@
     "spike:seal": "tsx chain/core/src/spike-seal.ts",
     "seed": "tsx scripts/seed.ts",
     "test:chain": "vitest run --dir chain",
-    "mcp:dev": "tsx chain/mcp/src/index.ts"
+    "mcp:dev": "tsx chain/mcp/src/index.ts",
+    "spike:core": "tsx chain/core/src/spike-core.ts"
   },
   "dependencies": {
+    "@mysten/seal": "^1.1.3",
     "@mysten/sui": "^2.16.2",
     "@mysten/walrus": "^1.1.7",
-    "@mysten/seal": "^1.1.3"
+    "fflate": "^0.8.3"
   },
   "devDependencies": {
+    "@types/node": "^25.9.2",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
-    "vitest": "^3.0.0",
-    "undici": "^7.0.0"
+    "undici": "^7.0.0",
+    "vitest": "^3.0.0"
   }
 }
