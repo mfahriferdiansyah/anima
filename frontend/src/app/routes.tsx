@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { startSession, useVaultSession } from '@/hooks/useVaultSession';
+import { Canvas } from '@/pages/Canvas';
 import { Companion } from '@/pages/Companion';
 import { Home } from '@/pages/Home';
 import { Landing } from '@/pages/Landing';
@@ -55,7 +56,7 @@ export function AppRoutes() {
         <Route index element={<Home />} />
         <Route path="companion" element={<Companion />} />
         <Route path="notes/:noteId?" element={<Notes />} />
-        <Route path="canvas" element={<PlaceholderPage name="Canvas" blurb="The shared constellation arrives here." />} />
+        <Route path="canvas" element={<Canvas />} />
         <Route path="settings" element={<PlaceholderPage name="Settings" blurb="Identity, devices, balances and export arrive here." />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

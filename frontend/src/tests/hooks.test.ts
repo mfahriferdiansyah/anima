@@ -22,8 +22,9 @@ import {
 } from '../mocks/vaultStore';
 import { resetWriteStateStore, writeStateStore } from '../mocks/writeStateStore';
 import { chatStore, resetChatStore, send, sendOnOpen, type ChatMessage } from '../mocks/chatStore';
-import { resetAgentTimeline } from '../mocks/agentTimeline';
-import { chatScripts, makeVault } from '../mocks/fixture';
+import { resetAgentTimeline, scheduleAgentNote } from '../mocks/agentTimeline';
+import { moveNote, presenceStore, resetPresenceStore } from '../mocks/presenceStore';
+import { chatScripts, makeVault, materializeNoteSeed } from '../mocks/fixture';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -32,6 +33,7 @@ beforeEach(() => {
   resetWriteStateStore();
   resetChatStore();
   resetAgentTimeline();
+  resetPresenceStore();
 });
 
 afterEach(() => {
@@ -153,6 +155,54 @@ describe('vaultStore: write states (AE4)', () => {
     const events = writeStateStore.getSnapshot().events;
     expect(events).toHaveLength(2);
     expect(events[events.length - 1].state.phase).toBe('certified');
+  });
+});
+
+describe('presenceStore: canvas layout (U9)', () => {
+  it('moveNote applies immediately and the layout outlives the save pulse', async () => {
+    const savingSeen: boolean[] = [];
+    presenceStore.subscribe(() => {
+      savingSeen.push(presenceStore.getSnapshot().savingLayout);
+    });
+
+    moveNote('n-walrus', 333, 444);
+    expect(presenceStore.getSnapshot().layout['n-walrus']).toEqual({ x: 333, y: 444 });
+    expect(presenceStore.getSnapshot().savingLayout).toBe(false);
+
+    // dragging keeps resetting the debounce; only the final position saves
+    moveNote('n-walrus', 350, 460);
+    await vi.advanceTimersByTimeAsync(850);
+    expect(presenceStore.getSnapshot().savingLayout).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(650);
+    expect(presenceStore.getSnapshot().savingLayout).toBe(false);
+    expect(presenceStore.getSnapshot().layout['n-walrus']).toEqual({ x: 350, y: 460 });
+    // exactly one pulse: false* -> true -> false
+    expect(savingSeen.filter((value, i) => value && !savingSeen[i - 1])).toHaveLength(1);
+  });
+
+  it('scheduleAgentNote materializes a placed agent note ~6s in, then the flag clears', async () => {
+    loadNotes(makeVault());
+    scheduleAgentNote();
+    scheduleAgentNote(); // idempotent: the beat fires once
+    expect(presenceStore.getSnapshot().materializedNoteId).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(6100);
+    const materializedId = presenceStore.getSnapshot().materializedNoteId;
+    expect(materializedId).toBeTruthy();
+    if (!materializedId) return;
+
+    const note = vaultStore.getSnapshot().notes.find((entry) => entry.noteId === materializedId);
+    expect(note?.title).toBe(materializeNoteSeed.title);
+    expect(note?.author).toBe('agent:nova');
+    expect(presenceStore.getSnapshot().layout[materializedId]).toEqual({
+      x: materializeNoteSeed.x,
+      y: materializeNoteSeed.y,
+    });
+    expect(vaultStore.getSnapshot().notes).toHaveLength(13);
+
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(presenceStore.getSnapshot().materializedNoteId).toBeNull();
   });
 });
 
