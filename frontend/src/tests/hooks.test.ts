@@ -21,7 +21,7 @@ import {
   vaultStore,
 } from '../mocks/vaultStore';
 import { resetWriteStateStore, writeStateStore } from '../mocks/writeStateStore';
-import { chatStore, resetChatStore, send, type ChatMessage } from '../mocks/chatStore';
+import { chatStore, resetChatStore, send, sendOnOpen, type ChatMessage } from '../mocks/chatStore';
 import { resetAgentTimeline } from '../mocks/agentTimeline';
 import { chatScripts, makeVault } from '../mocks/fixture';
 
@@ -184,5 +184,20 @@ describe('chatStore: shared conversation (AE3)', () => {
     expect(seenA).not.toBeNull();
     expect(seenA).toBe(seenB);
     expect(seenA).toBe(messages);
+  });
+
+  it('sendOnOpen opens the popup and a draft reply records the created note', async () => {
+    sendOnOpen('draft a checklist for demo day');
+    expect(chatStore.getSnapshot().chatOpen).toBe(true);
+    expect(chatStore.getSnapshot().thinking).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(20000);
+
+    const reply = chatStore.getSnapshot().messages[1];
+    expect(reply.role).toBe('agent');
+    expect(reply.createdNoteId).toBeDefined();
+    expect(reply.citations?.[0]).toBe(reply.createdNoteId);
+    // popup was open the whole time, so no orb badge
+    expect(chatStore.getSnapshot().pendingBadge).toBe(false);
   });
 });

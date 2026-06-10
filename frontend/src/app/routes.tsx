@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { startSession, useVaultSession } from '@/hooks/useVaultSession';
+import { Companion } from '@/pages/Companion';
 import { Landing } from '@/pages/Landing';
 import { SessionGate } from '@/pages/SessionStates';
 import { AppShell } from './AppShell';
@@ -61,7 +62,7 @@ export function AppRoutes() {
       <Route path="/" element={<Landing />} />
       <Route path="/app" element={<AppGate />}>
         <Route index element={<PlaceholderPage name="Home" blurb="The living dashboard arrives here: greeting, graph preview, quick starts and recents." />} />
-        <Route path="companion" element={<PlaceholderPage name="Companion" blurb="The full conversation surface arrives here." />} />
+        <Route path="companion" element={<Companion />} />
         <Route path="notes/:noteId?" element={<NotesPlaceholder />} />
         <Route path="canvas" element={<PlaceholderPage name="Canvas" blurb="The shared constellation arrives here." />} />
         <Route path="settings" element={<PlaceholderPage name="Settings" blurb="Identity, devices, balances and export arrive here." />} />

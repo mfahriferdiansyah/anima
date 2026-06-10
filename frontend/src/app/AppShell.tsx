@@ -1,12 +1,13 @@
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { BRAND_NAME } from '@/brand';
 import { Button } from '@/components/Button';
 import { Orb } from '@/components/Orb';
 import { disconnect } from '@/hooks/useVaultSession';
 import type { SessionState } from '@/hooks/useVaultSession';
-import { closePopup, openPopup, setOnCompanionRoute, useChat } from '@/hooks/useChat';
+import { closePopup, expandPopup, openPopup, setOnCompanionRoute, useChat } from '@/hooks/useChat';
+import { ChatMessages } from '@/pages/ChatMessages';
 
 export type ReadySession = Extract<SessionState, { phase: 'ready' }>;
 
@@ -90,10 +91,13 @@ const NAV: Array<{ to: string; label: string; end?: boolean; icon: ReactNode }> 
 
 /**
  * Floating popup-chat orb: hidden on the Companion route, reports route
- * changes to the chat store, toggles a placeholder panel (U6 fills it).
+ * changes to the chat store, opens the compact panel above itself. The
+ * panel lives here (above the Outlet) so it persists across routes;
+ * expand closes it and hands the shared transcript to the Companion page.
  */
-function ChatOrb() {
+function ChatOrb({ agentName }: { agentName: string }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const onCompanion = location.pathname.startsWith('/app/companion');
   const chat = useChat();
 
@@ -104,20 +108,51 @@ function ChatOrb() {
 
   if (onCompanion) return null;
 
+  const expand = () => {
+    expandPopup();
+    navigate('/app/companion');
+  };
+
   return (
     <>
       {chat.chatOpen ? (
         <div className="orbpanel">
-          <div className="dialog">
-            <div className="dh">
-              <div className="dt">Quick chat</div>
-              <div className="dd2">Ask anywhere. The conversation panel arrives in a later unit.</div>
+          <div className="chat chat-popup">
+            <div className="chead">
+              <span className="cglyph" aria-hidden="true">✧</span> {agentName}
+              <div className="chead-actions">
+                <button type="button" className="chx" aria-label="Open the Companion page" onClick={expand}>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M15 3h6v6" />
+                    <path d="m21 3-7 7" />
+                    <path d="M9 21H3v-6" />
+                    <path d="m3 21 7-7" />
+                  </svg>
+                </button>
+                <button type="button" className="chx" aria-label="Close quick chat" onClick={closePopup}>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
-            <div className="db">
-              <Button variant="quiet" size="sm" onClick={closePopup}>
-                Close
-              </Button>
-            </div>
+            <ChatMessages variant="popup" agentName={agentName} />
           </div>
         </div>
       ) : null}
@@ -175,7 +210,7 @@ export function AppShell({ session }: { session: ReadySession }) {
           <Outlet />
         </main>
       </div>
-      <ChatOrb />
+      <ChatOrb agentName={session.agent.name} />
     </div>
   );
 }

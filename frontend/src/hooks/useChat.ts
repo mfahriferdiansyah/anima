@@ -8,6 +8,7 @@ export function useChat(): ChatState {
 
 export {
   send,
+  sendOnOpen,
   openPopup,
   closePopup,
   expandPopup,

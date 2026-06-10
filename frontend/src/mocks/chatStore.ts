@@ -20,6 +20,8 @@ export interface ChatMessage {
   streaming?: boolean;
   /** noteIds the reply cites; UI renders them as citation chips. */
   citations?: string[];
+  /** Set when the reply created and sealed a note; the footer reports it. */
+  createdNoteId?: string;
 }
 
 export interface ChatState {
@@ -85,10 +87,12 @@ export function send(text: string): void {
     if (token !== streamToken) return;
     const script = chatScripts[intent];
     let citations = [...script.citations];
+    let createdNoteId: string | undefined;
     if (intent === 'draft' && script.note) {
       const draftId = createNote(AGENT_AUTHOR);
       saveNote(draftId, { ...script.note });
       citations = [draftId, ...citations];
+      createdNoteId = draftId;
       appendTimelineEvent('draft', `Nova drafted ${script.note.title}`, [draftId]);
     }
     const replyId = nextId();
@@ -96,7 +100,7 @@ export function send(text: string): void {
       ...prev,
       messages: [
         ...prev.messages,
-        { id: replyId, role: 'agent', text: '', at: nowIso(), streaming: true, citations },
+        { id: replyId, role: 'agent', text: '', at: nowIso(), streaming: true, citations, createdNoteId },
       ],
     }));
     const words = script.text.split(' ');
@@ -132,6 +136,13 @@ export function appendEventMessage(text: string): void {
 
 export function openPopup(): void {
   store.update((prev) => ({ ...prev, chatOpen: true, pendingBadge: false }));
+}
+
+/** Home's ask-input handoff (U5): open the popup and send in one action. */
+export function sendOnOpen(text: string): void {
+  if (!text.trim()) return;
+  openPopup();
+  send(text);
 }
 
 export function closePopup(): void {

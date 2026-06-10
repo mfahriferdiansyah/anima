@@ -33,11 +33,11 @@
 /* mock wallet dialog */
 .wallet-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;}
 
-/* popup chat orb + placeholder panel (above the MOCKED badge) */
+/* popup chat orb + compact chat panel (above the MOCKED badge) */
 .orbfab{position:fixed;right:22px;bottom:64px;z-index:85;width:50px;height:50px;border:none;border-radius:50%;background:#fff;box-shadow:var(--shadow-soft);cursor:pointer;display:flex;align-items:center;justify-content:center;}
 .orbfab:focus-visible{outline:2.5px solid var(--blue-600);outline-offset:2px;}
-.orbpanel{position:fixed;right:22px;bottom:126px;z-index:85;width:300px;}
-.orbpanel .dialog{animation:modalin var(--motion-duration-slow) var(--motion-easing-enter);}
+.orbpanel{position:fixed;right:22px;bottom:126px;z-index:85;width:380px;}
+.orbpanel .chat{max-height:480px;animation:modalin var(--motion-duration-slow) var(--motion-easing-enter);}
 
 /* MOCKED badge + scenario switcher */
 .mocked{position:fixed;right:20px;bottom:20px;z-index:95;border:none;cursor:pointer;}

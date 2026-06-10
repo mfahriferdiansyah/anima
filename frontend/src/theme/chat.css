@@ -1,0 +1,85 @@
+/* =====================================================
+   CHAT · ported from anima-components.html section 11.
+   Class names preserved 1:1. One deliberate change: the
+   kit fixes .cmsgs at 300px; the app flexes it per
+   variant (page fills the shell, popup is ~360px).
+   .anim/msgin and shimmer keyframes live in components.css.
+   ===================================================== */
+.chat{background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-soft);display:flex;flex-direction:column;overflow:hidden;}
+.chat .chead{display:flex;align-items:center;gap:9px;padding:13px 18px;box-shadow:0 1px 0 var(--gray-200);font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14.5px;}
+.chead .cglyph{color:var(--orange-500);}
+.chead .count-pill{margin-left:auto;}
+.chead-actions{margin-left:auto;display:flex;gap:2px;}
+.chx{border:none;background:transparent;cursor:pointer;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--gray-600);transition:background var(--motion-duration-fast) ease;}
+.chx:hover{background:var(--gray-100);color:var(--ink-900);}
+.chx:focus-visible{outline:2.5px solid var(--blue-600);outline-offset:1px;}
+.chx svg{width:14px;height:14px;}
+
+.cmsgs{padding:18px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;overscroll-behavior:contain;}
+.cmsgs::-webkit-scrollbar{width:5px;}
+.cmsgs::-webkit-scrollbar-thumb{background:var(--gray-200);border-radius:3px;}
+.cmsgs-page{flex:1;}
+.cmsgs-popup{height:360px;}
+
+.cmsg{display:flex;gap:9px;max-width:88%;}
+.cmsg.human{align-self:flex-end;flex-direction:row-reverse;}
+.cmsg .cav{width:26px;height:26px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;margin-top:2px;}
+.cav-human{background:var(--pink-500);}
+.cav-agent{background:var(--ink-900);color:var(--orange-500);}
+.cmsg .cb{border-radius:14px;padding:9px 13px;font-size:13.5px;line-height:1.5;}
+.cmsg.human .cb{background:var(--blue-600);color:#fff;border-bottom-right-radius:5px;}
+.cmsg.agent .cb{background:var(--gray-100);border-bottom-left-radius:5px;}
+.cmsg .cwho{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--gray-600);margin-bottom:3px;}
+.cmsg .cfoot{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--gray-600);margin-top:4px;display:flex;align-items:center;gap:5px;}
+.cmsg.human .cfoot{justify-content:flex-end;} /* kit applies this inline; promoted to a rule */
+.cmsg .cfoot .ok{color:var(--teal-500);}
+.cevent{align-self:center;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;color:var(--gray-600);background:var(--gray-100);border-radius:999px;padding:4px 13px;}
+.cevent em{font-style:normal;color:var(--orange-500);}
+.cstream{display:block;min-width:170px;}
+.cstream .sline{display:block;height:9px;border-radius:5px;margin:6px 0;background:linear-gradient(90deg,#E3E8F2 25%,#D7DEEC 50%,#E3E8F2 75%);background-size:200% 100%;animation:shimmer 1.4s linear infinite;}
+.cstream .sline:nth-child(2){width:78%;}
+.cstream .sline:nth-child(3){width:52%;}
+
+.cinput{display:flex;gap:9px;padding:13px 14px;box-shadow:0 -1px 0 var(--gray-200);}
+.cinput input{flex:1;min-width:0;border:none;outline:none;background:var(--gray-100);border-radius:999px;padding:9px 16px;font-family:'Inter',sans-serif;font-size:13.5px;}
+.cinput input:focus{box-shadow:0 0 0 1.5px var(--blue-600);background:#fff;}
+.cinput input[disabled]{opacity:.6;}
+.cinput button{border:none;cursor:pointer;width:38px;height:38px;border-radius:50%;background:var(--blue-600);color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;transition:transform var(--motion-duration-fast) ease,background var(--motion-duration-base) ease;flex:none;}
+.cinput button:hover{transform:translateY(-1.5px);}
+.cinput button:active{transform:scale(.9);}
+.cinput button[disabled]{opacity:.45;pointer-events:none;}
+
+/* ---- app additions on the kit frame ---- */
+
+/* ephemeral caption at the top of the list (N8) */
+.cephemeral{align-self:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gray-600);}
+
+/* citation chips under agent bubbles: the kit wikilink treatment */
+.ccites{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;}
+.ccite{
+  border:none;background:none;padding:0 2px;font-family:'Inter',sans-serif;font-size:12.5px;font-weight:500;
+  color:var(--blue-700);cursor:pointer;border-radius:3px;line-height:1.6;
+  text-decoration:underline;text-decoration-color:rgba(30,80,214,.3);text-underline-offset:3px;text-decoration-thickness:1px;
+  max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  transition:background var(--motion-duration-fast) ease,text-decoration-color var(--motion-duration-fast) ease;
+}
+.ccite:hover{background:var(--blue-100);text-decoration-color:var(--blue-700);}
+.ccite:focus-visible{outline:2.5px solid var(--blue-600);outline-offset:1px;}
+
+/* scripted low-balance banner (N5) */
+.cbanner{display:flex;align-items:center;gap:9px;padding:10px 18px;background:var(--gray-100);font-size:12.5px;box-shadow:0 1px 0 var(--gray-200);}
+.cbanner .bglyph{color:var(--orange-500);}
+.cbanner a{color:var(--blue-700);font-weight:600;}
+.cbanner .bx{margin-left:auto;flex:none;border:none;background:none;cursor:pointer;color:var(--gray-600);font-size:11px;padding:3px 6px;border-radius:6px;}
+.cbanner .bx:hover{background:var(--gray-200);color:var(--ink-900);}
+
+/* designed empty conversation state */
+.chat-hello{flex:1;justify-content:center;}
+.chat-starters{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:18px;}
+.starter{border:none;cursor:pointer;background:var(--gray-100);border-radius:999px;padding:8px 16px;font-family:'Inter',sans-serif;font-size:13px;color:var(--ink-900);transition:background var(--motion-duration-fast) ease,color var(--motion-duration-fast) ease;}
+.starter:hover{background:var(--blue-100);color:var(--blue-700);}
+.starter:focus-visible{outline:2.5px solid var(--blue-600);outline-offset:2px;}
+
+/* page variant: fill the shell content area */
+.companion{height:100%;display:flex;flex-direction:column;}
+.chat-page{flex:1;min-height:0;width:100%;max-width:720px;margin:0 auto;}
