@@ -21,10 +21,9 @@ export default defineConfig({
     outDir: resolve(__dirname, 'dist'),
     emptyOutDir: true,
     rollupOptions: {
+      // brand kit re-adds entries: alt.html (echo) + read.html (public reader)
       input: {
         main: resolve(__dirname, 'index.html'),
-        alt: resolve(__dirname, 'alt.html'),
-        read: resolve(__dirname, 'read.html'),
       },
     },
   },

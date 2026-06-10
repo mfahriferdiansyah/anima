@@ -10,8 +10,17 @@ import {
   newNote, writeTurn, preflight, ensureAgentWal, type Note, type VaultInfo, VaultIndex,
 } from '@core/index.js';
 import { getSuiClient, getSealVault, persistIndex } from '../lib/chain.js';
-import type { PendingNote } from './NoteToast.js';
 import type { ChatMsg } from './useChatStream.js';
+
+/** Write-state card model — the kit renders these four states (camera-legible). */
+export type WriteState = 'encrypting' | 'certifying' | 'certified' | 'failed';
+export interface PendingNote {
+  noteId: string;
+  title: string;
+  state: WriteState;
+  blobObjectId?: string;
+  error?: string;
+}
 
 export function useMemoryLoop(opts: {
   ns: string;
