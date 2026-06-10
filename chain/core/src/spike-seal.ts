@@ -13,7 +13,8 @@ import { Transaction } from '@mysten/sui/transactions';
 import { SealClient, SessionKey, NoAccessError } from '@mysten/seal';
 import { readFileSync, writeFileSync } from 'node:fs';
 
-const PACKAGE_ID = '0xdd5609e700b89eae1c11948e89bc45c506ee3a3a1a025d4eaad964c7203108d4';
+import chainConfig from './generated/chain.json' with { type: 'json' };
+const PACKAGE_ID = chainConfig.packageId;
 const KEY_SERVERS = [
   { objectId: '0x73d05d62c18d9374e3ea529e8e0ed6161da1a141a94d3f76ae3fe4e99356db75', weight: 1 }, // mysten-testnet-1
   { objectId: '0xf5d14a81a982144ae441cd7d64b09027f116a468bd36e7eca494f750591623c8', weight: 1 }, // mysten-testnet-2
@@ -91,26 +92,19 @@ async function main() {
   const outsider = Ed25519Keypair.generate();
   const results: Record<string, unknown> = { packageId: PACKAGE_ID };
 
-  // 1) create vault (wallet) — spike contract has no initial-agent param; two txs here.
-  //    DESIGN NOTE for U2 final: create_vault(name, first_agent) → single F0 PTB.
+  // 1) create vault + register first agent in ONE tx (the F0 single-popup shape)
   const tx1 = new Transaction();
-  tx1.moveCall({ target: `${PACKAGE_ID}::vault::create_vault`, arguments: [tx1.pure.string('Spike Vault')] });
+  tx1.moveCall({
+    target: `${PACKAGE_ID}::vault::create_vault`,
+    arguments: [tx1.pure.string('Spike Vault'), tx1.pure.address(agentAddr)],
+  });
   const r1 = await exec(tx1, wallet);
   const vaultChange = (r1.objectChanges ?? []).find(
     (c: any) => c.type === 'created' && String(c.objectType).endsWith('::vault::Vault'),
   ) as any;
   const vaultId = vaultChange.objectId;
-  log(`vault created: ${vaultId}`);
+  log(`vault created + first agent registered in ONE tx: ${vaultId}`);
   results.vaultId = vaultId;
-
-  // 2) register agent (wallet)
-  const tx2 = new Transaction();
-  tx2.moveCall({
-    target: `${PACKAGE_ID}::vault::register_agent`,
-    arguments: [tx2.object(vaultId), tx2.pure.address(agentAddr)],
-  });
-  await exec(tx2, wallet);
-  log(`agent registered: ${agentAddr.slice(0, 12)}…`);
 
   // 3) encrypt to the owner identity
   const idHex = hexNo0x(walletAddr);

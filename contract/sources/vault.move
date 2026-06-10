@@ -18,13 +18,17 @@ public struct Vault has key {
     agents: VecSet<address>,
 }
 
-/// Create a shared vault owned by the sender. Returns the vault ID for PTB chaining.
-public fun create_vault(name: String, ctx: &mut TxContext): ID {
+/// Create a shared vault owned by the sender, registering the first agent key
+/// at creation (a shared object cannot be created and mutated in one PTB —
+/// this keeps onboarding at a single wallet transaction). Returns the vault ID.
+public fun create_vault(name: String, first_agent: address, ctx: &mut TxContext): ID {
+    let mut agents = vec_set::empty();
+    agents.insert(first_agent);
     let vault = Vault {
         id: object::new(ctx),
         owner: ctx.sender(),
         name,
-        agents: vec_set::empty(),
+        agents,
     };
     let id = object::id(&vault);
     transfer::share_object(vault);
