@@ -13,3 +13,4 @@ export * from './funding.js';
 export { exportVaultZip } from './exportVault.js';
 export * from './vault.js';
 export * from './canvas.js';
+export * from './share.js';

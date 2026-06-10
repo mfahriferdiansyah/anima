@@ -24,6 +24,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         alt: resolve(__dirname, 'alt.html'),
+        read: resolve(__dirname, 'read.html'),
       },
     },
   },

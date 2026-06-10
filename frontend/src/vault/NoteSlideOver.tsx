@@ -7,6 +7,7 @@ import { useState } from 'react';
 import type { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { editedNote, writeTurn, ensureAgentWal, type VaultInfo, type VaultIndex } from '@core/index.js';
 import { getSuiClient, getSealVault, persistIndex } from '../lib/chain.js';
+import { ShareDialog } from './ShareDialog.js';
 
 export function NoteSlideOver({
   ns, noteId, vault, agent, index, onClose, onChanged,
@@ -24,6 +25,7 @@ export function NoteSlideOver({
   const [body, setBody] = useState(entry?.note.body ?? '');
   const [title, setTitle] = useState(entry?.note.title ?? '');
   const [saving, setSaving] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!entry) return null;
@@ -70,6 +72,11 @@ export function NoteSlideOver({
             {note.noteId.slice(0, 10)}… · v{note.version} · by {note.author}
           </span>
           <div className="flex gap-2">
+            {!editing && (
+              <button onClick={() => setSharing(true)} className="card px-3 py-1 hover:border-border-strong" style={{ fontSize: 'var(--text-meta)' }}>
+                share
+              </button>
+            )}
             {!editing ? (
               <button onClick={() => setEditing(true)} className="card px-3 py-1 hover:border-border-strong" style={{ fontSize: 'var(--text-meta)' }}>
                 edit
@@ -123,6 +130,7 @@ export function NoteSlideOver({
           </div>
         </div>
       </div>
+      {sharing && <ShareDialog note={note} vault={vault} agent={agent} onClose={() => setSharing(false)} />}
     </div>
   );
 }
