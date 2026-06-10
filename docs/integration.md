@@ -75,6 +75,23 @@ Decisions (engineering-final, visuals open):
 - **Freshness**: WS ping triggers index refresh; fallback poll (~20s) when canvas open. New notes materialize with author attribution (agent cursor).
 - Agents participate via the SAME vault writes (remember/place_note) + WS presence — no special agent path; humans and agents are peers on the canvas.
 
+## 6b. Sharing & publishing (BUILT)
+
+- **Publish as article** (`publishNote`): a chosen note becomes a standalone
+  Walrus blob — `public` (plaintext) or `password` (AES-GCM, PBKDF2-derived
+  key; decrypts in the READER'S browser, password never transmitted).
+- **Reader** (`/read.html?b=<blobId>[&locked=1]`): wallet-free, provider-free
+  article page (Medium-style) fetching straight from the public aggregator.
+  Public shares also work as raw aggregator URLs without anima at all.
+- **Registry = the chain**: published copies are wallet-owned blobs with
+  `app: anima-pub` attributes (`listPublished`); **unpublish = wallet-signed
+  delete** (the custody asymmetry, again).
+- Surfaces: `ShareDialog` (from NoteSlideOver "share"). Design-kit needs:
+  mode picker, link+copy state, published-copies list, the reader page.
+- NOT built (post-hackathon, by design): per-note Seal grants / read-only
+  vault invites — would trade away the one-identity-per-vault latency win.
+  Full-vault member invite = the agents pairing flow.
+
 ## 7. Custody invariants the UI must respect (the pitch depends on these)
 
 1. Plaintext at rest + keys exist ONLY client-side (browser IndexedDB / MCP env). Backend transiently sees chat context during inference (say it honestly), stores nothing.
