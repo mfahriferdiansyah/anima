@@ -8,6 +8,7 @@
     "spike:seal": "tsx chain/core/src/spike-seal.ts",
     "seed": "tsx scripts/seed.ts",
     "test:chain": "vitest run --dir chain",
+    "test:frontend": "vitest run --dir frontend",
     "mcp:dev": "tsx chain/mcp/src/index.ts",
     "spike:core": "tsx chain/core/src/spike-core.ts",
     "dev": "vite --config frontend/vite.config.ts",
