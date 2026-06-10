@@ -6,12 +6,14 @@
 import { ConnectButton } from '@mysten/dapp-kit';
 import { useVaultSession } from './lib/useVaultSession.js';
 import { Onboarding } from './onboarding/Onboarding.js';
+import { Workspace } from './workspace/Workspace.js';
 import { Orb } from './theme/Orb.js';
 
 const NS = 'anima';
 
 export default function App() {
   const { state, refresh } = useVaultSession(NS);
+  const [, setTick] = useState(0);
 
   if (state.phase === 'disconnected') {
     return (
@@ -66,23 +68,19 @@ export default function App() {
     );
   }
 
-  // ready — U6 (chat) + U7 (vault) panes mount here
+  // ready
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="flex items-center justify-between px-5 py-3 border-b border-border">
-        <div className="flex items-center gap-3">
-          <Orb size={22} />
-          <span style={{ fontWeight: 600 }}>{state.vault.name}</span>
-          <span className="text-fg-faint" style={{ fontSize: 'var(--text-meta)' }}>
-            {state.index.size} memories · yours
-          </span>
-        </div>
-        <ConnectButton />
-      </header>
-      <main className="flex-1 flex items-center justify-center">
-        <p className="text-fg-muted">chat + vault land in U6/U7 — session ready ✓</p>
-      </main>
-    </div>
+    <Workspace
+      ns={NS}
+      vault={state.vault}
+      agent={state.agent}
+      index={state.index}
+      greet={state.index.size === 0}
+      onIndexChanged={() => {
+        /* index object is mutated write-through; this forces a re-render */
+        setTick((t) => t + 1);
+      }}
+    />
   );
 }
 

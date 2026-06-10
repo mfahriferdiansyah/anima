@@ -156,9 +156,42 @@ async function readOneQuilt(
 }
 
 /**
- * Forget notes for real. Survivors-first ordering (edge #4): notes sharing a
- * quilt with a forgotten note are REWRITTEN into a new quilt before the old
- * quilt is deleted — nothing innocent is ever lost.
+ * Forget planning (shared by browser + node paths): which notes must be
+ * rewritten (survivors sharing a quilt with a forgotten note) and which
+ * quilt blobs die. Survivors-first ordering is the caller's contract (edge #4).
+ */
+export function buildForgetPlan(current: IndexedNote[], noteIdsToForget: string[]) {
+  const forget = new Set(noteIdsToForget);
+  const affectedBlobs = new Set(
+    current.filter((c) => forget.has(c.note.noteId)).map((c) => c.location.blobObjectId),
+  );
+  const survivors = current
+    .filter((c) => affectedBlobs.has(c.location.blobObjectId) && !forget.has(c.note.noteId))
+    .map((c) => c.note);
+  const forgotten = current.filter((c) => forget.has(c.note.noteId)).map((c) => c.note);
+  return { survivors, forgotten, affectedBlobObjectIds: [...affectedBlobs] };
+}
+
+/** Build ONE wallet PTB deleting multiple quilt blobs (one popup, many deletions). */
+export async function buildDeleteQuiltsTx(
+  deps: Pick<QuiltDeps, 'suiClient' | 'walletAddress'>,
+  blobObjectIds: string[],
+): Promise<Transaction> {
+  let tx = new Transaction();
+  for (const blobObjectId of blobObjectIds) {
+    tx = await deps.suiClient.walrus.deleteBlobTransaction({
+      blobObjectId,
+      owner: deps.walletAddress,
+      transaction: tx,
+    });
+  }
+  return tx;
+}
+
+/**
+ * Forget notes for real (node path — scripts/MCP with a raw wallet Signer).
+ * Survivors-first ordering (edge #4): notes sharing a quilt with a forgotten
+ * note are REWRITTEN into a new quilt before the old quilt is deleted.
  * Deletion is signed by the WALLET (it owns the blobs — the wallet-gate is real).
  */
 export async function forgetNotes(
