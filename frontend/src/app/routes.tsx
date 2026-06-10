@@ -1,15 +1,15 @@
 import { useEffect, useRef } from 'react';
-import type { ReactNode } from 'react';
-import { Navigate, Route, Routes, useParams } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { startSession, useVaultSession } from '@/hooks/useVaultSession';
 import { Companion } from '@/pages/Companion';
 import { Home } from '@/pages/Home';
 import { Landing } from '@/pages/Landing';
+import { Notes } from '@/pages/Notes';
 import { SessionGate } from '@/pages/SessionStates';
 import { AppShell } from './AppShell';
 
 /** Placeholder page body: real pages land in U4-U10. */
-function PlaceholderPage({ name, blurb, children }: { name: string; blurb: string; children?: ReactNode }) {
+function PlaceholderPage({ name, blurb }: { name: string; blurb: string }) {
   return (
     <section>
       <h1 className="page-title">{name}</h1>
@@ -17,18 +17,8 @@ function PlaceholderPage({ name, blurb, children }: { name: string; blurb: strin
         <span className="ghost" aria-hidden="true">✦</span>
         <div className="et">{name} is on its way</div>
         <div className="ed">{blurb}</div>
-        {children}
       </div>
     </section>
-  );
-}
-
-function NotesPlaceholder() {
-  const { noteId } = useParams();
-  return (
-    <PlaceholderPage name="Notes" blurb="The note tree and the editor frame arrive here.">
-      {noteId ? <span className="mono page-note">Selected note: {noteId}</span> : null}
-    </PlaceholderPage>
   );
 }
 
@@ -64,7 +54,7 @@ export function AppRoutes() {
       <Route path="/app" element={<AppGate />}>
         <Route index element={<Home />} />
         <Route path="companion" element={<Companion />} />
-        <Route path="notes/:noteId?" element={<NotesPlaceholder />} />
+        <Route path="notes/:noteId?" element={<Notes />} />
         <Route path="canvas" element={<PlaceholderPage name="Canvas" blurb="The shared constellation arrives here." />} />
         <Route path="settings" element={<PlaceholderPage name="Settings" blurb="Identity, devices, balances and export arrive here." />} />
       </Route>
