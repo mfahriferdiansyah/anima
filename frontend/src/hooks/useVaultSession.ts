@@ -15,6 +15,7 @@ export {
   rejectPairing,
   retryRebuild,
   failNextRebuild,
+  renameCompanion,
   disconnect,
 } from '../mocks/sessionStore';
 export type { SessionState, VaultInfo, AgentInfo, OnboardingStep } from '../mocks/sessionStore';

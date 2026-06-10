@@ -208,6 +208,21 @@ export function failNextRebuild(): void {
   rebuildShouldFail = true;
 }
 
+/**
+ * Rename the companion (non-destructive, no wallet): the ready-phase
+ * vault and agent names update in place so the header follows at once.
+ */
+export function renameCompanion(name: string): void {
+  const state = store.getSnapshot();
+  const trimmed = name.trim();
+  if (state.phase !== 'ready' || !trimmed) return;
+  store.update(() => ({
+    ...state,
+    vault: vaultInfo(trimmed),
+    agent: agentInfo(trimmed),
+  }));
+}
+
 export function disconnect(): void {
   generation += 1;
   store.update(() => ({ phase: 'disconnected' }));

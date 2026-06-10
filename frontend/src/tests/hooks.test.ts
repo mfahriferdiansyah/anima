@@ -8,10 +8,18 @@ import {
   completeOnboarding,
   pair,
   rejectPairing,
+  renameCompanion,
   resetSessionStore,
   sessionStore,
   startSession,
 } from '../mocks/sessionStore';
+import {
+  connectExternalAgent,
+  regenerateAgentSecret,
+  resetSettingsStore,
+  revokeKey,
+  settingsStore,
+} from '../mocks/settingsStore';
 import {
   failNextWrite,
   loadNotes,
@@ -34,6 +42,7 @@ beforeEach(() => {
   resetChatStore();
   resetAgentTimeline();
   resetPresenceStore();
+  resetSettingsStore();
 });
 
 afterEach(() => {
@@ -126,6 +135,56 @@ describe('sessionStore: unpaired scenario', () => {
     const ready = sessionStore.getSnapshot();
     expect(ready.phase).toBe('ready');
     expect(vaultStore.getSnapshot().notes).toHaveLength(12);
+  });
+});
+
+describe('sessionStore: renameCompanion (U10)', () => {
+  it('updates the ready vault and agent names; no-op outside ready', async () => {
+    renameCompanion('Lyra'); // disconnected: nothing to rename
+    expect(sessionStore.getSnapshot().phase).toBe('disconnected');
+
+    startSession('returning');
+    await vi.advanceTimersByTimeAsync(650 + 7 * 450 + 500);
+    expect(sessionStore.getSnapshot().phase).toBe('ready');
+
+    renameCompanion('  Lyra  ');
+    const ready = sessionStore.getSnapshot();
+    if (ready.phase !== 'ready') return;
+    expect(ready.vault.name).toBe('Lyra');
+    expect(ready.agent.name).toBe('Lyra');
+
+    renameCompanion('   '); // blank names never apply
+    const after = sessionStore.getSnapshot();
+    expect(after.phase === 'ready' && after.vault.name).toBe('Lyra');
+  });
+});
+
+describe('settingsStore: keys and secrets (U10)', () => {
+  it('seeds the fixture keys and revoke removes one', () => {
+    expect(settingsStore.getSnapshot().keys).toHaveLength(3);
+    revokeKey('key-studio');
+    const keys = settingsStore.getSnapshot().keys;
+    expect(keys).toHaveLength(2);
+    expect(keys.some((key) => key.id === 'key-studio')).toBe(false);
+  });
+
+  it('connect issues a key whose secret lives only in the return value', () => {
+    const { key, secret } = connectExternalAgent('  ');
+    expect(secret).toMatch(/^anima_sk_[0-9a-f]{40}$/);
+    expect(key.kind).toBe('external');
+    expect(key.label).toBe('external agent 1');
+
+    const stored = settingsStore.getSnapshot().keys.find((entry) => entry.id === key.id);
+    expect(stored?.secretIssued).toBe(true);
+    expect(JSON.stringify(settingsStore.getSnapshot())).not.toContain(secret);
+  });
+
+  it('regenerate returns a fresh secret for external keys only', () => {
+    const { key, secret } = connectExternalAgent('claude code');
+    const next = regenerateAgentSecret(key.id);
+    expect(next).toMatch(/^anima_sk_[0-9a-f]{40}$/);
+    expect(next).not.toBe(secret);
+    expect(regenerateAgentSecret('key-browser')).toBeNull(); // device keys have no secret
   });
 });
 

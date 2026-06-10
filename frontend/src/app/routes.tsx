@@ -7,21 +7,8 @@ import { Home } from '@/pages/Home';
 import { Landing } from '@/pages/Landing';
 import { Notes } from '@/pages/Notes';
 import { SessionGate } from '@/pages/SessionStates';
+import { Settings } from '@/pages/Settings';
 import { AppShell } from './AppShell';
-
-/** Placeholder page body: real pages land in U4-U10. */
-function PlaceholderPage({ name, blurb }: { name: string; blurb: string }) {
-  return (
-    <section>
-      <h1 className="page-title">{name}</h1>
-      <div className="empty">
-        <span className="ghost" aria-hidden="true">✦</span>
-        <div className="et">{name} is on its way</div>
-        <div className="ed">{blurb}</div>
-      </div>
-    </section>
-  );
-}
 
 /**
  * Phase gate for every /app route: starts the session once on mount,
@@ -57,7 +44,7 @@ export function AppRoutes() {
         <Route path="companion" element={<Companion />} />
         <Route path="notes/:noteId?" element={<Notes />} />
         <Route path="canvas" element={<Canvas />} />
-        <Route path="settings" element={<PlaceholderPage name="Settings" blurb="Identity, devices, balances and export arrive here." />} />
+        <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
