@@ -1,0 +1,159 @@
+/* =====================================================
+   PRIMITIVES · ported verbatim from anima-components.html
+   Class names are preserved so kit and app screenshots
+   compare 1:1. Do not restyle here; only the kit changes.
+   ===================================================== */
+
+/* =====================================================
+   BUTTONS
+   ===================================================== */
+.btn{
+  font-family:'Inter',sans-serif;font-weight:700;font-size:14.5px;cursor:pointer;border:none;
+  border-radius:var(--radius-pill);padding:11px 22px;display:inline-flex;align-items:center;gap:8px;
+  transition:transform var(--motion-duration-fast) ease,box-shadow var(--motion-duration-fast) ease,background var(--motion-duration-base) ease;
+  background:var(--gray-100);color:var(--ink-900);
+}
+.btn:hover{transform:translateY(-2px);box-shadow:var(--shadow-softer);}
+.btn:active{transform:translateY(0);}
+.btn:focus-visible{outline:2.5px solid var(--blue-600);outline-offset:2px;}
+.btn-primary{background:var(--blue-600);color:#fff;}
+.btn-primary:hover{background:var(--blue-700);}
+.btn-accent{background:var(--orange-500);color:#fff;}
+.btn-ink{background:var(--ink-900);color:#fff;}
+.btn-danger{background:var(--red-500);color:#fff;}
+.btn-quiet{background:transparent;}
+.btn-quiet:hover{background:var(--gray-100);box-shadow:none;}
+.btn[disabled]{opacity:.45;pointer-events:none;}
+.btn-sm{padding:7px 16px;font-size:13px;}
+.btn-lg{padding:14px 28px;font-size:16px;border-radius:18px;}
+
+/* =====================================================
+   FORMS
+   ===================================================== */
+.field{max-width:320px;}
+.field label{display:block;font-size:12px;font-weight:500;color:var(--gray-600);margin-bottom:4px;}
+.field input[type=text]{
+  width:100%;font-family:'Inter',sans-serif;font-size:13.5px;color:var(--ink-900);
+  background:var(--gray-100);border:1px solid transparent;border-radius:8px;padding:6px 11px;line-height:18px;
+  transition:border-color var(--motion-duration-base) ease,background var(--motion-duration-base) ease,box-shadow var(--motion-duration-base) ease;
+}
+.field input[type=text]:hover{background:#EBEFF7;}
+.field input[type=text]:focus{outline:none;border-color:var(--blue-600);background:#fff;box-shadow:0 0 0 3px var(--blue-100);}
+.field .help{font-size:11.5px;color:var(--gray-600);margin-top:3px;line-height:1.45;}
+.field.error input[type=text]{border-color:var(--red-500);background:var(--red-100);}
+.field.error .help{color:#C92B33;font-weight:500;}
+.field .mono-input{font-family:'JetBrains Mono',monospace!important;font-size:12.5px!important;}
+.setrow,.switch.setrow{display:flex;width:100%;justify-content:space-between;align-items:center;gap:14px;padding:8px 0;box-shadow:0 1px 0 var(--gray-100);}
+.setrow:last-child{box-shadow:none;}
+.setrow .sl{font-size:13px;font-weight:400;}
+
+.switch{position:relative;display:inline-flex;align-items:center;gap:10px;cursor:pointer;user-select:none;}
+.switch input{position:absolute;opacity:0;width:0;height:0;}
+.switch .track{width:42px;height:24px;border-radius:999px;background:var(--gray-200);transition:background var(--motion-duration-base) ease;position:relative;flex:none;}
+.switch .track::after{
+  content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;
+  box-shadow:0 1px 3px rgba(22,24,29,.25);transition:transform var(--motion-duration-base) var(--motion-easing-enter);
+}
+.switch input:checked + .track{background:var(--blue-600);}
+.switch input:checked + .track::after{transform:translateX(18px);}
+.switch input:focus-visible + .track{outline:2.5px solid var(--blue-600);outline-offset:2px;}
+.switch .sl{font-size:14px;font-weight:500;}
+
+/* =====================================================
+   PILLS & BADGES
+   ===================================================== */
+.pill{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;border-radius:999px;padding:6px 14px;display:inline-flex;align-items:center;gap:6px;}
+.pill-ink{background:var(--ink-900);color:#fff;}
+.tagpill{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;border-radius:999px;padding:5px 13px;background:var(--ink-900);color:#fff;font-family:'Inter',sans-serif;}
+.count-pill{font-family:'Inter',sans-serif;font-size:12.5px;font-weight:600;background:var(--gray-100);color:var(--gray-600);border-radius:999px;padding:5px 12px;}
+
+/* =====================================================
+   TOASTS · single-line 32px pills
+   ===================================================== */
+.toast{
+  display:flex;align-items:center;gap:9px;background:var(--ink-900);color:#fff;
+  border-radius:999px;padding:8px 16px 8px 14px;max-width:440px;box-shadow:var(--shadow-soft);
+  white-space:nowrap;
+}
+.toast .ti{font-size:13px;line-height:1;flex:none;}
+.toast .tt{font-weight:600;font-size:13px;line-height:1.3;}
+.toast .td{font-size:12.5px;opacity:.65;line-height:1.3;overflow:hidden;text-overflow:ellipsis;}
+.toast .td::before{content:"·";margin:0 7px 0 7px;opacity:.8;}
+.toast .tact{margin-left:auto;flex:none;font-size:13px;font-weight:700;color:var(--blue-300);background:none;border:none;cursor:pointer;padding:2px 4px;}
+.toast .tact:focus-visible{outline:2px solid var(--blue-300);outline-offset:2px;border-radius:4px;}
+.toast a.tact{text-decoration:none;}
+.toast .ti .spinstar{display:inline-block;animation:spinstar 1.2s linear infinite;}
+.toast.success .ti{color:var(--teal-500);}
+.toast.error .ti{color:var(--red-500);}
+.toast.info .ti{color:var(--blue-300);}
+#toaststack{position:fixed;bottom:20px;right:20px;z-index:80;display:flex;flex-direction:column;gap:10px;}
+#toaststack .toast{animation:toastin var(--motion-duration-base) var(--motion-easing-enter);}
+@keyframes toastin{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
+
+/* =====================================================
+   LOADING
+   ===================================================== */
+.spin{font-size:26px;color:var(--blue-600);display:inline-block;animation:spinstar 1.2s linear infinite;}
+@keyframes spinstar{from{transform:rotate(0);}to{transform:rotate(360deg);}}
+.skel{border-radius:10px;background:linear-gradient(90deg,var(--gray-100) 25%,#E9EDF5 50%,var(--gray-100) 75%);background-size:200% 100%;animation:shimmer 1.4s linear infinite;}
+@keyframes shimmer{from{background-position:200% 0;}to{background-position:-200% 0;}}
+
+/* =====================================================
+   MODAL · overlay + dialog + command palette
+   ===================================================== */
+.overlay{position:fixed;inset:0;background:rgba(22,24,29,.45);z-index:90;display:none;align-items:center;justify-content:center;padding:24px;}
+.overlay.open{display:flex;}
+.overlay .dialog{animation:modalin var(--motion-duration-slow) var(--motion-easing-enter);width:100%;}
+@keyframes modalin{from{opacity:0;transform:translateY(18px) scale(.98);}to{opacity:1;transform:none;}}
+
+.dialog{background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-soft);max-width:440px;overflow:hidden;}
+.dialog .dh{padding:20px 22px 0;}
+.dialog .dt{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:19px;}
+.dialog .dd2{font-size:13px;color:var(--gray-600);margin-top:3px;}
+.dialog .db{padding:18px 22px 22px;}
+
+.cmdk-dialog{max-width:460px;width:100%;background:#fff;border-radius:16px;box-shadow:var(--shadow-soft);overflow:hidden;}
+.overlay.fast .cmdk-dialog{animation:cmdkin var(--motion-duration-base) var(--motion-easing-enter);}
+@keyframes cmdkin{from{opacity:0;transform:scale(.98);}to{opacity:1;transform:none;}}
+.cmdk-dialog input{width:100%;border:none;outline:none;font-family:'Inter',sans-serif;font-size:15px;padding:16px 18px;box-shadow:0 1px 0 var(--gray-200);}
+.cmdk-list{padding:8px;}
+.cmdk-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:14px;cursor:pointer;}
+.cmdk-item:hover,.cmdk-item.on{background:var(--blue-100);color:var(--blue-700);}
+.cmdk-item .ic{font-size:12px;color:var(--orange-500);flex:none;}
+.cmdk-item kbd{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;background:var(--gray-100);border-radius:6px;padding:3px 7px;color:var(--gray-600);}
+.cmdk-item:hover kbd{background:#fff;}
+
+/* =====================================================
+   INK PANEL + STATES
+   ===================================================== */
+.inkpanel{background:var(--ink-900);color:#fff;border-radius:var(--radius-card);padding:24px 26px;}
+.inkpanel b.lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;display:block;margin-bottom:12px;color:rgba(255,255,255,.55);}
+.inkpanel .lead{color:var(--blue-300);}
+.inkpanel .glyph{color:var(--orange-500);}
+.inkpanel .inner{background:rgba(255,255,255,.1);border-radius:10px;padding:9px 12px;font-family:'JetBrains Mono',monospace;font-size:12.5px;}
+
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:48px 20px;}
+.empty .ghost{font-size:40px;color:#C9D4E8;animation:bob 4s ease-in-out infinite;display:inline-block;}
+.empty .et{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;margin-top:14px;}
+.empty .ed{font-size:13.5px;color:var(--gray-600);margin-top:4px;max-width:34ch;}
+
+/* =====================================================
+   SHARED KEYFRAMES (kit motion vocabulary)
+   ===================================================== */
+@keyframes bob{0%,100%{transform:translateY(0) rotate(-8deg);}50%{transform:translateY(-12px) rotate(9deg);}}
+.anim{animation:msgin .32s cubic-bezier(.34,1.56,.64,1);}
+@keyframes msgin{from{opacity:0;transform:translateY(10px) scale(.96);}to{opacity:1;transform:none;}}
+@keyframes pop{0%{transform:scale(.7);}60%{transform:scale(1.08);}100%{transform:scale(1);}}
+@keyframes burst{0%{transform:scale(1) rotate(0);}50%{transform:scale(1.7) rotate(40deg);}100%{transform:scale(1) rotate(90deg);}}
+
+/* =====================================================
+   ORB · the one living element
+   (app primitive composed from kit tokens + kit keyframes only)
+   ===================================================== */
+.orb{position:relative;display:inline-flex;align-items:center;justify-content:center;color:var(--blue-600);line-height:1;user-select:none;}
+.orb .oglyph{display:inline-block;animation:bob 4.4s ease-in-out infinite;}
+.orb.working .oglyph{animation:spinstar 1.2s linear infinite;}
+.orb .obadge{position:absolute;top:-2px;right:-2px;width:8px;height:8px;border-radius:50%;background:var(--orange-500);box-shadow:0 0 0 2px var(--color-surface);}
+.orb-sm{font-size:18px;}
+.orb-md{font-size:26px;}
+.orb-lg{font-size:40px;}

@@ -1,0 +1,15 @@
+/* TEMPORARY gallery chrome (U1 only; deleted with PrimitivesGallery in U3).
+   Section/stage/row classes copied verbatim from the kit so the gallery
+   screenshots compare 1:1 against anima-components.html. */
+section.comp{padding:64px 0 12px;}
+section.comp.band{background:var(--gray-100);padding-bottom:56px;}
+.num{display:inline-flex;align-items:center;gap:10px;font-size:12px;font-weight:600;color:var(--gray-600);letter-spacing:.14em;text-transform:uppercase;}
+.num b{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:#fff;background:var(--ink-900);border-radius:7px;padding:4px 8px;}
+h2.kt{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:clamp(26px,3.4vw,36px);letter-spacing:-.02em;margin-top:10px;}
+p.kd{color:var(--gray-600);max-width:64ch;margin-top:10px;font-size:15.5px;}
+.subhead{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--gray-600);margin:38px 0 16px;display:flex;align-items:center;gap:12px;}
+.subhead::after{content:"";flex:1;height:1px;background:var(--gray-200);}
+.stage{background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-softer);padding:26px;}
+.band .stage{box-shadow:var(--shadow-soft);}
+.row{display:flex;gap:14px;flex-wrap:wrap;align-items:center;}
+.gallery-footer{padding:40px 0 64px;}
