@@ -12,10 +12,12 @@
     "spike:core": "tsx chain/core/src/spike-core.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@mysten/seal": "^1.1.3",
     "@mysten/sui": "^2.16.2",
     "@mysten/walrus": "^1.1.7",
-    "fflate": "^0.8.3"
+    "fflate": "^0.8.3",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^25.9.2",
