@@ -1,0 +1,56 @@
+/* ============ workspace shell + app chrome (U3) ============ */
+
+.shell{display:flex;min-height:100vh;background:var(--color-surface);}
+
+/* sidebar: white with hairline, rows mirror the kit's .trow treatment */
+.shell-side{width:216px;flex:none;display:flex;flex-direction:column;gap:2px;padding:16px 12px;box-shadow:1px 0 0 var(--gray-200);}
+.shell-wordmark{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;letter-spacing:-.01em;padding:2px 10px 16px;}
+.shell-wordmark .star{color:var(--orange-500);font-size:.62em;vertical-align:.32em;}
+.snav{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:9px;font-size:13px;color:var(--ink-900);text-decoration:none;transition:background var(--motion-duration-fast) ease;}
+.snav:hover{background:var(--gray-100);}
+.snav:focus-visible{outline:2.5px solid var(--blue-600);outline-offset:2px;}
+.snav svg{width:15px;height:15px;flex:none;color:var(--gray-600);}
+.snav.active{background:var(--blue-100);color:var(--blue-700);font-weight:600;}
+.snav.active svg{color:var(--blue-700);}
+
+/* header (R2): companion name, memory count, owner address, disconnect */
+.shell-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.shell-head{display:flex;align-items:center;gap:14px;padding:12px 26px;box-shadow:0 1px 0 var(--gray-200);}
+.shell-agent{font-weight:600;font-size:14px;}
+.shell-agent .glyph{color:var(--orange-500);margin-right:6px;}
+.shell-head .count-pill{margin-left:auto;}
+.shell-addr{font-size:12.5px;color:var(--gray-600);}
+.shell-page{flex:1;padding:28px 32px;overflow:auto;}
+
+/* placeholder pages (replaced in U4-U10) */
+.page-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:22px;letter-spacing:-.01em;}
+.page-note{display:block;margin-top:10px;font-size:12.5px;color:var(--gray-600);}
+.empty .btn{margin-top:16px;}
+.land-mark{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:26px;letter-spacing:-.02em;}
+.land-mark .star{color:var(--orange-500);font-size:.62em;vertical-align:.32em;}
+
+/* session gate placeholder (U4 replaces its internals) */
+.gate{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+.gate-phase{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:19px;}
+.gate-detail{font-size:13.5px;color:var(--gray-600);}
+
+/* write toasts live bottom-left so the orb corner stays free (U1 handoff note) */
+#toaststack{right:auto;left:20px;}
+
+/* mock wallet dialog */
+.wallet-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;}
+
+/* popup chat orb + placeholder panel (above the MOCKED badge) */
+.orbfab{position:fixed;right:22px;bottom:64px;z-index:85;width:50px;height:50px;border:none;border-radius:50%;background:#fff;box-shadow:var(--shadow-soft);cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.orbfab:focus-visible{outline:2.5px solid var(--blue-600);outline-offset:2px;}
+.orbpanel{position:fixed;right:22px;bottom:126px;z-index:85;width:300px;}
+.orbpanel .dialog{animation:modalin var(--motion-duration-slow) var(--motion-easing-enter);}
+
+/* MOCKED badge + scenario switcher */
+.mocked{position:fixed;right:20px;bottom:20px;z-index:95;border:none;cursor:pointer;}
+.mocked-panel{position:fixed;right:20px;bottom:60px;z-index:95;width:230px;background:var(--ink-900);color:#fff;border-radius:16px;padding:14px;box-shadow:var(--shadow-soft);display:flex;flex-direction:column;gap:8px;}
+.mocked-panel .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.55);}
+.mocked-opt{display:flex;align-items:center;border:none;cursor:pointer;background:transparent;color:#fff;font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 10px;border-radius:9px;text-align:left;transition:background var(--motion-duration-fast) ease;}
+.mocked-opt:hover{background:rgba(255,255,255,.08);}
+.mocked-opt.on{background:var(--blue-600);font-weight:700;}
+.mocked-row{display:flex;align-items:center;justify-content:space-between;font-size:13px;padding:0 2px;}
