@@ -2,7 +2,7 @@
    White cards on the white shell page, kit shadows carrying the separation
    (the kit's .stage / .tree / .note treatment). Tokens only. */
 
-.home{max-width:860px;display:flex;flex-direction:column;gap:24px;}
+.home{max-width:1060px;margin:0 auto;display:flex;flex-direction:column;gap:24px;}
 .hcard{background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-soft);}
 .hlabel{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--gray-600);margin-bottom:10px;}
 

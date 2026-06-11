@@ -120,9 +120,13 @@
    ===================================================== */
 
 /* page layout: in-page tree (~240px) + editor */
-.notes{display:flex;gap:24px;align-items:flex-start;max-width:1100px;}
-.notes-side{width:240px;flex:none;display:flex;flex-direction:column;gap:10px;}
-.notes-main{flex:1;min-width:0;}
+.notes{display:flex;gap:24px;align-items:stretch;max-width:1360px;margin:0 auto;height:100%;}
+.notes-side{width:300px;flex:none;display:flex;flex-direction:column;gap:10px;min-height:0;}
+.notes-side .tree{flex:1;overflow:auto;min-height:0;}
+.notes-main{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;}
+.notes-main .edframe{flex:1;min-height:0;display:flex;flex-direction:column;}
+.notes-main .edframe .edbody{flex:1;min-height:0;overflow:auto;}
+.notes-main > .empty{flex:1;background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-soft);display:flex;flex-direction:column;align-items:center;justify-content:center;}
 .tree-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:30px;padding:0 2px;}
 .tree-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--gray-600);}
 .tree-foot .btn{width:100%;justify-content:center;}

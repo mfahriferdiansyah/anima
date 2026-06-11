@@ -4,7 +4,7 @@
    .accessrow lists, the inkpanel secret treatment.
    ===================================================== */
 
-.settings{max-width:720px;}
+.settings{max-width:760px;margin:0 auto;}
 
 /* kit .subhead, verbatim: the uppercase label with a hairline tail */
 .subhead{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--gray-600);margin:38px 0 16px;display:flex;align-items:center;gap:12px;}

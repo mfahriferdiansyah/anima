@@ -50,3 +50,7 @@
 .mocked-opt:hover{background:rgba(255,255,255,.08);}
 .mocked-opt.on{background:var(--blue-600);font-weight:700;}
 .mocked-row{display:flex;align-items:center;justify-content:space-between;font-size:13px;padding:0 2px;}
+
+/* default buttons sit on the gray workspace now: give them a body */
+.shell-page .btn:not(.btn-primary):not(.btn-accent):not(.btn-ink):not(.btn-danger){background:#fff;box-shadow:inset 0 0 0 1px var(--gray-200);}
+.shell-page .btn:not(.btn-primary):not(.btn-accent):not(.btn-ink):not(.btn-danger):hover{box-shadow:inset 0 0 0 1px var(--gray-200),var(--shadow-softer);}

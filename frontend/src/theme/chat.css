@@ -82,4 +82,5 @@
 
 /* page variant: fill the shell content area */
 .companion{height:100%;display:flex;flex-direction:column;}
-.chat-page{flex:1;min-height:0;width:100%;max-width:720px;margin:0 auto;}
+.chat-page{flex:1;min-height:0;width:100%;max-width:900px;margin:0 auto;height:100%;display:flex;flex-direction:column;}
+.chat-page .chat{flex:1;min-height:0;}
