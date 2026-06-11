@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import ForceGraph from 'force-graph';
-import type { LinkObject, NodeObject } from 'force-graph';
 import { Orb } from '@/components/Orb';
+import { usePresence } from '@/hooks/usePresence';
 import { sendOnOpen, useChat } from '@/hooks/useChat';
 import { createNote, recentNotes, useVault } from '@/hooks/useVault';
 import type { Note } from '@/hooks/useVault';
@@ -27,23 +26,9 @@ function relativeTime(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-/* ---------- graph preview (kit section 10, simplified: hover-only, click opens canvas) ---------- */
+/* ---------- graph preview: the canvas layout rendered as a static constellation ---------- */
 
 const NODE_COLORS = { note: '#2F6BFF', leaf: '#4DA2FF', agent: '#FF5C1A' } as const;
-
-interface GraphNode extends NodeObject {
-  id: string;
-  label: string;
-  group: keyof typeof NODE_COLORS;
-  val: number;
-  labeled: boolean;
-}
-type GraphLink = LinkObject<GraphNode>;
-
-/** A sim link endpoint is a string id before the engine runs and a node object after. */
-function endId(end: GraphLink['source']): string {
-  return typeof end === 'object' && end !== null ? String(end.id) : String(end);
-}
 
 function buildGraphData(notes: Note[]) {
   const ids = new Set(notes.map((note) => note.noteId));
@@ -61,16 +46,14 @@ function buildGraphData(notes: Note[]) {
       degree.set(target, (degree.get(target) ?? 0) + 1);
     }
   }
-  const labelAll = notes.length <= 12;
-  const nodes: GraphNode[] = notes.map((note) => {
+  const nodes = notes.map((note) => {
     const deg = degree.get(note.noteId) ?? 0;
     const title = note.title || 'Untitled note';
     return {
       id: note.noteId,
-      label: title.length > 24 ? `${title.slice(0, 23)}…` : title,
-      group: note.author.startsWith('agent') ? 'agent' : deg > 1 ? 'note' : 'leaf',
-      val: 2 + deg * 2,
-      labeled: labelAll || deg > 1,
+      label: title.length > 28 ? `${title.slice(0, 27)}…` : title,
+      group: (note.author.startsWith('agent') ? 'agent' : deg > 1 ? 'note' : 'leaf') as keyof typeof NODE_COLORS,
+      r: Math.min(5 + deg * 1.6, 11),
     };
   });
   const neighbors = new Map<string, Set<string>>();
@@ -83,122 +66,107 @@ function buildGraphData(notes: Note[]) {
   return { nodes, links, neighbors };
 }
 
-/** Kit 4-point star for agent nodes (stroke only). */
-function drawStar(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string, width: number) {
-  ctx.beginPath();
-  ctx.moveTo(x, y - r);
-  ctx.lineTo(x + r * 0.24, y - r * 0.24);
-  ctx.lineTo(x + r, y);
-  ctx.lineTo(x + r * 0.24, y + r * 0.24);
-  ctx.lineTo(x, y + r);
-  ctx.lineTo(x - r * 0.24, y + r * 0.24);
-  ctx.lineTo(x - r, y);
-  ctx.lineTo(x - r * 0.24, y - r * 0.24);
-  ctx.closePath();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.lineJoin = 'round';
-  ctx.stroke();
+/** Kit 4-point star path for agent nodes, centered at (x, y). */
+function starPath(x: number, y: number, r: number): string {
+  return [
+    `M ${x} ${y - r}`,
+    `L ${x + r * 0.24} ${y - r * 0.24}`,
+    `L ${x + r} ${y}`,
+    `L ${x + r * 0.24} ${y + r * 0.24}`,
+    `L ${x} ${y + r}`,
+    `L ${x - r * 0.24} ${y + r * 0.24}`,
+    `L ${x - r} ${y}`,
+    `L ${x - r * 0.24} ${y - r * 0.24}`,
+    'Z',
+  ].join(' ');
 }
+
+const VB_W = 860;
+const VB_H = 240;
+const VB_PAD = 40;
 
 function GraphPreview({ notes }: { notes: Note[] }) {
   const navigate = useNavigate();
-  const boxRef = useRef<HTMLDivElement>(null);
+  const { layout } = usePresence();
+  const [hover, setHover] = useState<string | null>(null);
 
-  useEffect(() => {
-    const el = boxRef.current;
-    if (!el) return;
-    const { nodes, links, neighbors } = buildGraphData(notes);
-    let hover: string | null = null;
-    const openCanvas = () => navigate('/app/canvas');
+  const { nodes, links, neighbors } = buildGraphData(notes);
+  const placed = nodes.filter((n) => layout[n.id]);
+  if (placed.length === 0) return null;
 
-    const graph = new ForceGraph<GraphNode, GraphLink>(el)
-      .width(el.clientWidth)
-      .height(el.clientHeight)
-      .backgroundColor('rgba(0,0,0,0)')
-      .nodeVal('val')
-      .nodeLabel(() => '')
-      .linkColor((l) => {
-        const hot = hover !== null && (endId(l.source) === hover || endId(l.target) === hover);
-        if (hot) return 'rgba(58,66,84,.6)';
-        return hover ? 'rgba(154,167,196,.07)' : 'rgba(154,167,196,.3)';
-      })
-      .linkWidth((l) => (hover !== null && (endId(l.source) === hover || endId(l.target) === hover) ? 1.6 : 1))
-      .nodeCanvasObjectMode(() => 'replace')
-      .nodeCanvasObject((n, ctx, scale) => {
-        const r = 3 + Math.sqrt(n.val) * 2;
-        const hot = hover === n.id;
-        const dim = hover !== null && !hot && !neighbors.get(hover)?.has(n.id);
-        ctx.globalAlpha = dim ? 0.16 : 1;
-        if (n.group === 'agent') {
-          drawStar(ctx, n.x!, n.y!, r * (hot ? 1.25 : 1) + 2, NODE_COLORS.agent, 1.6);
-        } else {
-          ctx.beginPath();
-          ctx.arc(n.x!, n.y!, r * (hot ? 1.25 : 1), 0, 2 * Math.PI);
-          ctx.fillStyle = NODE_COLORS[n.group];
-          if (hot) {
-            ctx.shadowColor = 'rgba(47,107,255,.55)';
-            ctx.shadowBlur = 12;
-          }
-          ctx.fill();
-          ctx.shadowBlur = 0;
-        }
-        if (n.labeled) {
-          const fs = Math.max(9 / scale, 3);
-          ctx.font = `600 ${fs}px "JetBrains Mono", monospace`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'top';
-          ctx.fillStyle = '#3A4254';
-          ctx.fillText(n.label + (n.group === 'agent' ? ' ✧' : ''), n.x!, n.y! + r + 3);
-        }
-        ctx.globalAlpha = 1;
-      })
-      .nodePointerAreaPaint((n, color, ctx) => {
-        ctx.beginPath();
-        ctx.arc(n.x!, n.y!, 9 + Math.sqrt(n.val) * 2, 0, 2 * Math.PI);
-        ctx.fillStyle = color;
-        ctx.fill();
-      })
-      .autoPauseRedraw(false)
-      .enableNodeDrag(false)
-      .enableZoomInteraction(false)
-      .enablePanInteraction(false)
-      .onNodeHover((n) => {
-        hover = n ? n.id : null;
-      })
-      .onNodeClick(openCanvas)
-      .onBackgroundClick(openCanvas)
-      .cooldownTime(8000)
-      .graphData({ nodes, links });
+  // map the canvas layout into the preview viewBox: this previews the real constellation
+  const xs = placed.map((n) => layout[n.id].x);
+  const ys = placed.map((n) => layout[n.id].y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const px = (x: number) => VB_PAD + ((x - minX) / Math.max(maxX - minX, 1)) * (VB_W - VB_PAD * 2);
+  const py = (y: number) => VB_PAD + ((y - minY) / Math.max(maxY - minY, 1)) * (VB_H - VB_PAD * 2);
+  const pos = new Map(placed.map((n) => [n.id, { x: px(layout[n.id].x), y: py(layout[n.id].y) }]));
 
-    // squishy physics (kit section 10)
-    graph.d3Force('charge')?.strength(-260);
-    graph.d3Force('link')?.distance(75).strength(0.35);
-    graph.d3AlphaDecay(0.014).d3VelocityDecay(0.24);
-    // keep the view fitted while the squishy sim settles, then stop refitting
-    let settled = false;
-    const fit = window.setInterval(() => graph.zoomToFit(180, 28), 450);
-    graph.onEngineStop(() => {
-      if (settled) return;
-      settled = true;
-      window.clearInterval(fit);
-      graph.zoomToFit(300, 28);
-    });
-    const ro = new ResizeObserver(() => {
-      graph.width(el.clientWidth).height(el.clientHeight);
-      graph.zoomToFit(0, 28);
-    });
-    ro.observe(el);
-
-    return () => {
-      window.clearInterval(fit);
-      ro.disconnect();
-      graph._destructor?.();
-    };
-  }, [notes, navigate]);
+  const dimmed = (id: string) => hover !== null && hover !== id && !neighbors.get(hover)?.has(id);
+  const hovered = hover ? placed.find((n) => n.id === hover) : null;
+  const hoverPos = hover ? pos.get(hover) : null;
 
   return (
-    <div className="hcard hgraph" ref={boxRef} role="link" aria-label="Open the canvas">
+    <div
+      className="hcard hgraph"
+      role="link"
+      aria-label="Open the canvas"
+      onClick={() => navigate('/app/canvas')}
+      onMouseLeave={() => setHover(null)}
+    >
+      <svg viewBox={`0 0 ${VB_W} ${VB_H}`} preserveAspectRatio="xMidYMid meet">
+        {links.map((l) => {
+          const a = pos.get(l.source);
+          const b = pos.get(l.target);
+          if (!a || !b) return null;
+          const hot = hover === l.source || hover === l.target;
+          const faded = hover !== null && !hot;
+          return (
+            <line
+              key={`${l.source}|${l.target}`}
+              x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+              stroke={hot ? 'rgba(58,66,84,.55)' : 'rgba(154,167,196,.35)'}
+              strokeWidth={hot ? 1.6 : 1.1}
+              opacity={faded ? 0.18 : 1}
+            />
+          );
+        })}
+        {placed.map((n) => {
+          const p = pos.get(n.id)!;
+          const hot = hover === n.id;
+          const r = n.r * (hot ? 1.25 : 1);
+          return (
+            <g
+              key={n.id}
+              opacity={dimmed(n.id) ? 0.18 : 1}
+              onMouseEnter={() => setHover(n.id)}
+              style={{ transition: 'opacity 180ms ease' }}
+            >
+              {n.group === 'agent' ? (
+                <path d={starPath(p.x, p.y, r + 3)} fill="none" stroke={NODE_COLORS.agent} strokeWidth={1.8} strokeLinejoin="round" />
+              ) : (
+                <circle cx={p.x} cy={p.y} r={r} fill={NODE_COLORS[n.group]} />
+              )}
+            </g>
+          );
+        })}
+        {hovered && hoverPos && (
+          <text
+            x={Math.min(Math.max(hoverPos.x, 90), VB_W - 90)}
+            y={hoverPos.y > VB_H - 36 ? hoverPos.y - hovered.r - 10 : hoverPos.y + hovered.r + 16}
+            textAnchor="middle"
+            fontFamily="'JetBrains Mono', monospace"
+            fontSize="11"
+            fontWeight="600"
+            fill="#3A4254"
+          >
+            {hovered.label}{hovered.group === 'agent' ? ' ✧' : ''}
+          </text>
+        )}
+      </svg>
       <span className="hgraph-hint">click to open canvas</span>
     </div>
   );
