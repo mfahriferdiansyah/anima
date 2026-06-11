@@ -48,3 +48,5 @@
 .hrow .ht{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .hrow .hg{color:var(--orange-500);flex:none;font-size:12px;}
 .hrow .hage{margin-left:auto;flex:none;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--gray-600);}
+
+.hgraph svg{width:100%;height:100%;display:block;}
