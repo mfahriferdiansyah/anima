@@ -47,10 +47,9 @@
   .pgcal { width: 100%; }
   .pghcol6 { max-width: 920px; }
 
-  /* Canvas: let the board pan, keep the chrome pinned to the viewport */
-  .shell .pgcv { overflow: auto; -webkit-overflow-scrolling: touch; }
-  .shell .pgcv-tools { position: fixed; left: 50%; bottom: 18px; }
-  .shell .pgcv-avs { position: fixed; top: 56px; right: 18px; }
+  /* Canvas pans as an infinite plane (transform-based, handled in Canvas.tsx),
+     so it stays overflow:hidden at every size and the toolbar/avatars stay
+     pinned inside .pgcv — no mobile-specific scroll handling needed. */
 }
 
 /* ------------------------------------------------------------------ <= 768 */

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createNote, useVault } from '@/hooks/useVault';
 import type { Note } from '@/hooks/useVault';
@@ -82,11 +82,23 @@ interface DragState {
   moved: boolean;
 }
 
+/** A pan drag of the whole board (empty-canvas drag or the hand tool). */
+interface PanState {
+  startClientX: number;
+  startClientY: number;
+  originX: number;
+  originY: number;
+}
+
 /**
  * The shared sky (spec #page-canvas): memory cards on constellation paper,
  * faint link edges, live human + agent cursors, the Excalidraw toolbar
  * (decorative except drag + recall), and the saving whisper. Layout writes
  * go through moveNote, which debounces the mock save and pulses the pill.
+ *
+ * The board is an infinite plane: the wheel/trackpad and empty-canvas drags
+ * pan a translated world layer, and the dotted grid scrolls with it. Cards,
+ * edges and cursors live in that layer; the avatars and toolbar stay pinned.
  */
 export function Canvas() {
   const session = useVaultSession();
@@ -97,9 +109,28 @@ export function Canvas() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [tool, setTool] = useState('select');
 
+  // Infinite-canvas camera: the world layer is translated by this offset.
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const panRef = useRef<PanState | null>(null);
+  const [panning, setPanning] = useState(false);
+
   useEffect(() => {
     startPresence();
     return () => stopPresence();
+  }, []);
+
+  // Wheel/trackpad pans the plane. A native non-passive listener so the
+  // horizontal axis can't trigger browser back/forward overscroll.
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      setPan((prev) => ({ x: prev.x - event.deltaX, y: prev.y - event.deltaY }));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
   const titles = useMemo(() => {
@@ -109,33 +140,21 @@ export function Canvas() {
   }, [notes]);
 
   // Notes without a stored position (e.g. chat drafts) cascade near the top-left.
-  // The fixture layout was authored for a wider board; scale it down to fit so
-  // far-right cards don't clip the viewport (desktop-first).
+  // The plane is infinite, so authored coordinates are used as-is — the viewer
+  // pans to reach cards rather than the board scaling to fit them.
   const positions = useMemo(() => {
-    const TARGET_W = 1140;
-    const TARGET_H = 660;
-    const raw = new Map<string, { x: number; y: number }>();
+    const map = new Map<string, { x: number; y: number }>();
     let cascade = 0;
     for (const note of notes) {
       const stored = layout[note.noteId];
       if (stored) {
-        raw.set(note.noteId, stored);
+        map.set(note.noteId, stored);
       } else {
-        raw.set(note.noteId, { x: 60 + cascade * 32, y: 60 + cascade * 32 });
+        map.set(note.noteId, { x: 60 + cascade * 32, y: 60 + cascade * 32 });
         cascade += 1;
       }
     }
-    let maxRight = 0;
-    let maxBottom = 0;
-    for (const p of raw.values()) {
-      maxRight = Math.max(maxRight, p.x + CARD_WIDTH);
-      maxBottom = Math.max(maxBottom, p.y + 110);
-    }
-    const scale = Math.min(1, TARGET_W / maxRight, TARGET_H / maxBottom);
-    if (scale >= 1) return raw;
-    const scaled = new Map<string, { x: number; y: number }>();
-    for (const [id, p] of raw) scaled.set(id, { x: Math.round(p.x * scale), y: Math.round(p.y * scale) });
-    return scaled;
+    return map;
   }, [notes, layout]);
 
   const edges = useMemo(() => {
@@ -199,6 +218,35 @@ export function Canvas() {
     }
   };
 
+  // Pan the plane when a drag starts on empty canvas (cards and chrome keep
+  // their own pointer handling, so a drag on them never pans).
+  const onCanvasPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest('.pgcv-note, .pgcv-tools, .pgcv-avs')) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    panRef.current = {
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      originX: pan.x,
+      originY: pan.y,
+    };
+    setPanning(true);
+  };
+
+  const onCanvasPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const p = panRef.current;
+    if (!p) return;
+    setPan({
+      x: p.originX + (event.clientX - p.startClientX),
+      y: p.originY + (event.clientY - p.startClientY),
+    });
+  };
+
+  const onCanvasPointerUp = () => {
+    if (!panRef.current) return;
+    panRef.current = null;
+    setPanning(false);
+  };
+
   return (
     <div className="pged">
       <div className="pged-top">
@@ -215,77 +263,94 @@ export function Canvas() {
           Share board
         </button>
       </div>
-      <div className="pgcv">
-        <svg className="pgcv-edges" aria-hidden="true">
-          {edges.map((edge) => {
-            const from = positions.get(edge.from);
-            const to = positions.get(edge.to);
-            if (!from || !to) return null;
+      <div
+        className="pgcv"
+        ref={viewportRef}
+        onPointerDown={onCanvasPointerDown}
+        onPointerMove={onCanvasPointerMove}
+        onPointerUp={onCanvasPointerUp}
+        onPointerCancel={onCanvasPointerUp}
+        style={{
+          backgroundPosition: `${pan.x}px ${pan.y}px`,
+          touchAction: 'none',
+          cursor: panning ? 'grabbing' : tool === 'hand' ? 'grab' : 'default',
+        }}
+      >
+        <div
+          className="pgcv-world"
+          style={{ position: 'absolute', inset: 0, transform: `translate(${pan.x}px, ${pan.y}px)` }}
+        >
+          <svg className="pgcv-edges" style={{ overflow: 'visible' }} aria-hidden="true">
+            {edges.map((edge) => {
+              const from = positions.get(edge.from);
+              const to = positions.get(edge.to);
+              if (!from || !to) return null;
+              return (
+                <line
+                  key={`${edge.from}~${edge.to}`}
+                  x1={from.x + CARD_WIDTH / 2}
+                  y1={from.y + CARD_CENTER_Y}
+                  x2={to.x + CARD_WIDTH / 2}
+                  y2={to.y + CARD_CENTER_Y}
+                  stroke="#9AA7C4"
+                  strokeOpacity="0.3"
+                  strokeWidth="1"
+                />
+              );
+            })}
+          </svg>
+
+          {peers.map((peer) => (
+            <PeerCursor key={peer.id} peer={peer} />
+          ))}
+
+          {notes.map((note) => {
+            const pos = positions.get(note.noteId);
+            if (!pos) return null;
+            const byAgent = note.author.startsWith('agent');
+            const classes = [
+              'pgcv-note',
+              byAgent ? 'byagent2' : '',
+              draggingId === note.noteId ? 'drag2' : '',
+              materializedNoteId === note.noteId ? 'pop2' : '',
+            ]
+              .filter(Boolean)
+              .join(' ');
             return (
-              <line
-                key={`${edge.from}~${edge.to}`}
-                x1={from.x + CARD_WIDTH / 2}
-                y1={from.y + CARD_CENTER_Y}
-                x2={to.x + CARD_WIDTH / 2}
-                y2={to.y + CARD_CENTER_Y}
-                stroke="#9AA7C4"
-                strokeOpacity="0.3"
-                strokeWidth="1"
-              />
+              <div
+                key={note.noteId}
+                className={classes}
+                style={{ left: pos.x, top: pos.y }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open ${note.title || 'Untitled note'}`}
+                onPointerDown={(event) => onCardPointerDown(event, note.noteId)}
+                onPointerMove={onCardPointerMove}
+                onPointerUp={onCardPointerUp}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    navigate(`/app/notes/${note.noteId}`);
+                  }
+                }}
+              >
+                <div className="nt3">{note.title || 'Untitled note'}</div>
+                <div className="nb3">{excerptOf(note, titles)}</div>
+                {byAgent ? (
+                  <div className="na3">
+                    <i>✧ {name.toLowerCase()} · {shortAge(note.updatedAt)}</i>
+                  </div>
+                ) : null}
+              </div>
             );
           })}
-        </svg>
+        </div>
 
         <div className="pgcv-avs" aria-label={`Mira, ${name} and you are on this board`}>
           <span className="av m">M</span>
           <span className="av n" aria-hidden="true">✧</span>
           <span className="av y">Y</span>
         </div>
-
-        {peers.map((peer) => (
-          <PeerCursor key={peer.id} peer={peer} />
-        ))}
-
-        {notes.map((note) => {
-          const pos = positions.get(note.noteId);
-          if (!pos) return null;
-          const byAgent = note.author.startsWith('agent');
-          const classes = [
-            'pgcv-note',
-            byAgent ? 'byagent2' : '',
-            draggingId === note.noteId ? 'drag2' : '',
-            materializedNoteId === note.noteId ? 'pop2' : '',
-          ]
-            .filter(Boolean)
-            .join(' ');
-          return (
-            <div
-              key={note.noteId}
-              className={classes}
-              style={{ left: pos.x, top: pos.y }}
-              role="button"
-              tabIndex={0}
-              aria-label={`Open ${note.title || 'Untitled note'}`}
-              onPointerDown={(event) => onCardPointerDown(event, note.noteId)}
-              onPointerMove={onCardPointerMove}
-              onPointerUp={onCardPointerUp}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  navigate(`/app/notes/${note.noteId}`);
-                }
-              }}
-            >
-              <div className="nt3">{note.title || 'Untitled note'}</div>
-              <div className="nb3">{excerptOf(note, titles)}</div>
-              {byAgent ? (
-                <div className="na3">
-                  <i>✧ {name.toLowerCase()} · {shortAge(note.updatedAt)}</i>
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
 
         <div className="pgcv-tools" aria-label="Canvas tools">
           {DECOR_TOOLS.map((t) => (
