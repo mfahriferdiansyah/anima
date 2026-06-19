@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { createNote, useVault } from '@/hooks/useVault';
 import type { Note } from '@/hooks/useVault';
+import { SHARED_CANVAS_ID, useCanvases } from '@/hooks/useCanvases';
 import { moveNote, startPresence, stopPresence, usePresence } from '@/hooks/usePresence';
 import type { Peer } from '@/hooks/usePresence';
 import { scheduleAgentNote } from '@/hooks/useAgentTimeline';
@@ -137,6 +138,11 @@ interface PanState {
 export function Canvas() {
   const session = useVaultSession();
   const navigate = useNavigate();
+  const { canvasId } = useParams();
+  const canvases = useCanvases();
+  // The seed board shows the shared note constellation; created boards are blank.
+  const isShared = !canvasId || canvasId === SHARED_CANVAS_ID;
+  const boardTitle = canvases.find((c) => c.canvasId === (canvasId ?? SHARED_CANVAS_ID))?.title ?? 'Untitled board';
   const { notes } = useVault();
   const { peers, layout, savingLayout, materializedNoteId } = usePresence();
   const dragRef = useRef<DragState | null>(null);
@@ -161,10 +167,21 @@ export function Canvas() {
   const idSeq = useRef(0);
   const nextId = () => `sh${++idSeq.current}`;
 
+  // Presence + the live constellation belong to the shared board only.
   useEffect(() => {
+    if (!isShared) return;
     startPresence();
     return () => stopPresence();
-  }, []);
+  }, [isShared]);
+
+  // Each board carries its own (session-local) drawings; switching clears them.
+  useEffect(() => {
+    setShapes([]);
+    setDraft(null);
+    setSelectedId(null);
+    setEditingId(null);
+    draftRef.current = null;
+  }, [canvasId]);
 
   // Wheel/trackpad pans the plane. A native non-passive listener so the
   // horizontal axis can't trigger browser back/forward overscroll.
@@ -462,7 +479,7 @@ export function Canvas() {
     <div className="pged">
       <div className="pged-top">
         <span className="pgcrumb">
-          <b>Canvas</b> · shared board
+          <b>Canvas</b> · {boardTitle}
         </span>
         <span className="sp" />
         {savingLayout ? (
@@ -492,7 +509,7 @@ export function Canvas() {
           style={{ position: 'absolute', inset: 0, transform: `translate(${pan.x}px, ${pan.y}px)` }}
         >
           <svg className="pgcv-edges" style={{ overflow: 'visible' }} aria-hidden="true">
-            {edges.map((edge) => {
+            {isShared && edges.map((edge) => {
               const from = positions.get(edge.from);
               const to = positions.get(edge.to);
               if (!from || !to) return null;
@@ -556,11 +573,11 @@ export function Canvas() {
             ),
           )}
 
-          {peers.map((peer) => (
+          {isShared && peers.map((peer) => (
             <PeerCursor key={peer.id} peer={peer} />
           ))}
 
-          {notes.map((note) => {
+          {isShared && notes.map((note) => {
             const pos = positions.get(note.noteId);
             if (!pos) return null;
             const byAgent = note.author.startsWith('agent');
@@ -602,11 +619,13 @@ export function Canvas() {
           })}
         </div>
 
-        <div className="pgcv-avs" aria-label={`Mira, ${name} and you are on this board`}>
-          <span className="av m">M</span>
-          <span className="av n" aria-hidden="true">✧</span>
-          <span className="av y">Y</span>
-        </div>
+        {isShared ? (
+          <div className="pgcv-avs" aria-label={`Mira, ${name} and you are on this board`}>
+            <span className="av m">M</span>
+            <span className="av n" aria-hidden="true">✧</span>
+            <span className="av y">Y</span>
+          </div>
+        ) : null}
 
         <div className="pgcv-tools" aria-label="Canvas tools">
           {TOOLS.map((t) => (
@@ -628,9 +647,11 @@ export function Canvas() {
               <line x1="5" y1="12" x2="19" y2="12" />
             </ToolIcon>
           </button>
-          <button type="button" className="recall" onClick={() => scheduleAgentNote()}>
-            <span aria-hidden="true">✧</span> Recall
-          </button>
+          {isShared ? (
+            <button type="button" className="recall" onClick={() => scheduleAgentNote()}>
+              <span aria-hidden="true">✧</span> Recall
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

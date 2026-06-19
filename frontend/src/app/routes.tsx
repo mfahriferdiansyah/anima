@@ -43,7 +43,7 @@ export function AppRoutes() {
         <Route index element={<Home />} />
         <Route path="companion" element={<Companion />} />
         <Route path="notes/:noteId?" element={<Notes />} />
-        <Route path="canvas" element={<Canvas />} />
+        <Route path="canvas/:canvasId?" element={<Canvas />} />
         <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
