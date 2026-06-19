@@ -303,9 +303,20 @@ function ChatOrb({ agentName }: { agentName: string }) {
 export function AppShell({ session }: { session: ReadySession }) {
   const count = session.index.count;
   const { scenario } = useScenario();
+  const location = useLocation();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  // The drawer is modal on small screens; any navigation dismisses it.
+  useEffect(() => setDrawerOpen(false), [location.pathname]);
   return (
     <div className="shell v-single">
       <header className="pghead">
+        <button type="button" className="pgburger" aria-label="Toggle menu" aria-expanded={drawerOpen} onClick={() => setDrawerOpen((open) => !open)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
         <span className="pgagent">
           <span className="ag2" aria-hidden="true">✦</span>
           <span className="agname">{session.agent.name}</span>
@@ -321,7 +332,8 @@ export function AppShell({ session }: { session: ReadySession }) {
         </button>
       </header>
       <div className="pgbody">
-        <aside className="pgtree">
+        {drawerOpen ? <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)} aria-hidden="true" /> : null}
+        <aside className={drawerOpen ? 'pgtree open' : 'pgtree'}>
           <div className="pgtree-top">
             <div className="pgmark2">
               {BRAND_NAME}

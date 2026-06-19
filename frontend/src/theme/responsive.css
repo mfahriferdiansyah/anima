@@ -1,0 +1,105 @@
+/* ============================================================================
+   Responsive layer. kit.css is the desktop spec (verbatm); this file adds the
+   tablet and mobile tiers on top. Three breakpoints:
+     <= 1024  drawer nav (sidebar off-canvas), Home rail stacks, canvas pans
+     <= 768   tablet: fluid columns, calendar scrolls, quick-starts collapse
+     <= 480   mobile: condensed top bar, single column, touch-sized controls
+   ========================================================================== */
+
+/* hamburger + backdrop are desktop-hidden; the drawer query turns them on */
+.pgburger { display: none; }
+.drawer-backdrop { display: none; }
+
+/* ----------------------------------------------------------------- <= 1024 */
+@media (max-width: 1024px) {
+  .pgburger {
+    display: flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; margin: 0 2px 0 -6px;
+    border: none; background: none; cursor: pointer;
+    color: var(--ink-900); border-radius: 8px;
+  }
+  .pgburger svg { width: 20px; height: 20px; }
+  .pgburger:hover { background: rgba(22, 24, 29, .06); }
+
+  /* sidebar becomes an off-canvas drawer */
+  .shell .pgtree {
+    position: fixed; top: 0; left: 0; height: 100%; width: 276px; z-index: 90;
+    transform: translateX(-100%);
+    transition: transform .22s var(--motion-easing-enter);
+    box-shadow: 0 0 48px rgba(22, 24, 29, .22);
+  }
+  .shell .pgtree.open { transform: translateX(0); }
+  .drawer-backdrop {
+    display: block; position: fixed; inset: 0; z-index: 89;
+    background: rgba(22, 24, 29, .40);
+    animation: fadein var(--motion-duration-base) ease;
+  }
+
+  /* Home: the suggestions rail drops under the calendar */
+  .pgh6 { flex-direction: column; }
+  .pgh6-rail { width: 100%; flex: none; }
+  .pghcol6 { max-width: 920px; }
+
+  /* Canvas: let the board pan, keep the chrome pinned to the viewport */
+  .shell .pgcv { overflow: auto; -webkit-overflow-scrolling: touch; }
+  .shell .pgcv-tools { position: fixed; left: 50%; bottom: 18px; }
+  .shell .pgcv-avs { position: fixed; top: 56px; right: 18px; }
+}
+
+/* ------------------------------------------------------------------ <= 768 */
+@media (max-width: 768px) {
+  .pghcol6 { padding: 28px 20px 64px; }
+  .pgh5-hello { flex-wrap: wrap; }
+  .pgh5-date { width: 100%; margin-left: 0; order: 3; }
+
+  /* quick-starts: 3 -> 2 columns */
+  .pgh-quick { grid-template-columns: repeat(2, 1fr); }
+
+  /* calendar scrolls horizontally as a unit (markup wraps the grids) */
+  .pgcal-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .pgcal-scroll .pgcal-days,
+  .pgcal-scroll .pgcal-allday,
+  .pgcal-scroll .pgcal-grid { min-width: 600px; }
+  .pgcal-t { flex-wrap: wrap; row-gap: 8px; }
+
+  /* editor + chat + settings columns go fluid */
+  .pgcol { padding: 36px 22px 80px; }
+  .pgccol { padding: 22px 18px 24px; }
+  .pgcomposer { padding: 6px 16px 16px; }
+  .pgstcol { padding: 32px 22px 72px; }
+}
+
+/* ------------------------------------------------------------------ <= 480 */
+@media (max-width: 480px) {
+  .shell .pghead { padding: 0 12px; gap: 8px; }
+  .pghead .pgaddr { display: none; }
+  .pghead .pgpill { margin-left: auto; }
+
+  /* quick-starts stack */
+  .pgh-quick { grid-template-columns: 1fr; }
+  .pghcol6 { padding: 22px 14px 56px; }
+  .pgh5-hello h2 { font-size: 22px; }
+
+  /* editor */
+  .pgcol { padding: 26px 16px 64px; }
+  .pgtitle { font-size: 25px; }
+  .pged-top { flex-wrap: wrap; row-gap: 6px; height: auto; padding: 8px 14px; }
+  .pgstatus .pgspeak { display: none; }
+
+  /* chat */
+  .pgccol { padding: 18px 14px 20px; }
+
+  /* settings rows wrap their right-aligned values */
+  .pgstcol { padding: 24px 14px 56px; }
+  .pgst-row, .pgst-key, .pgst-k, .pgst-v { flex-wrap: wrap; row-gap: 6px; }
+
+  /* drawer takes most of the width on a phone */
+  .shell .pgtree { width: 82vw; max-width: 320px; }
+
+  /* landing: scale the hero + section padding down */
+  .ld-hero { padding: 40px 0 70px; }
+  .ld-hero h1 { font-size: 34px; }
+  .ld-sec { padding: 48px 22px; }
+}
+
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }

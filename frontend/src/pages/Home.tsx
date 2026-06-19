@@ -176,6 +176,7 @@ function WeekCalendar() {
           synced 2m ago
         </span>
       </div>
+      <div className="pgcal-scroll">
       <div className="pgcal-days">
         <span />
         {cols.map((d, i) => (
@@ -241,6 +242,7 @@ function WeekCalendar() {
           );
         })}
         {tIdx >= 0 && tIdx < 7 ? <div className="nowline2" style={{ top: (11.4 - H0) * PX, left: 52, right: 0 }} /> : null}
+      </div>
       </div>
     </div>
   );

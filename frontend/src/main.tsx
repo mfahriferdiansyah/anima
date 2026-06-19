@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import '@/theme/kit.css';
 import { BRAND_NAME } from '@/brand';
 import { App } from '@/app/App';
+// imported after App so the responsive layer wins over shell/page CSS
+import '@/theme/responsive.css';
 import { failNextWrite } from '@/mocks/vaultStore';
 import { failNextRebuild } from '@/mocks/sessionStore';
 import { triggerLowBalance } from '@/mocks/chatStore';
