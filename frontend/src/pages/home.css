@@ -1,0 +1,107 @@
+/* ============================================================================
+   Home calendar refinements. The kit's .pgcal* base lives verbatim in kit.css;
+   these overrides are scoped under the Home page root (.pghpaper) so they can't
+   leak to the component-library surface. Three goals from the design review:
+   calmer colour, readable blocks, and a grid you can actually scroll.
+   ========================================================================== */
+
+/* The agenda scrolls inside a fixed viewport while the toolbar + header stay
+   pinned, so Home stays a single screen and the week scrolls internally. The
+   height is set per-view (.pgag-scroll below); this carries the shared chrome. */
+.pghpaper .pgcal-gridscroll {
+  min-height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.pghpaper .pgcal-gridscroll::-webkit-scrollbar { width: 8px; }
+.pghpaper .pgcal-gridscroll::-webkit-scrollbar-thumb { background: rgba(22, 24, 29, .14); border-radius: 4px; }
+.pghpaper .pgcal-gridscroll::-webkit-scrollbar-track { background: transparent; }
+
+/* Calendar card header. Under the big page greeting the kit's "Your week" title
+   read quiet and its subtitle sat at 48% ink — lift the title's size/weight and
+   darken the subtitle so the header is legible at a glance. */
+.pghpaper .pgcal-t > div > b { font-size: 20px; font-weight: 700; letter-spacing: -.015em; }
+.pghpaper .pgcal-t > div > span { font-size: 12.5px; color: rgba(22, 24, 29, .62); }
+
+/* The week is a day-grouped agenda list, not a 7-column time grid: 80px columns
+   forced titles to truncate ("Walrus stor…") no matter how they were clamped, so
+   each event is now a full-width row that reads at a glance. A row is a coloured
+   source dot + title + source line + right-aligned time; colour stays reserved
+   for the source (teal Seals / orange Nova / blue Google) and today wayfinding. */
+.pghpaper .pgag { padding: 2px 0 10px; }
+.pghpaper .pgag-scroll { height: calc(100vh - 376px); }
+
+/* day header: weekday + date, a hairline rule, blue TODAY pill on the current day */
+.pghpaper .pgagd { display: flex; align-items: baseline; gap: 10px; padding: 15px 18px 7px; }
+.pghpaper .pgag-day:first-child .pgagd { padding-top: 10px; }
+.pghpaper .pgagd .dn { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: .08em; color: rgba(22, 24, 29, .5); }
+.pghpaper .pgagd .dd { font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 600; color: var(--ink-900); }
+.pghpaper .pgagd.tdy .dd { color: var(--blue-600); }
+.pghpaper .pgagd .tpill { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: .07em; color: #fff; background: var(--blue-600); border-radius: 999px; padding: 2px 7px; }
+.pghpaper .pgagd .hr { flex: 1; height: 1px; background: rgba(22, 24, 29, .08); }
+
+/* event row (a <button>): strip UA chrome; only memory rows (.link) get a pointer */
+.pghpaper .pgagrow {
+  display: flex; align-items: center; gap: 11px; width: 100%; padding: 8px 18px;
+  border: none; background: none; font: inherit; text-align: left; cursor: default;
+  -webkit-appearance: none; appearance: none;
+}
+.pghpaper .pgagrow.link { cursor: pointer; }
+.pghpaper .pgagrow.link:hover { background: rgba(22, 24, 29, .028); }
+.pghpaper .pgagrow .cdot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: rgba(22, 24, 29, .3); }
+.pghpaper .pgagrow.seal .cdot { background: var(--teal-500); }
+.pghpaper .pgagrow.agent .cdot { background: var(--orange-500); }
+.pghpaper .pgagrow.gcal .cdot { background: var(--blue-600); }
+.pghpaper .pgagrow .bd { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pghpaper .pgagrow .bd b { font-size: 13.5px; font-weight: 600; line-height: 1.3; color: var(--ink-900); }
+.pghpaper .pgagrow .bd small { font-size: 11.5px; line-height: 1.3; color: rgba(22, 24, 29, .5); }
+.pghpaper .pgagrow .tm { flex: none; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: rgba(22, 24, 29, .5); white-space: nowrap; }
+.pghpaper .pgagrow .arr { flex: none; width: 14px; text-align: center; font-size: 13px; color: rgba(22, 24, 29, .18); }
+.pghpaper .pgagrow.link:hover .arr { color: var(--blue-600); }
+.pghpaper .pgag-empty { padding: 4px 18px 4px 40px; font-size: 12px; font-style: italic; color: rgba(22, 24, 29, .3); }
+
+/* all-day "plans" chip (now a button): neutral, dark text, a small ✧ tick */
+.pghpaper .adchip { background: rgba(22, 24, 29, .04); color: var(--ink-900); font-weight: 600; display: block; border: none; font-family: inherit; text-align: left; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.pghpaper .adchip i { color: var(--orange-500); }
+
+/* plans rail rows are buttons that open their source note */
+.pghpaper .plrow { background: none; border: none; font: inherit; text-align: left; cursor: pointer; -webkit-appearance: none; appearance: none; }
+
+/* Fit one page: tighten the column padding and the rhythm above the grid so
+   the greeting + quick-starts + calendar sit within a single viewport. */
+.pghpaper .pghcol6 { padding: 24px 40px 26px; }
+.pghpaper .pgh6-quick { margin: 14px 0 16px; }
+
+/* Rail cards: a full-width hairline under the header (title + description) so
+   it reads as a distinct header, not another list item. */
+.pghpaper .railt { margin: 0 -17px 12px; padding: 0 17px 11px; box-shadow: 0 1px 0 rgba(22, 24, 29, .08); }
+
+/* ---- Month view: a calm overview (dots + a couple of labels per day), not a
+   dense chip grid. Fills the remaining viewport so it stays a single page. ---- */
+.pghpaper .pgcal-month-wrap { display: flex; flex-direction: column; height: calc(100vh - 370px); min-height: 320px; }
+.pghpaper .pgcal-mhead { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); padding: 4px 0 9px; }
+.pghpaper .pgcal-mhead span { text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: rgba(22, 24, 29, .62); }
+.pghpaper .pgcal-month { flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid rgba(22, 24, 29, .07); border-left: 1px solid rgba(22, 24, 29, .07); }
+.pghpaper .pgcm-cell {
+  display: flex; flex-direction: column; gap: 2px; align-items: stretch; min-width: 0; overflow: hidden;
+  padding: 5px 6px; background: #fff; cursor: pointer; text-align: left; font: inherit;
+  border: none; border-right: 1px solid rgba(22, 24, 29, .07); border-bottom: 1px solid rgba(22, 24, 29, .07);
+  -webkit-appearance: none; appearance: none;
+}
+.pghpaper .pgcm-cell:hover { background: rgba(22, 24, 29, .025); }
+.pghpaper .pgcm-cell.dim { background: rgba(22, 24, 29, .012); }
+.pghpaper .pgcm-cell.dim .pgcm-d { color: rgba(22, 24, 29, .28); }
+.pghpaper .pgcm-d { align-self: flex-start; min-width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--ink-900); }
+.pghpaper .pgcm-cell.tdy .pgcm-d { background: var(--blue-600); color: #fff; }
+.pghpaper .pgcm-ev {
+  display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  padding: 1px 3px; border-radius: 4px; border: none; background: none; text-align: left; cursor: default;
+  font-family: inherit; font-size: 11px; font-weight: 500; color: var(--ink-900);
+}
+.pghpaper .pgcm-ev.link { cursor: pointer; }
+.pghpaper .pgcm-ev.link:hover { background: rgba(22, 24, 29, .05); }
+.pghpaper .pgcm-ev .cdot { position: static; flex: none; width: 5px; height: 5px; border-radius: 50%; background: rgba(22, 24, 29, .3); }
+.pghpaper .pgcm-ev.seal .cdot { background: var(--teal-500); }
+.pghpaper .pgcm-ev.agent .cdot { background: var(--orange-500); }
+.pghpaper .pgcm-ev.gcal .cdot { background: var(--blue-600); }
+.pghpaper .pgcm-more { padding-left: 3px; font-size: 9.5px; font-weight: 600; color: rgba(22, 24, 29, .40); }
