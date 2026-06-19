@@ -6,6 +6,7 @@
  * blank (a dotted grid you draw on).
  */
 import { createStore } from './store';
+import { seedCanvases } from './seed';
 
 export interface CanvasDoc {
   canvasId: string;
@@ -13,6 +14,8 @@ export interface CanvasDoc {
   desc: string;
   /** Folder key (matches a note tag[0] / the folders store). */
   folder: string;
+  /** Optional cover (preset path or uploaded data URL), shown on the home card. */
+  image?: string;
   /** The seed canvas shows the shared note constellation; others start blank. */
   seed?: boolean;
 }
@@ -20,12 +23,12 @@ export interface CanvasDoc {
 export const SHARED_CANVAS_ID = 'shared';
 
 const seed: CanvasDoc[] = [
-  { canvasId: SHARED_CANVAS_ID, title: 'Shared canvas', desc: 'The whole vault as one live constellation.', folder: 'research', seed: true },
-  { canvasId: 'c-lisbon', title: 'Lisbon planning canvas', desc: 'Routes, places and bookings on one board.', folder: 'trips' },
-  { canvasId: 'c-demo', title: 'Demo day canvas', desc: 'Storyboard for the seven-minute walkthrough.', folder: 'work' },
+  { canvasId: SHARED_CANVAS_ID, title: 'Shared canvas', desc: 'The whole vault as one live constellation.', folder: 'research', image: '/covers/ink.svg', seed: true },
+  { canvasId: 'c-lisbon', title: 'Lisbon planning canvas', desc: 'Routes, places and bookings on one board.', folder: 'trips', image: '/covers/dusk.svg' },
+  { canvasId: 'c-demo', title: 'Demo day canvas', desc: 'Storyboard for the seven-minute walkthrough.', folder: 'work', image: '/covers/ember.svg' },
 ];
 
-const store = createStore<CanvasDoc[]>(seed);
+const store = createStore<CanvasDoc[]>([...seed, ...seedCanvases]);
 
 export const canvasStore = {
   getSnapshot: store.getSnapshot,
@@ -46,8 +49,8 @@ export function setCanvasFolder(canvasId: string, folder: string): void {
   store.update((prev) => prev.map((c) => (c.canvasId === canvasId ? { ...c, folder } : c)));
 }
 
-/** Edit a canvas title / description (manage modal). */
-export function updateCanvas(canvasId: string, patch: { title?: string; desc?: string }): void {
+/** Edit a canvas title / description / cover (manage modal). */
+export function updateCanvas(canvasId: string, patch: { title?: string; desc?: string; image?: string }): void {
   store.update((prev) => prev.map((c) => (c.canvasId === canvasId ? { ...c, ...patch } : c)));
 }
 

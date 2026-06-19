@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createCanvas, useCanvases, useFolders } from '@/hooks/useCanvases';
 import { buildLibrary } from '@/app/library';
+import { ManageLibrary } from '@/app/ManageLibrary';
 import './sectionhome.css';
 
 function titleCase(value: string): string {
@@ -17,13 +19,18 @@ const GRID_GLYPH = (
 );
 
 /** Canvas home: the overview reached from the Canvas nav — every canvas as a
- *  card (title + description), grouped into the same folders as the sidebar.
- *  Open one to enter its board. */
+ *  card (cover or grid glyph + title + description), grouped into the same
+ *  folders as the sidebar. Open one to enter its board. */
 export function CanvasHome() {
   const navigate = useNavigate();
   const canvases = useCanvases();
   const folderOrder = useFolders();
-  const folders = buildLibrary([], canvases, folderOrder).filter((folder) => folder.items.length > 0);
+  const [query, setQuery] = useState('');
+  const [manageOpen, setManageOpen] = useState(false);
+  const q = query.trim().toLowerCase();
+  const folders = buildLibrary([], canvases, folderOrder)
+    .map((folder) => ({ ...folder, items: q ? folder.items.filter((it) => it.title.toLowerCase().includes(q)) : folder.items }))
+    .filter((folder) => folder.items.length > 0);
 
   const newCanvas = () => navigate(`/app/canvas/${createCanvas()}`);
 
@@ -34,6 +41,15 @@ export function CanvasHome() {
           <b>Canvas</b> · {canvases.length} {canvases.length === 1 ? 'canvas' : 'canvases'}
         </span>
         <span className="sp" />
+        <span className="pghome-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input type="text" placeholder="Search canvases" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search canvases" />
+        </span>
+        <button type="button" className="pgbtn" onClick={() => setManageOpen(true)}>
+          Organize
+        </button>
         <button type="button" className="pgbtn primary" onClick={newCanvas}>
           New canvas
         </button>
@@ -57,17 +73,22 @@ export function CanvasHome() {
                       className="pglib-card canvas"
                       onClick={() => navigate(`/app/canvas/${canvas.canvasId}`)}
                     >
-                      <span className="pglib-ic">{GRID_GLYPH}</span>
-                      <div className="pglib-t">{canvas.title || 'Untitled canvas'}</div>
-                      <div className="pglib-x">{canvas.desc || 'A blank canvas to draw on.'}</div>
+                      {canvas.image ? <span className="pglib-cover"><img src={canvas.image} alt="" /></span> : null}
+                      <span className="pglib-body">
+                        {!canvas.image ? <span className="pglib-ic">{GRID_GLYPH}</span> : null}
+                        <span className="pglib-t">{canvas.title || 'Untitled canvas'}</span>
+                        <span className="pglib-x">{canvas.desc || 'A blank canvas to draw on.'}</span>
+                      </span>
                     </button>
                   );
                 })}
               </div>
             </div>
           ))}
+          {folders.length === 0 ? <div className="pghome-empty">No canvases match “{query}”.</div> : null}
         </div>
       </div>
+      {manageOpen ? <ManageLibrary onClose={() => setManageOpen(false)} /> : null}
     </div>
   );
 }

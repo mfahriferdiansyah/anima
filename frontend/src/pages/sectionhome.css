@@ -15,12 +15,15 @@
 .pglib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
 
 .pglib-card {
-  display: flex; flex-direction: column; gap: 6px; min-height: 118px; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; min-height: 118px; text-align: left; cursor: pointer; overflow: hidden;
   background: #fff; border: none; border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(22, 24, 29, .10);
-  padding: 14px 15px; font: inherit; -webkit-appearance: none; appearance: none;
+  font: inherit; -webkit-appearance: none; appearance: none;
   transition: box-shadow 150ms ease, transform 150ms ease;
 }
 .pglib-card:hover { box-shadow: inset 0 0 0 1px rgba(22, 24, 29, .16), var(--shadow-softer); transform: translateY(-1px); }
+.pglib-cover { display: block; flex: none; height: 84px; background: var(--gray-100); }
+.pglib-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pglib-body { display: flex; flex-direction: column; gap: 6px; flex: 1; padding: 13px 15px 15px; }
 .pglib-ic { width: 18px; height: 18px; display: flex; color: rgba(22, 24, 29, .4); }
 .pglib-ic svg { width: 17px; height: 17px; }
 .pglib-card.canvas .pglib-ic { color: var(--orange-500); }
@@ -28,3 +31,11 @@
 .pglib-x { flex: 1; font-size: 12.5px; line-height: 1.45; color: rgba(22, 24, 29, .55); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .pglib-m { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 700; color: var(--orange-500); }
 .pglib-m i { font-style: normal; }
+
+/* home toolbar: search filter + Organize, in the .pged-top bar */
+.pghome-search { position: relative; width: 200px; }
+.pghome-search input { width: 100%; height: 28px; border: 1px solid var(--gray-200); border-radius: 8px; background: #fff; padding: 0 10px 0 28px; font-family: 'Inter', sans-serif; font-size: 12.5px; color: var(--ink-900); transition: border-color 150ms ease; }
+.pghome-search input::placeholder { color: rgba(22, 24, 29, .4); }
+.pghome-search input:focus { outline: none; border-color: var(--blue-300); }
+.pghome-search svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; color: rgba(22, 24, 29, .4); pointer-events: none; }
+.pghome-empty { padding: 30px 4px; font-size: 13px; color: rgba(22, 24, 29, .45); }

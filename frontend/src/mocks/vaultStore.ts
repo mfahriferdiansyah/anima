@@ -19,6 +19,7 @@ export interface NotePatch {
   body?: string;
   tags?: string[];
   links?: string[];
+  image?: string;
 }
 
 export interface VaultState {

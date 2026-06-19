@@ -5,6 +5,8 @@
  * settings page data. Shapes follow docs/integration.md.
  */
 
+import { seedNotes } from './seed';
+
 export interface Note {
   noteId: string;
   version: number;
@@ -14,6 +16,8 @@ export interface Note {
   links: string[];
   title: string;
   body: string;
+  /** Optional banner cover (preset path or uploaded data URL). */
+  image?: string;
 }
 
 export const COMPANION_NAME = 'Nova';
@@ -121,6 +125,7 @@ const demoNotes: Note[] = [
     author: OWNER_AUTHOR,
     tags: ['trips', 'lisbon'],
     links: ['n-packing', 'n-flights'],
+    image: '/covers/dusk.svg',
     title: 'Lisbon trip plan',
     body: [
       'Four days, late June. Alfama first, then a slow day in Belem.',
@@ -242,9 +247,10 @@ const demoNotes: Note[] = [
   },
 ];
 
-/** Fresh copy of the 12-note demo vault. Mutating the result never touches the fixture. */
+/** Fresh copy of the demo vault (curated notes + generated seed). Mutating the
+ *  result never touches the fixture. */
 export function makeVault(): Note[] {
-  return demoNotes.map((note) => ({ ...note, tags: [...note.tags], links: [...note.links] }));
+  return [...demoNotes, ...seedNotes].map((note) => ({ ...note, tags: [...note.tags], links: [...note.links] }));
 }
 
 /** The first-run variant: onboarding completes into a vault with zero notes. */

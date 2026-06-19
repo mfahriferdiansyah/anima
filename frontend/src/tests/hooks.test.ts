@@ -83,7 +83,7 @@ describe('sessionStore: first-run scenario (AE1)', () => {
 });
 
 describe('sessionStore: returning scenario (AE2)', () => {
-  it('rebuilds with monotonically increasing done, then ready with 12 notes', async () => {
+  it('rebuilds with monotonically increasing done, then ready with the full vault', async () => {
     const doneSeen: number[] = [];
     sessionStore.subscribe(() => {
       const state = sessionStore.getSnapshot();
@@ -107,8 +107,8 @@ describe('sessionStore: returning scenario (AE2)', () => {
       expect(doneSeen[i]).toBeGreaterThanOrEqual(doneSeen[i - 1]);
     }
     expect(doneSeen[doneSeen.length - 1]).toBe(7);
-    expect(ready.index.count).toBe(12);
-    expect(vaultStore.getSnapshot().notes).toHaveLength(12);
+    expect(ready.index.count).toBe(makeVault().length);
+    expect(vaultStore.getSnapshot().notes).toHaveLength(makeVault().length);
   });
 });
 
@@ -134,7 +134,7 @@ describe('sessionStore: unpaired scenario', () => {
     await vi.advanceTimersByTimeAsync(7 * 450 + 500);
     const ready = sessionStore.getSnapshot();
     expect(ready.phase).toBe('ready');
-    expect(vaultStore.getSnapshot().notes).toHaveLength(12);
+    expect(vaultStore.getSnapshot().notes).toHaveLength(makeVault().length);
   });
 });
 
@@ -258,7 +258,7 @@ describe('presenceStore: canvas layout (U9)', () => {
       x: materializeNoteSeed.x,
       y: materializeNoteSeed.y,
     });
-    expect(vaultStore.getSnapshot().notes).toHaveLength(13);
+    expect(vaultStore.getSnapshot().notes).toHaveLength(makeVault().length + 1);
 
     await vi.advanceTimersByTimeAsync(2500);
     expect(presenceStore.getSnapshot().materializedNoteId).toBeNull();

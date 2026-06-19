@@ -23,7 +23,8 @@ type Shape =
   | { id: string; kind: 'draw'; pts: number[] }
   | { id: string; kind: 'rect'; x: number; y: number; w: number; h: number }
   | { id: string; kind: 'arrow'; x1: number; y1: number; x2: number; y2: number }
-  | { id: string; kind: 'text'; x: number; y: number; text: string };
+  | { id: string; kind: 'text'; x: number; y: number; text: string }
+  | { id: string; kind: 'image'; x: number; y: number; w: number; h: number; src: string };
 
 /** Kit .aged format. */
 function shortAge(iso: string): string {
@@ -61,6 +62,8 @@ function translateShape(s: Shape, dx: number, dy: number): Shape {
     case 'arrow':
       return { ...s, x1: s.x1 + dx, y1: s.y1 + dy, x2: s.x2 + dx, y2: s.y2 + dy };
     case 'text':
+      return { ...s, x: s.x + dx, y: s.y + dy };
+    case 'image':
       return { ...s, x: s.x + dx, y: s.y + dy };
   }
 }
@@ -168,6 +171,7 @@ export function Canvas() {
   const startRef = useRef({ x: 0, y: 0 });
   const shapeDragRef = useRef<{ id: string; startClientX: number; startClientY: number; origin: Shape } | null>(null);
   const textPendingRef = useRef<{ x: number; y: number } | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const idSeq = useRef(0);
   const nextId = () => `sh${++idSeq.current}`;
 
@@ -431,6 +435,32 @@ export function Canvas() {
     else setShapes((prev) => prev.map((s) => (s.id === id && s.kind === 'text' ? { ...s, text } : s)));
   };
 
+  // Upload an image; it lands as a small element at the viewport centre, sized
+  // to the file's aspect, then selectable/movable/deletable like any shape.
+  const onAddImage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const src = String(reader.result);
+      const probe = new Image();
+      probe.onload = () => {
+        const w = 220;
+        const h = probe.naturalWidth ? Math.round(w * (probe.naturalHeight / probe.naturalWidth)) : 150;
+        const rect = viewportRef.current?.getBoundingClientRect();
+        const x = (rect ? rect.width / 2 : 320) - pan.x - w / 2;
+        const y = (rect ? rect.height / 2 : 220) - pan.y - h / 2;
+        const shape: Shape = { id: nextId(), kind: 'image', x, y, w, h, src };
+        setShapes((prev) => [...prev, shape]);
+        setSelectedId(shape.id);
+        setTool('select');
+      };
+      probe.src = src;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const cursor = panning
     ? 'grabbing'
     : tool === 'hand'
@@ -442,7 +472,7 @@ export function Canvas() {
   // One shape -> its visible stroke plus (committed only) a fat invisible hit
   // band that opts into pointer events when the select tool is active.
   const renderShape = (s: Shape, isDraft: boolean) => {
-    if (s.kind === 'text') return null;
+    if (s.kind === 'text' || s.kind === 'image') return null;
     const sel = !isDraft && s.id === selectedId;
     const stroke = sel ? SEL : INK;
     const hit = !isDraft && tool === 'select';
@@ -580,6 +610,22 @@ export function Canvas() {
             ),
           )}
 
+          {shapes
+            .filter((s): s is Extract<Shape, { kind: 'image' }> => s.kind === 'image')
+            .map((s) => (
+              <img
+                key={s.id}
+                className={selectedId === s.id ? 'cv-image sel' : 'cv-image'}
+                src={s.src}
+                alt=""
+                draggable={false}
+                style={{ left: s.x, top: s.y, width: s.w, height: s.h, cursor: tool === 'select' ? 'move' : 'default' }}
+                onPointerDown={(e) => onShapePointerDown(e, s)}
+                onPointerMove={onShapePointerMove}
+                onPointerUp={onShapePointerUp}
+              />
+            ))}
+
           {isShared && peers.map((peer) => (
             <PeerCursor key={peer.id} peer={peer} />
           ))}
@@ -634,6 +680,7 @@ export function Canvas() {
           </div>
         ) : null}
 
+        <input ref={imageInputRef} type="file" accept="image/*" hidden onChange={onAddImage} />
         <div className="pgcv-tools" aria-label="Canvas tools">
           {TOOLS.map((t) => (
             <button
@@ -647,6 +694,13 @@ export function Canvas() {
               {t.icon}
             </button>
           ))}
+          <button type="button" aria-label="Add image" onClick={() => imageInputRef.current?.click()}>
+            <ToolIcon>
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="m21 15-5-5L5 21" />
+            </ToolIcon>
+          </button>
           <span className="tsep" />
           <button type="button" aria-label="New note card" onClick={newNote}>
             <ToolIcon>

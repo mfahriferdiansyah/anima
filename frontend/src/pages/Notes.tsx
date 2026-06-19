@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/Button';
@@ -7,6 +7,7 @@ import { useFolders } from '@/hooks/useCanvases';
 import { notesMounted } from '@/hooks/useAgentTimeline';
 import { useVaultSession } from '@/hooks/useVaultSession';
 import { buildLibrary } from '@/app/library';
+import { ManageLibrary } from '@/app/ManageLibrary';
 import { NoteEditor } from './NoteEditor';
 import './notes.css';
 import './sectionhome.css';
@@ -96,8 +97,13 @@ function NotesHome({ name, onNew }: { name: string; onNew: () => void }) {
   const navigate = useNavigate();
   const { notes } = useVault();
   const folderOrder = useFolders();
+  const [query, setQuery] = useState('');
+  const [manageOpen, setManageOpen] = useState(false);
   const titles = new Map(notes.map((note) => [note.noteId, note.title || 'Untitled']));
-  const folders = buildLibrary(notes, [], folderOrder).filter((folder) => folder.items.length > 0);
+  const q = query.trim().toLowerCase();
+  const folders = buildLibrary(notes, [], folderOrder)
+    .map((folder) => ({ ...folder, items: q ? folder.items.filter((it) => it.title.toLowerCase().includes(q)) : folder.items }))
+    .filter((folder) => folder.items.length > 0);
 
   return (
     <div className="pged">
@@ -106,6 +112,15 @@ function NotesHome({ name, onNew }: { name: string; onNew: () => void }) {
           <b>Notes</b> · {notes.length} {notes.length === 1 ? 'note' : 'notes'}
         </span>
         <span className="sp" />
+        <span className="pghome-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input type="text" placeholder="Search notes" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search notes" />
+        </span>
+        <button type="button" className="pgbtn" onClick={() => setManageOpen(true)}>
+          Organize
+        </button>
         <button type="button" className="pgbtn primary" onClick={onNew}>
           New note
         </button>
@@ -130,21 +145,26 @@ function NotesHome({ name, onNew }: { name: string; onNew: () => void }) {
                       className="pglib-card"
                       onClick={() => navigate(`/app/notes/${note.noteId}`)}
                     >
-                      <div className="pglib-t">{item.title}</div>
-                      <div className="pglib-x">{excerptOf(note.body, titles) || 'Empty note'}</div>
-                      {byAgent ? (
-                        <div className="pglib-m">
-                          <i>✧ {name.toLowerCase()} · {shortAge(note.updatedAt)}</i>
-                        </div>
-                      ) : null}
+                      {note.image ? <span className="pglib-cover"><img src={note.image} alt="" /></span> : null}
+                      <span className="pglib-body">
+                        <span className="pglib-t">{item.title}</span>
+                        <span className="pglib-x">{excerptOf(note.body, titles) || 'Empty note'}</span>
+                        {byAgent ? (
+                          <span className="pglib-m">
+                            <i>✧ {name.toLowerCase()} · {shortAge(note.updatedAt)}</i>
+                          </span>
+                        ) : null}
+                      </span>
                     </button>
                   );
                 })}
               </div>
             </div>
           ))}
+          {folders.length === 0 ? <div className="pghome-empty">No notes match “{query}”.</div> : null}
         </div>
       </div>
+      {manageOpen ? <ManageLibrary onClose={() => setManageOpen(false)} /> : null}
     </div>
   );
 }

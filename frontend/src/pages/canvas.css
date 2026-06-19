@@ -18,6 +18,10 @@
   color: var(--ink-900); white-space: pre-wrap; word-break: break-word; max-width: 340px; cursor: default;
 }
 .cv-text.sel { box-shadow: 0 0 0 1.5px var(--blue-600); border-radius: 4px; }
+/* image elements: small rendered images placed on the board, movable like shapes */
+.cv-image { position: absolute; display: block; border-radius: 8px; object-fit: cover; user-select: none; box-shadow: 0 1px 6px rgba(22, 24, 29, .14), inset 0 0 0 1px rgba(22, 24, 29, .08); }
+.cv-image.sel { box-shadow: 0 0 0 1.5px var(--blue-600); }
+
 .cv-text.editing {
   border: none; outline: 1.5px solid var(--blue-600); border-radius: 4px;
   background: rgba(255, 255, 255, .82); padding: 1px 3px; margin: -1px -3px; resize: none; overflow: hidden;

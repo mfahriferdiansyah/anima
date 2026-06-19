@@ -7,7 +7,7 @@
  */
 import { createStore } from './store';
 
-const store = createStore<string[]>(['research', 'trips', 'work']);
+const store = createStore<string[]>(['research', 'trips', 'work', 'reading', 'product']);
 
 export const foldersStore = {
   getSnapshot: store.getSnapshot,
