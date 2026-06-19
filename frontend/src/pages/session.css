@@ -1,41 +1,64 @@
 /* ============ session states (U4): checking · ceremony · pairing · rebuilding ============ */
+/* One branded gate surface for every non-ready phase. The first-run ceremony
+   is the only place the kit's stroke-drawn ✦ plays ("first board open"); the
+   other phases stay calm (spinner, breathing orb, quilt-fill) by design. */
 
-/* full-viewport gate surface shared by every non-ready phase */
-.gate{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;background:var(--color-surface);}
+/* full-viewport gate surface shared by every phase */
+.gate{position:relative;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;background:var(--color-surface);}
 .gate-line{font-size:12.5px;color:var(--gray-600);}
+
+/* the wordmark in the corner — the thread that ties the four phases together */
+.gate-mark{position:absolute;top:24px;left:28px;display:flex;align-items:center;gap:3px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;letter-spacing:-.01em;color:var(--ink-900);}
+.gate-mark i{font-style:normal;font-size:12px;color:var(--orange-500);}
+
+/* the quiet escape hatches: a text "disconnect" link, and the ceremony close X */
 .gate-escape{border:none;background:transparent;cursor:pointer;font-size:12.5px;color:var(--gray-600);text-decoration:underline;padding:4px;}
 .gate-escape:hover{color:var(--ink-900);}
 .gate-escape:focus-visible{outline:2.5px solid var(--blue-600);outline-offset:2px;border-radius:6px;}
+.gate-x{position:absolute;top:22px;right:24px;border:none;background:transparent;cursor:pointer;color:var(--gray-600);padding:7px;border-radius:9px;line-height:0;transition:background var(--motion-duration-fast) ease,color var(--motion-duration-fast) ease;}
+.gate-x:hover{background:var(--gray-100);color:var(--ink-900);}
+.gate-x:focus-visible{outline:2.5px solid var(--blue-600);outline-offset:2px;}
+.gate-x svg{width:16px;height:16px;display:block;}
 
-/* ceremony modal: header row with the close X (hidden once signing lands) */
-.ceremony-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;}
-.ceremony-x{flex:none;border:none;background:transparent;cursor:pointer;color:var(--gray-600);padding:5px;border-radius:8px;margin:-2px -6px 0 0;line-height:0;}
-.ceremony-x:hover{background:var(--gray-100);color:var(--ink-900);}
-.ceremony-x:focus-visible{outline:2.5px solid var(--blue-600);outline-offset:2px;}
-.ceremony-x svg{width:15px;height:15px;display:block;}
-.ceremony-body{display:flex;flex-direction:column;gap:14px;}
-.ceremony-body .field{max-width:none;}
-.ceremony-wait{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--gray-600);}
-.ceremony-wait .spinstar{display:inline-block;animation:spinstar 1.2s linear infinite;color:var(--blue-600);}
+/* ---- first-run ceremony: name → one signature → the star-draw ----
+   Full-bleed like the rebuild hero — content sits on the gate, no card box. */
+.cere{max-width:440px;width:100%;display:flex;flex-direction:column;align-items:center;gap:15px;text-align:center;}
+.cere-kick{font-size:11px;font-weight:700;letter-spacing:.16em;color:var(--blue-600);}
+.cere-h{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:clamp(29px,3.3vw,36px);letter-spacing:-.025em;line-height:1.06;}
+.cere-hl{color:var(--blue-600);}
+.cere-sub{font-size:13.5px;line-height:1.55;color:var(--gray-600);max-width:38ch;}
+.cere .field{max-width:none;width:100%;text-align:left;margin-top:2px;}
+.cere .inkpanel{width:100%;text-align:left;}
+.cere > .btn{width:100%;justify-content:center;margin-top:2px;}
+/* The ceremony is a centered stack now (no card), so its wallet row centers
+   too — overriding the global .wallet-actions right-align used by dialogs. */
+.cere .wallet-actions{width:100%;justify-content:center;}
+.cere-fine{margin-top:4px;font-size:11.5px;color:var(--gray-600);opacity:.85;}
+.cere-wait{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--gray-600);}
+.cere-wait .spinstar{display:inline-block;color:var(--blue-600);animation:spinstar 1.2s linear infinite;}
 
-/* onboarding progress: ✧ pending → spinning ✦ active → ✦ complete */
-.ceremony-steps{list-style:none;display:flex;flex-direction:column;gap:10px;}
+/* the single ceremony glyph, centered above the steps */
+.cere .stardraw{margin:2px auto 0;}
+
+/* onboarding progress: ✧ pending → ✦ active (bold) → ✦ complete */
+.cere-steps{list-style:none;display:inline-flex;flex-direction:column;gap:11px;text-align:left;margin:2px auto 0;}
 .cstep{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--gray-600);}
 .cstep .ci{width:18px;text-align:center;flex:none;color:#C9D4E8;}
-.cstep .ci .spinstar{display:inline-block;animation:spinstar 1.2s linear infinite;}
 .cstep.on{color:var(--ink-900);font-weight:600;}
 .cstep.on .ci{color:var(--blue-600);}
+.cstep.ok{color:var(--ink-900);}
 .cstep.ok .ci{color:var(--teal-500);}
 
-/* pairing card */
-.pair-card{background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-soft);padding:30px 32px;max-width:430px;width:100%;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;}
-.pair-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:22px;letter-spacing:-.01em;}
-.pair-desc{font-size:13.5px;color:var(--gray-600);max-width:40ch;}
+/* pairing: full-bleed too — same family as the ceremony, no card box */
+.pair-card{max-width:430px;width:100%;display:flex;flex-direction:column;align-items:center;gap:13px;text-align:center;}
+.pair-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:clamp(25px,2.8vw,31px);letter-spacing:-.02em;line-height:1.08;}
+.pair-desc{font-size:13.5px;line-height:1.55;color:var(--gray-600);max-width:40ch;}
 .pair-error{font-size:13px;font-weight:500;color:#C92B33;max-width:40ch;}
 .pair-card .inkpanel{width:100%;text-align:left;}
-.pair-card .wallet-actions{margin-top:4px;}
+.pair-card > .btn{width:100%;justify-content:center;}
+.pair-card .wallet-actions{margin-top:4px;width:100%;justify-content:center;}
 
-/* rebuild hero: the decryption moment */
+/* rebuild hero: the decryption moment (its device is the quilt-fill, not the star-draw) */
 .rebuild{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;}
 .rebuild-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:clamp(30px,4.6vw,48px);letter-spacing:-.025em;line-height:1.05;}
 .rebuild-sub{font-size:13px;color:var(--gray-600);}
@@ -43,9 +66,19 @@
 .rebuild-quilts .q{transition:color var(--motion-duration-base) ease;}
 .rebuild-quilts .q.f{color:var(--blue-600);animation:pop .35s var(--motion-easing-enter);}
 
-/* failed-card pattern (rebuild failure) */
-.failcard{background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-soft);padding:26px 30px;max-width:430px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;}
-.failcard .fx{color:var(--red-500);font-size:20px;font-weight:700;line-height:1;}
-.failcard .ft{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;}
-.failcard .fd{font-size:13.5px;color:var(--gray-600);}
-.failcard .btn{margin-top:6px;}
+/* rebuild failure: full-bleed too, no card box — same family */
+.failcard{max-width:430px;width:100%;display:flex;flex-direction:column;align-items:center;gap:11px;text-align:center;}
+.failcard .fx{color:var(--red-500);font-size:24px;font-weight:700;line-height:1;}
+.failcard .ft{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:clamp(22px,2.4vw,26px);letter-spacing:-.01em;}
+.failcard .fd{font-size:13.5px;line-height:1.55;color:var(--gray-600);max-width:40ch;}
+.failcard .btn{margin-top:6px;width:100%;justify-content:center;}
+
+/* ---- phone (the gate isn't covered by responsive.css) ---- */
+@media (max-width:480px){
+  .gate{padding:20px;}
+  .gate-mark{top:18px;left:18px;font-size:16px;}
+  .gate-x{top:16px;right:16px;}
+  .cere-h{font-size:24px;}
+  .cere .stardraw{width:46px;height:46px;}
+  .pair-title{font-size:23px;}
+}
