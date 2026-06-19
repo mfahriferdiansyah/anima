@@ -50,11 +50,11 @@ function generatePassword(): string {
 }
 
 /** Publish a note. Progress ticks to 100 over ~3s, then the copy resolves. */
-export function publish(noteId: string, mode: ShareMode): Promise<PublishedCopy> {
+export function publish(noteId: string, mode: ShareMode, titleOverride?: string): Promise<PublishedCopy> {
   publishToken += 1;
   const token = publishToken;
   const note = vaultStore.getSnapshot().notes.find((entry) => entry.noteId === noteId);
-  const title = note?.title || 'Untitled note';
+  const title = titleOverride?.trim() || note?.title || 'Untitled note';
   store.update((prev) => ({ ...prev, publishing: { noteId, mode, progress: 0 } }));
   return new Promise((resolve) => {
     const interval = setInterval(() => {

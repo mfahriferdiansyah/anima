@@ -5,6 +5,7 @@ import { publish, unpublish, useShare } from '@/hooks/useShare';
 import type { PublishedCopy, ShareMode } from '@/hooks/useShare';
 import { useVault } from '@/hooks/useVault';
 import { confirmWithWallet } from '@/hooks/useWallet';
+import './share.css';
 
 function slugOf(url: string): string {
   return url.split('/c/')[1] ?? url;
@@ -74,6 +75,8 @@ export interface ShareDialogProps {
   onClose: () => void;
   noteId: string;
   title: string;
+  /** 'note' shares a memory, 'canvas' shares a board — only the copy differs. */
+  kind?: 'note' | 'canvas';
 }
 
 /**
@@ -82,9 +85,10 @@ export interface ShareDialogProps {
  * copy burst. A password renders exactly once, here. Unpublish is the
  * destructive one, so it goes through the mock wallet.
  */
-export function ShareDialog({ open, onClose, noteId, title }: ShareDialogProps) {
+export function ShareDialog({ open, onClose, noteId, title, kind = 'note' }: ShareDialogProps) {
   const { publishedCopies } = useShare();
   const { notes } = useVault();
+  const noun = kind === 'canvas' ? 'canvas' : 'memory';
   const [step, setStep] = useState<Step>('pick');
   const [mode, setMode] = useState<ShareMode>('public');
   const [result, setResult] = useState<PublishedCopy | null>(null);
@@ -112,7 +116,7 @@ export function ShareDialog({ open, onClose, noteId, title }: ShareDialogProps) 
   const start = async (next: ShareMode) => {
     setMode(next);
     setStep('progress');
-    const copy = await publish(noteId, next);
+    const copy = await publish(noteId, next, title);
     setResult(copy);
     setStep('done');
   };
@@ -134,7 +138,7 @@ export function ShareDialog({ open, onClose, noteId, title }: ShareDialogProps) 
   return (
     <Modal open={open} onClose={close}>
       <div className="dh">
-        <div className="dt">Share this memory</div>
+        <div className="dt">Share this {noun}</div>
         <div className="dd2">
           {title}
           {note ? (
@@ -151,7 +155,7 @@ export function ShareDialog({ open, onClose, noteId, title }: ShareDialogProps) 
               <button type="button" className="sharemode" onClick={() => start('public')}>
                 <ModeIcon mode="public" />
                 <span className="smt">Public article</span>
-                <span className="sms">Anyone with the link can read this memory.</span>
+                <span className="sms">Anyone with the link can read this {noun}.</span>
               </button>
               <button type="button" className="sharemode" onClick={() => start('password')}>
                 <ModeIcon mode="password" />

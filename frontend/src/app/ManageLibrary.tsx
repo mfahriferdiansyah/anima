@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { forgetNotes, setNoteFolder, useVault } from '@/hooks/useVault';
 import {
   addFolder,
@@ -27,6 +27,14 @@ export function ManageLibrary({ onClose }: { onClose: () => void }) {
   const canvases = useCanvases();
   const folders = useFolders();
   const [newName, setNewName] = useState('');
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   const library = buildLibrary(notes, canvases, folders);
   const folderOptions = library.map((f) => f.name);

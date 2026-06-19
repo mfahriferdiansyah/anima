@@ -119,8 +119,9 @@
 .mlib-del:hover:not(:disabled){background:var(--red-100);color:var(--red-500);}
 .mlib-del:disabled{opacity:.3;cursor:not-allowed;}
 
-/* write toasts live bottom-left so the orb corner stays free */
-#toaststack{position:fixed;left:20px;bottom:20px;right:auto;z-index:80;display:flex;flex-direction:column;gap:10px;}
+/* write toasts: bottom-right, stacked above the companion orb so they clear the
+   sidebar (they used to sit bottom-left, overlapping the rail's account chip) */
+#toaststack{position:fixed;right:20px;bottom:122px;left:auto;z-index:84;display:flex;flex-direction:column;align-items:flex-end;gap:10px;}
 
 /* mock wallet dialog. Lift the shared overlay above the organize modal (97) so
    the forget confirmation it triggers lands on top, not behind. The overlay is

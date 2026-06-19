@@ -1,0 +1,30 @@
+/* ============================================================================
+   Share dialog. kit.css styled the published-link rows (.sharebar/.copybtn/
+   .accessrow) but NOT the mode picker — so the .sharemode icons rendered
+   unsized (huge) and the labels ran together. These rules style the pick step,
+   the progress line, and the published list. Shared by notes and canvases.
+   ========================================================================== */
+
+.sharemodes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sharemode {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; cursor: pointer;
+  background: #fff; border: 1px solid var(--gray-200); border-radius: 14px; padding: 15px 14px;
+  font: inherit; -webkit-appearance: none; appearance: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+.sharemode:hover { border-color: var(--blue-300); box-shadow: var(--shadow-softer); transform: translateY(-1px); }
+.sharemode svg { width: 22px; height: 22px; color: var(--blue-600); margin-bottom: 4px; }
+.sharemode .smt { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13.5px; color: var(--ink-900); }
+.sharemode .sms { font-size: 12px; line-height: 1.4; color: var(--gray-600); }
+
+.shareprog { display: flex; align-items: center; gap: 10px; padding: 26px 4px; font-size: 13.5px; color: var(--gray-600); }
+.shareprog .spin { display: inline-block; color: var(--blue-600); animation: spinstar 1.1s linear infinite; }
+
+.sharebar + .sharebar { margin-top: 10px; }
+.sharecaption { font-size: 11.5px; color: var(--gray-600); margin-top: 6px; padding-left: 4px; }
+
+.pubrows { margin-top: 18px; }
+.publabel { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: rgba(22, 24, 29, .4); margin-bottom: 2px; }
+.pubmeta { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pubmeta svg { width: 18px; height: 18px; color: var(--gray-600); flex: none; }
+.pubmeta .al { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

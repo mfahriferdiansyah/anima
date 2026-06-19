@@ -5,6 +5,7 @@ import { createNote, useVault } from '@/hooks/useVault';
 import type { Note } from '@/hooks/useVault';
 import { SHARED_CANVAS_ID, useCanvases } from '@/hooks/useCanvases';
 import { CanvasHome } from './CanvasHome';
+import { ShareDialog } from './ShareDialog';
 import { moveNote, startPresence, stopPresence, usePresence } from '@/hooks/usePresence';
 import type { Peer } from '@/hooks/usePresence';
 import { scheduleAgentNote } from '@/hooks/useAgentTimeline';
@@ -161,6 +162,7 @@ export function Canvas() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const panRef = useRef<PanState | null>(null);
   const [panning, setPanning] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   // Drawings: committed shapes, the one being drawn, and the current selection.
   const [shapes, setShapes] = useState<Shape[]>([]);
@@ -524,10 +526,11 @@ export function Canvas() {
             <span className="spin" aria-hidden="true">✦</span> saving layout…
           </span>
         ) : null}
-        <button type="button" className="pgbtn">
+        <button type="button" className="pgbtn" onClick={() => setSharing(true)}>
           Share canvas
         </button>
       </div>
+      <ShareDialog open={sharing} onClose={() => setSharing(false)} noteId={canvasId} title={boardTitle} kind="canvas" />
       <div
         className="pgcv"
         ref={viewportRef}
