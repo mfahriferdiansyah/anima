@@ -142,7 +142,9 @@ export function Canvas() {
   const canvases = useCanvases();
   // The seed board shows the shared note constellation; created boards are blank.
   const isShared = !canvasId || canvasId === SHARED_CANVAS_ID;
-  const boardTitle = canvases.find((c) => c.canvasId === (canvasId ?? SHARED_CANVAS_ID))?.title ?? 'Untitled board';
+  const boardDoc = canvases.find((c) => c.canvasId === (canvasId ?? SHARED_CANVAS_ID));
+  const boardTitle = boardDoc?.title ?? 'Untitled canvas';
+  const boardDesc = boardDoc?.desc ?? '';
   const { notes } = useVault();
   const { peers, layout, savingLayout, materializedNoteId } = usePresence();
   const dragRef = useRef<DragState | null>(null);
@@ -480,6 +482,7 @@ export function Canvas() {
       <div className="pged-top">
         <span className="pgcrumb">
           <b>Canvas</b> · {boardTitle}
+          {boardDesc ? <span className="pgcrumb-d"> — {boardDesc}</span> : null}
         </span>
         <span className="sp" />
         {savingLayout ? (
@@ -488,7 +491,7 @@ export function Canvas() {
           </span>
         ) : null}
         <button type="button" className="pgbtn">
-          Share board
+          Share canvas
         </button>
       </div>
       <div
@@ -620,7 +623,7 @@ export function Canvas() {
         </div>
 
         {isShared ? (
-          <div className="pgcv-avs" aria-label={`Mira, ${name} and you are on this board`}>
+          <div className="pgcv-avs" aria-label={`Mira, ${name} and you are on this canvas`}>
             <span className="av m">M</span>
             <span className="av n" aria-hidden="true">✧</span>
             <span className="av y">Y</span>

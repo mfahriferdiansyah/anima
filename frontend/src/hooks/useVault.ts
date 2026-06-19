@@ -18,6 +18,7 @@ export {
   failNextWrite,
   forgetNotes,
   createNote,
+  setNoteFolder,
   recentNotes,
 } from '../mocks/vaultStore';
 export { dismissWriteEvent } from '../mocks/writeStateStore';

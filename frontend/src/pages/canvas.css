@@ -5,6 +5,9 @@
    the board chrome (.pgcv, .pgcv-tools, cards); this file only adds drawings.
    ========================================================================== */
 
+/* canvas description, muted, after the title in the breadcrumb */
+.pgcrumb-d { color: rgba(22, 24, 29, .42); }
+
 /* the SVG that holds freehand paths, rectangles and arrows; individual shapes
    opt back into pointer events when the select tool is active (see Canvas.tsx) */
 .pgcv-ink { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }

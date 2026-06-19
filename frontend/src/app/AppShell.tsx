@@ -6,10 +6,10 @@ import { Orb } from '@/components/Orb';
 import { disconnect } from '@/hooks/useVaultSession';
 import type { SessionState } from '@/hooks/useVaultSession';
 import { closePopup, expandPopup, openPopup, setOnCompanionRoute, useChat } from '@/hooks/useChat';
-import { createNote, forgetNotes, useVault } from '@/hooks/useVault';
-import type { Note } from '@/hooks/useVault';
-import { createCanvas, SHARED_CANVAS_ID, useCanvases } from '@/hooks/useCanvases';
-import { confirmWithWallet } from '@/hooks/useWallet';
+import { createNote, useVault } from '@/hooks/useVault';
+import { createCanvas, SHARED_CANVAS_ID, useCanvases, useFolders } from '@/hooks/useCanvases';
+import { buildLibrary } from './library';
+import { ManageLibrary } from './ManageLibrary';
 import { ChatMessages } from '@/pages/ChatMessages';
 
 export type ReadySession = Extract<SessionState, { phase: 'ready' }>;
@@ -94,26 +94,6 @@ const NAV: Array<{ to: string; label: string; end?: boolean; icon: ReactNode }> 
   },
 ];
 
-interface Folder {
-  name: string;
-  notes: Note[];
-}
-
-/** Group notes into sidebar folders by their first tag, first-seen order. */
-function buildFolders(notes: Note[]): Folder[] {
-  const order: string[] = [];
-  const byFolder = new Map<string, Note[]>();
-  for (const note of notes) {
-    const key = note.tags[0] ?? 'untitled';
-    if (!byFolder.has(key)) {
-      byFolder.set(key, []);
-      order.push(key);
-    }
-    byFolder.get(key)!.push(note);
-  }
-  return order.map((name) => ({ name, notes: byFolder.get(name)! }));
-}
-
 function titleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -157,86 +137,61 @@ type DocFilter = 'all' | 'notes' | 'canvas';
 function MemoryTree() {
   const { notes } = useVault();
   const canvases = useCanvases();
+  const folderOrder = useFolders();
   const navigate = useNavigate();
   const location = useLocation();
   const openId = activeNoteId(location.pathname);
   const canvasMatch = location.pathname.match(/^\/app\/canvas(?:\/(.+))?$/);
   const activeCanvasId = canvasMatch ? decodeURIComponent(canvasMatch[1] ?? SHARED_CANVAS_ID) : null;
-  const folders = buildFolders(notes);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [selecting, setSelecting] = useState(false);
-  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<DocFilter>('all');
+  const [manageOpen, setManageOpen] = useState(false);
 
-  // Title filter (search) plus the type filter (All / Notes / Canvas). While
-  // searching, folders force-open so matches surface.
+  // Notes + canvases filed into folders. Search filters by title; the
+  // All / Notes / Canvas control filters by type. While searching, folders
+  // force-open so matches surface; empty folders drop out here.
   const q = query.trim().toLowerCase();
-  const visibleFolders = q
-    ? folders
-        .map((folder) => ({ ...folder, notes: folder.notes.filter((n) => (n.title || 'Untitled').toLowerCase().includes(q)) }))
-        .filter((folder) => folder.notes.length > 0)
-    : folders;
-  const visibleCanvases = q ? canvases.filter((c) => c.title.toLowerCase().includes(q)) : canvases;
-
-  const showNotes = filter !== 'canvas';
-  const showCanvases = filter !== 'notes' && !selecting;
-  const folderRows = showNotes ? visibleFolders : [];
-  const canvasRows = showCanvases ? visibleCanvases : [];
-  const noMatches = q.length > 0 && folderRows.length === 0 && canvasRows.length === 0;
+  const kindWanted = filter === 'notes' ? 'note' : 'canvas'; // DocFilter 'notes' -> LibItem 'note'
+  const library = buildLibrary(notes, canvases, folderOrder)
+    .map((folder) => ({
+      ...folder,
+      items: folder.items.filter(
+        (item) => (filter === 'all' || item.kind === kindWanted) && (!q || item.title.toLowerCase().includes(q)),
+      ),
+    }))
+    .filter((folder) => folder.items.length > 0);
+  const noMatches = q.length > 0 && library.length === 0;
 
   const newNote = () => navigate(`/app/notes/${createNote()}`);
   const newCanvas = () => navigate(`/app/canvas/${createCanvas()}`);
 
-  const toggleSelectMode = () => {
-    setSelecting((prev) => !prev);
-    setSelected(new Set());
-  };
-  const toggleSelected = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  // Forget is the destructive op: it enumerates the victims, then gates on the
-  // (mocked) wallet — writes are silent, deletion costs a signature (R16/R20).
-  const forgetSelected = async () => {
-    const ids = [...selected];
-    if (ids.length === 0) return;
-    const victims = notes.filter((note) => selected.has(note.noteId)).map((note) => note.title || 'Untitled');
-    const approved = await confirmWithWallet(
-      `Forget ${ids.length} ${ids.length === 1 ? 'memory' : 'memories'}: ${victims.join(', ')}`,
-    );
-    if (!approved) return;
-    forgetNotes(ids);
-    setSelecting(false);
-    setSelected(new Set());
-  };
-
   return (
     <>
       <div className="pgsearch">
-        <svg className="pgsearch-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <circle cx="11" cy="11" r="7" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-        <input
-          type="text"
-          placeholder="Search notes"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          aria-label="Search notes"
-        />
-        {query ? (
-          <button type="button" className="pgsearch-x" aria-label="Clear search" onClick={() => setQuery('')}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
-            </svg>
-          </button>
-        ) : null}
+        <div className="pgsearch-field">
+          <svg className="pgsearch-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search notes and canvases"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="Search notes and canvases"
+          />
+          {query ? (
+            <button type="button" className="pgsearch-x" aria-label="Clear search" onClick={() => setQuery('')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+              </svg>
+            </button>
+          ) : null}
+        </div>
+        <button type="button" className="pgsearch-gear" aria-label="Organize folders" title="Organize folders" onClick={() => setManageOpen(true)}>
+          {GEAR_GLYPH}
+        </button>
       </div>
 
       <div className="pgfilter">
@@ -254,27 +209,9 @@ function MemoryTree() {
             </button>
           ))}
         </div>
-        {showNotes ? (
-          <button type="button" className="pgtree-sel" onClick={toggleSelectMode}>
-            {selecting ? 'Done' : 'Select'}
-          </button>
-        ) : null}
       </div>
       <div className="pgtree-scroll">
-        {canvasRows.map((c) => {
-          const isOpen = c.canvasId === activeCanvasId;
-          return (
-            <div
-              key={c.canvasId}
-              className={isOpen ? 'pgrow on' : 'pgrow'}
-              onClick={() => navigate(`/app/canvas/${c.canvasId}`)}
-            >
-              <span className="pgtype canvas" aria-hidden="true">{CANVAS_GLYPH}</span>
-              <span className="nt2">{c.title}</span>
-            </div>
-          );
-        })}
-        {folderRows.map((folder) => {
+        {library.map((folder) => {
           const isClosed = q ? false : (collapsed[folder.name] ?? false);
           return (
             <div key={folder.name}>
@@ -286,25 +223,34 @@ function MemoryTree() {
                   <path d="m2 4 3 3 3-3" />
                 </svg>
                 <span>{titleCase(folder.name)}</span>
-                <span className="fcnt">{folder.notes.length}</span>
+                <span className="fcnt">{folder.items.length}</span>
               </div>
               {!isClosed &&
-                folder.notes.map((note) => {
+                folder.items.map((item) => {
+                  if (item.kind === 'canvas') {
+                    const isActive = item.id === activeCanvasId;
+                    return (
+                      <div
+                        key={item.id}
+                        className={isActive ? 'pgrow on' : 'pgrow'}
+                        onClick={() => navigate(`/app/canvas/${item.id}`)}
+                      >
+                        <span className="pgtype canvas" aria-hidden="true">{CANVAS_GLYPH}</span>
+                        <span className="nt2">{item.title}</span>
+                      </div>
+                    );
+                  }
+                  const note = item.note!;
                   const isOpen = note.noteId === openId;
                   const byAgent = note.author.startsWith(AGENT_PREFIX);
-                  const isSel = selected.has(note.noteId);
                   return (
                     <div
-                      key={note.noteId}
-                      className={`pgrow${isOpen && !selecting ? ' on' : ''}${isSel ? ' sel' : ''}`}
-                      onClick={() => (selecting ? toggleSelected(note.noteId) : navigate(`/app/notes/${note.noteId}`))}
+                      key={item.id}
+                      className={isOpen ? 'pgrow on' : 'pgrow'}
+                      onClick={() => navigate(`/app/notes/${note.noteId}`)}
                     >
-                      {selecting ? (
-                        <span className={isSel ? 'pgdot sel' : 'pgdot draft'} aria-hidden="true" />
-                      ) : (
-                        <span className="pgtype doc" aria-hidden="true">{NOTE_GLYPH}</span>
-                      )}
-                      <span className="nt2">{note.title || 'Untitled'}</span>
+                      <span className="pgtype doc" aria-hidden="true">{NOTE_GLYPH}</span>
+                      <span className="nt2">{item.title}</span>
                       {byAgent ? <span className="pgagentmark" aria-hidden="true">✦</span> : null}
                     </div>
                   );
@@ -312,27 +258,21 @@ function MemoryTree() {
             </div>
           );
         })}
-        {noMatches ? <div className="pgempty2">No {filter === 'canvas' ? 'boards' : 'documents'} match “{query}”.</div> : null}
+        {noMatches ? <div className="pgempty2">No documents match “{query}”.</div> : null}
       </div>
-      {selecting ? (
-        <button type="button" className="pgnew pgforget" disabled={selected.size === 0} onClick={forgetSelected}>
-          Forget ({selected.size})
+
+      <div className="pgfoot">
+        <button type="button" className="pgnew" onClick={newNote}>
+          {PLUS_GLYPH}
+          New note
         </button>
-      ) : (
-        <div className="pgfoot">
-          <button type="button" className="pgnew" onClick={newNote}>
-            {PLUS_GLYPH}
-            New note
-          </button>
-          <button type="button" className="pgnew" onClick={newCanvas}>
-            {PLUS_GLYPH}
-            New canvas
-          </button>
-          <NavLink to="/app/settings" className="pgfoot-set" aria-label="Settings" title="Settings">
-            {GEAR_GLYPH}
-          </NavLink>
-        </div>
-      )}
+        <button type="button" className="pgnew" onClick={newCanvas}>
+          {PLUS_GLYPH}
+          New canvas
+        </button>
+      </div>
+
+      {manageOpen ? <ManageLibrary onClose={() => setManageOpen(false)} /> : null}
     </>
   );
 }

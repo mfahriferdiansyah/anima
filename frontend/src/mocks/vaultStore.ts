@@ -77,6 +77,14 @@ export function createNote(author: string = OWNER_AUTHOR): string {
   return noteId;
 }
 
+/** Move a note into a folder (manage modal): the folder is tags[0]. */
+export function setNoteFolder(noteId: string, folder: string): void {
+  store.update((prev) => ({
+    ...prev,
+    notes: prev.notes.map((n) => (n.noteId === noteId ? { ...n, tags: [folder, ...n.tags.slice(1)] } : n)),
+  }));
+}
+
 /**
  * Apply a patch (new version) and run the write-state sequence.
  * Without a noteId a fresh untitled note is created first. Returns the id.

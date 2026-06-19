@@ -44,15 +44,19 @@
 .shell .pgforget:hover{background:var(--red-100);color:var(--red-500);}
 .shell .pgforget:disabled{opacity:.45;cursor:not-allowed;}
 
-/* Sidebar search: a title filter above the typed list. */
-.shell .pgsearch{position:relative;margin:2px 8px 6px;}
-.shell .pgsearch input{width:100%;height:30px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;padding:0 26px 0 28px;font-family:'Inter',sans-serif;font-size:12.5px;color:var(--ink-900);transition:border-color 150ms ease;}
-.shell .pgsearch input::placeholder{color:rgba(22,24,29,.4);}
-.shell .pgsearch input:focus{outline:none;border-color:var(--blue-300);}
+/* Sidebar search (title filter) + a gear that opens the organize modal. */
+.shell .pgsearch{display:flex;align-items:center;gap:6px;margin:2px 8px 6px;}
+.shell .pgsearch-field{position:relative;flex:1;min-width:0;}
+.shell .pgsearch-field input{width:100%;height:30px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;padding:0 26px 0 28px;font-family:'Inter',sans-serif;font-size:12.5px;color:var(--ink-900);transition:border-color 150ms ease;}
+.shell .pgsearch-field input::placeholder{color:rgba(22,24,29,.4);}
+.shell .pgsearch-field input:focus{outline:none;border-color:var(--blue-300);}
 .shell .pgsearch-i{position:absolute;left:9px;top:50%;transform:translateY(-50%);width:13px;height:13px;color:rgba(22,24,29,.4);pointer-events:none;}
 .shell .pgsearch-x{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;border:none;background:none;cursor:pointer;color:rgba(22,24,29,.4);padding:4px;border-radius:5px;}
 .shell .pgsearch-x svg{width:12px;height:12px;}
 .shell .pgsearch-x:hover{color:var(--ink-900);background:rgba(22,24,29,.06);}
+.shell .pgsearch-gear{flex:none;display:flex;align-items:center;justify-content:center;width:30px;height:30px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;color:rgba(22,24,29,.5);transition:background 150ms ease,color 150ms ease;}
+.shell .pgsearch-gear svg{width:16px;height:16px;}
+.shell .pgsearch-gear:hover{background:rgba(22,24,29,.05);color:var(--ink-900);}
 
 /* Two distinct item types, told by a glyph before the title: the board (pinned,
    grid glyph) and notes (doc glyph). The glyph replaces the old status dot. */
@@ -71,18 +75,57 @@
 .shell .pgseg button.on{background:#fff;color:var(--ink-900);box-shadow:0 1px 2px rgba(22,24,29,.10);}
 .shell .pgfilter .pgtree-sel{flex:none;}
 
-/* footer: create a note / a canvas, plus a quick settings gear */
+/* footer: create a note / a canvas */
 .shell .pgfoot{display:flex;align-items:center;gap:5px;padding:6px 8px;box-shadow:0 -1px 0 rgba(22,24,29,.06);}
 .shell .pgfoot .pgnew{flex:1;width:auto;min-width:0;margin:0;justify-content:center;gap:6px;font-size:12px;padding:0 6px;white-space:nowrap;}
-.shell .pgfoot-set{flex:none;display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;color:rgba(22,24,29,.5);text-decoration:none;transition:background 150ms ease,color 150ms ease;}
-.shell .pgfoot-set svg{width:16px;height:16px;}
-.shell .pgfoot-set:hover{background:rgba(22,24,29,.06);color:var(--ink-900);}
-.shell .pgfoot-set.active{color:var(--ink-900);background:rgba(22,24,29,.06);}
+
+/* organize-library modal (opened by the gear beside search) */
+.mlib-scrim{position:fixed;inset:0;z-index:96;background:rgba(22,24,29,.40);animation:fadein var(--motion-duration-base) ease;}
+.mlib{position:fixed;z-index:97;top:50%;left:50%;transform:translate(-50%,-50%);width:min(560px,calc(100vw - 32px));max-height:min(660px,calc(100vh - 48px));display:flex;flex-direction:column;background:#fff;border-radius:16px;box-shadow:var(--shadow-soft),0 0 0 1px rgba(22,24,29,.08);animation:fadein var(--motion-duration-base) ease;overflow:hidden;}
+.mlib-h{display:flex;align-items:flex-start;gap:12px;padding:18px 20px 14px;box-shadow:0 1px 0 rgba(22,24,29,.07);}
+.mlib-h b{display:block;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;color:var(--ink-900);}
+.mlib-h span{display:block;font-size:12.5px;color:var(--gray-600);margin-top:2px;}
+.mlib-x{margin-left:auto;flex:none;border:none;background:none;cursor:pointer;color:var(--gray-600);padding:6px;border-radius:8px;line-height:0;}
+.mlib-x svg{width:16px;height:16px;}
+.mlib-x:hover{background:var(--gray-100);color:var(--ink-900);}
+.mlib-add{display:flex;gap:8px;padding:14px 20px;box-shadow:0 1px 0 rgba(22,24,29,.06);}
+.mlib-add input{flex:1;min-width:0;height:32px;border:1px solid var(--gray-200);border-radius:8px;padding:0 11px;font-family:'Inter',sans-serif;font-size:13px;color:var(--ink-900);}
+.mlib-add input:focus{outline:none;border-color:var(--blue-300);}
+.mlib-body{flex:1;overflow:auto;padding:8px 12px 16px;}
+.mlib-fold{margin-top:10px;}
+.mlib-foldh{display:flex;align-items:center;gap:8px;padding:6px 8px;}
+.mlib-foldn{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;color:var(--ink-900);}
+.mlib-cnt{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:rgba(22,24,29,.4);}
+.mlib-foldh .sp{flex:1;}
+.mlib-arrow{flex:none;border:none;background:none;cursor:pointer;width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--gray-600);}
+.mlib-arrow svg{width:15px;height:15px;}
+.mlib-arrow:hover:not(:disabled){background:var(--gray-100);color:var(--ink-900);}
+.mlib-arrow:disabled{opacity:.3;cursor:not-allowed;}
+.mlib-empty{padding:4px 10px 8px 34px;font-size:12px;font-style:italic;color:rgba(22,24,29,.35);}
+.mlib-item{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:8px;}
+.mlib-item:hover{background:rgba(22,24,29,.03);}
+.mlib-item .pgtype{flex:none;width:16px;height:16px;display:flex;align-items:center;justify-content:center;color:rgba(22,24,29,.45);}
+.mlib-item .pgtype svg{width:15px;height:15px;}
+.mlib-item .pgtype.canvas{color:var(--orange-500);}
+.mlib-title{flex:1;min-width:0;font-size:13.5px;color:var(--ink-900);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mlib-cv{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;}
+.mlib-cv input{border:1px solid var(--gray-200);border-radius:6px;padding:3px 7px;font-family:'Inter',sans-serif;color:var(--ink-900);}
+.mlib-cv input:focus{outline:none;border-color:var(--blue-300);}
+.mlib-cv-t{font-size:13px;font-weight:600;}
+.mlib-cv-d{font-size:11.5px;color:var(--gray-600);}
+.mlib-move{flex:none;max-width:96px;height:28px;border:1px solid var(--gray-200);border-radius:7px;background:#fff;font-family:'Inter',sans-serif;font-size:11.5px;color:var(--ink-900);padding:0 4px;cursor:pointer;}
+.mlib-del{flex:none;border:none;background:none;cursor:pointer;width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--gray-600);}
+.mlib-del svg{width:15px;height:15px;}
+.mlib-del:hover:not(:disabled){background:var(--red-100);color:var(--red-500);}
+.mlib-del:disabled{opacity:.3;cursor:not-allowed;}
 
 /* write toasts live bottom-left so the orb corner stays free */
 #toaststack{position:fixed;left:20px;bottom:20px;right:auto;z-index:80;display:flex;flex-direction:column;gap:10px;}
 
-/* mock wallet dialog */
+/* mock wallet dialog. Lift the shared overlay above the organize modal (97) so
+   the forget confirmation it triggers lands on top, not behind. The overlay is
+   rendered at the App root (outside .shell), so this selector is not scoped. */
+.overlay.open{z-index:110;}
 .wallet-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;}
 
 /* popup chat orb + compact chat panel (above the MOCKED badge) */
