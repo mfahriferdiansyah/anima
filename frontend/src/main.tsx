@@ -1,8 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import '@/theme/tokens.css';
-import '@/theme/base.css';
-import '@/theme/components.css';
+import '@/theme/kit.css';
 import { BRAND_NAME } from '@/brand';
 import { App } from '@/app/App';
 import { failNextWrite } from '@/mocks/vaultStore';

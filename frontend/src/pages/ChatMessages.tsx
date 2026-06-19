@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { FormEvent } from 'react';
+import type { FormEvent, KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Orb } from '@/components/Orb';
 import { send, useChat } from '@/hooks/useChat';
@@ -81,6 +81,64 @@ function AgentMessage({
   );
 }
 
+/** Page choreography: the agent reply with the ✦ attribution + mono receipt the spec calls for. */
+function PageAgentMessage({
+  message,
+  agentName,
+  notes,
+  onCite,
+}: {
+  message: Message;
+  agentName: string;
+  notes: Note[];
+  onCite: (noteId: string) => void;
+}) {
+  const cited = (message.citations ?? [])
+    .map((id) => notes.find((note) => note.noteId === id))
+    .filter((note): note is Note => Boolean(note));
+  return (
+    <div className="pgcm agent">
+      <div className="who">
+        <i>✧</i> {agentName.toLowerCase()} · agent
+      </div>
+      {message.streaming && !message.text ? (
+        <span className="pgcshim" role="status" aria-label="Reply is arriving" />
+      ) : (
+        <div className="bub">{message.text}</div>
+      )}
+      {!message.streaming && cited.length > 0 ? (
+        <div className="pgccites">
+          {cited.map((note) => (
+            <span
+              key={note.noteId}
+              role="button"
+              tabIndex={0}
+              title={note.title || 'Untitled note'}
+              onClick={() => onCite(note.noteId)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') onCite(note.noteId);
+              }}
+            >
+              {note.title || 'Untitled note'}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {!message.streaming ? (
+        <div className="rcpt">
+          {message.createdNoteId ? (
+            <>
+              <span className="ok" aria-hidden="true">✦</span> sealed · 1 note added
+            </>
+          ) : (
+            'no vault changes'
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export interface ChatMessagesProps {
   /** Page fills the available height; popup keeps the list at ~360px. */
   variant: 'page' | 'popup';
@@ -114,6 +172,15 @@ export function ChatMessages({ variant, agentName }: ChatMessagesProps) {
     setDraft('');
   };
 
+  const onComposerKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      if (chat.thinking || !draft.trim()) return;
+      send(draft);
+      setDraft('');
+    }
+  };
+
   // Kit choreography step 2: the event pill shows what the agent is doing
   // between the send and the reply bubble appearing.
   const last = chat.messages[chat.messages.length - 1];
@@ -122,6 +189,91 @@ export function ChatMessages({ variant, agentName }: ChatMessagesProps) {
     notes.length > 0
       ? `${agentName} is reading ${notes.length} ${notes.length === 1 ? 'note' : 'notes'}`
       : `${agentName} is reading the vault`;
+
+  if (variant === 'page') {
+    return (
+      <>
+        <div className="pged-scroll" ref={listRef}>
+          <div className="pgccol">
+            {chat.messages.length === 0 ? (
+              <div className="pgchello">
+                <span className="horb" aria-hidden="true">✦</span>
+                <h4>Say hello to {agentName}</h4>
+                <p>Replies cite the sealed memories they draw on. The transcript itself never persists.</p>
+                <div className="pgcstarts">
+                  {STARTERS.map((prompt) => (
+                    <button key={prompt} type="button" onClick={() => send(prompt)}>
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <>
+                {chat.messages.map((message) =>
+                  message.role === 'event' ? (
+                    <div key={message.id} className="pgcev">
+                      {message.text}
+                    </div>
+                  ) : message.role === 'user' ? (
+                    <div key={message.id} className="pgcm human">
+                      <div className="bub">{message.text}</div>
+                      <div className="rcpt">
+                        <span className="ok" aria-hidden="true">✦</span> sent · {timeOf(message.at)}
+                      </div>
+                    </div>
+                  ) : (
+                    <PageAgentMessage
+                      key={message.id}
+                      message={message}
+                      agentName={agentName}
+                      notes={notes}
+                      onCite={(noteId) => navigate(`/app/notes/${noteId}`)}
+                    />
+                  ),
+                )}
+                {reading ? (
+                  <div className="pgcev" role="status">
+                    {readingLine}
+                  </div>
+                ) : null}
+              </>
+            )}
+          </div>
+        </div>
+        <div className="pgcomposer">
+          <form className="pgcomp-card" onSubmit={submit}>
+            <textarea
+              rows={1}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={onComposerKey}
+              placeholder={`Message ${agentName}. She reads the vault before answering…`}
+              aria-label="Message"
+              disabled={chat.thinking}
+            />
+            <div className="pgcomp-row">
+              <span className="hint">ENTER TO SEND · SHIFT+ENTER FOR A LINE BREAK</span>
+              <button type="submit" className="pgcsend" aria-label="Send" disabled={chat.thinking || !draft.trim()}>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m22 2-7 20-4-9-9-4Z" />
+                  <path d="M22 2 11 13" />
+                </svg>
+              </button>
+            </div>
+          </form>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

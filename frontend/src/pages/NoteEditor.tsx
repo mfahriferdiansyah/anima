@@ -224,8 +224,24 @@ function shortId(id: string): string {
   return id.length > 12 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id;
 }
 
-function truncate(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+/** Stable mock blob id for a note already sealed before this session (deterministic). */
+function mockSealId(noteId: string): string {
+  let h = 0;
+  for (let i = 0; i < noteId.length; i += 1) h = (h * 31 + noteId.charCodeAt(i)) >>> 0;
+  const hex = (h * 2654435761) >>> 0;
+  const s = hex.toString(16).padStart(8, '0');
+  return `0x${s.slice(0, 4)}…${s.slice(4, 8)}`;
+}
+
+/** Same algorithm the share flow uses, so the status-bar link matches the published slug. */
+function slugify(title: string): string {
+  return (
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+      .slice(0, 32) || 'untitled'
+  );
 }
 
 let toastCounter = 0;
@@ -245,7 +261,7 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
   const frameRef = useRef<HTMLDivElement>(null);
   const selRef = useRef<HTMLDivElement>(null);
   const typeRef = useRef<HTMLDivElement>(null);
-  const titleRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
   const hoverTimer = useRef<number | null>(null);
 
@@ -454,12 +470,12 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
   };
 
   const saveTitle = () => {
-    const value = titleRef.current?.value.trim() ?? '';
+    const value = titleRef.current?.textContent?.trim() ?? '';
     if (value !== note.title) saveNote(note.noteId, { title: value });
   };
 
   const save = () => {
-    const title = titleRef.current?.value.trim() ?? note.title;
+    const title = titleRef.current?.textContent?.trim() || note.title;
     const typed = typeRef.current?.innerText.trim() ?? '';
     const body = typed ? (note.body ? `${note.body}\n\n${typed}` : typed) : note.body;
     if (typeRef.current) typeRef.current.textContent = '';
@@ -488,59 +504,66 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
     }, 200);
   };
 
+  const folder = note.tags[0] ?? 'unsorted';
+  const folderLabel = folder.charAt(0).toUpperCase() + folder.slice(1);
+
   return (
-    <div className="edframe" ref={frameRef}>
-      <div className="edtabs">
-        <span className="edtab on">
-          {note.author.startsWith('agent') ? <span className="ai" aria-hidden="true">✧</span> : null}
-          {truncate(note.title || 'Untitled note', 32)}
-          <button type="button" className="x" aria-label="Close note" onClick={() => navigate('/app/notes')}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-              <path d="M18 6 6 18" />
-              <path d="m6 6 12 12" />
-            </svg>
-          </button>
+    <div className="pged" ref={frameRef}>
+      <div className="pged-top">
+        <span className="pgcrumb">
+          {folderLabel} / <b>{note.title || 'Untitled note'}</b>
         </span>
+        <span className="sp" />
+        <button type="button" className="pgbtn" onClick={() => setSharing(true)}>
+          Share
+        </button>
+        <button type="button" className="pgbtn primary" onClick={save}>
+          Save
+        </button>
       </div>
-      <div className="edbody">
-        <input
-          ref={titleRef}
-          className="edtitle"
-          type="text"
-          defaultValue={note.title}
-          placeholder="Untitled note"
-          aria-label="Note title"
-          onBlur={saveTitle}
-        />
-        <div className="props">
-          {note.tags.length > 0 ? (
-            <div className="proprow">
-              <span className="pk">tags</span>
-              <span className="pv">
-                {note.tags.map((tag) => (
-                  <span key={tag} className="ptag">{tag}</span>
-                ))}
-              </span>
-            </div>
-          ) : null}
-          <div className="proprow">
-            <span className="pk">updated</span>
-            <span className="pv"><span className="mono">{note.updatedAt.slice(0, 10)}</span></span>
-          </div>
-          {certified ? (
-            <div className="proprow">
-              <span className="pk">sealed</span>
-              <span className="pv">
-                <span className="mono">
-                  <span style={{ color: 'var(--teal-500)' }} aria-hidden="true">✦</span> rev {note.version} · {shortId(certified.blobObjectId)}
+      <div className="pged-scroll">
+        <div className="pgcol">
+          <h1
+            ref={titleRef}
+            className="pgtitle"
+            contentEditable
+            suppressContentEditableWarning
+            spellCheck={false}
+            role="textbox"
+            aria-label="Note title"
+            onBlur={saveTitle}
+          >
+            {note.title}
+          </h1>
+          <div className="props">
+            {note.tags.length > 0 ? (
+              <div className="proprow">
+                <span className="pk">tags</span>
+                <span className="pv">
+                  {note.tags.map((tag) => (
+                    <span key={tag} className="ptag">{tag}</span>
+                  ))}
                 </span>
-              </span>
+              </div>
+            ) : null}
+            <div className="proprow">
+              <span className="pk">updated</span>
+              <span className="pv"><span className="mono">{note.updatedAt.slice(0, 10)}</span></span>
             </div>
-          ) : null}
-        </div>
-        <div className="edsel" ref={selRef}>
-          <div className="edcontent">
-            {blocks.map((block, index) => {
+            {certified || !note.noteId.startsWith('note-new-') ? (
+              <div className="proprow">
+                <span className="pk">sealed</span>
+                <span className="pv">
+                  <span className="mono">
+                    <span style={{ color: 'var(--teal-500)' }} aria-hidden="true">✦</span> rev {note.version} · {certified ? shortId(certified.blobObjectId) : mockSealId(note.noteId)}
+                  </span>
+                </span>
+              </div>
+            ) : null}
+          </div>
+          <div ref={selRef}>
+            <div className="edcontent">
+              {blocks.map((block, index) => {
               switch (block.kind) {
                 case 'p':
                   return (
@@ -620,30 +643,26 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
               </div>
             </div>
           ) : null}
+          </div>
         </div>
-        <div className="edstatus">
-          <span>{wordCount.toLocaleString()} words</span>
-          <span aria-hidden="true">·</span>
-          {writeState?.phase === 'certified' ? (
-            <span>
-              <span className="ok" aria-hidden="true">✦</span> sealed rev {note.version}
-            </span>
-          ) : writeState?.phase === 'failed' ? (
-            <span style={{ color: 'var(--red-500)' }}>seal failed</span>
-          ) : writeState ? (
-            <span>{writeState.phase} rev {note.version}</span>
-          ) : (
-            <span>rev {note.version}</span>
-          )}
-          <span className="edactions">
-            <Button variant="quiet" size="sm" onClick={() => setSharing(true)}>
-              Share
-            </Button>
-            <Button variant="primary" size="sm" onClick={save}>
-              Save
-            </Button>
+      </div>
+      <div className="pgstatus">
+        <span>{wordCount.toLocaleString()} words</span>
+        <span aria-hidden="true">·</span>
+        {writeState?.phase === 'certified' ? (
+          <span>
+            <span className="ok" aria-hidden="true">✦</span> sealed rev {note.version}
           </span>
-        </div>
+        ) : writeState?.phase === 'failed' ? (
+          <span style={{ color: 'var(--red-500)' }}>seal failed</span>
+        ) : writeState ? (
+          <span>{writeState.phase} rev {note.version}</span>
+        ) : (
+          <span>rev {note.version}</span>
+        )}
+        <span className="pgspeak" style={{ marginLeft: 'auto' }}>
+          anima.app/c/{slugify(note.title || 'untitled')}
+        </span>
       </div>
 
       {hover && hoverNote ? (

@@ -1,30 +1,14 @@
-/* ============ landing (U4): marketing-kit hero + ink marquee ============ */
+/* ============ landing (screen 18): the pitch that scrolls ============ */
 
-.landing{min-height:100vh;background:var(--color-surface);overflow-x:hidden;padding-bottom:72px;}
+/* The whole pitch lives in the kit's .ld scroller. In the component gallery
+   that scroller is a fixed 860px frame; as a real page it fills the viewport
+   so the kit's percentage section heights (88% / 74% / 64%) resolve as the
+   spec intends and the body itself never scrolls. */
+.ldframe {
+  height: 100vh;
+}
 
-/* diagonal hero · ported from the kit's .pagehero with the brand kit's hero meta row */
-.pagehero{background:var(--blue-600);color:#fff;padding:84px 0 130px;clip-path:polygon(0 0,100% 0,100% 88%,0 100%);position:relative;}
-.pagehero .kicker{font-size:13px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;opacity:.85;}
-.pagehero h1{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:clamp(40px,6vw,76px);letter-spacing:-.03em;line-height:1.02;margin-top:14px;}
-.pagehero h1 .chip{display:inline-block;background:#fff;color:var(--blue-600);border-radius:14px;padding:0 .18em;transform:rotate(-1.4deg);}
-.pagehero p{margin-top:18px;max-width:54ch;opacity:.9;font-size:17px;}
-.pagehero .fl{position:absolute;font-style:normal;animation:bob 4.4s ease-in-out infinite;}
-
-/* wordmark: lowercase Space Grotesk, the star is white on blue (brand rule) */
-.land-wordmark{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:22px;letter-spacing:-.02em;margin-bottom:40px;}
-.land-wordmark .star{font-size:.6em;vertical-align:.38em;margin-left:.04em;}
-
-.pagehero .meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px;}
-.pagehero .meta span{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;background:rgba(255,255,255,.14);border-radius:999px;padding:7px 16px;}
-
-/* hero CTA: white on blue so the one primary stays visible on the brand surface */
-.btn.land-cta{background:#fff;color:var(--blue-600);margin-top:32px;text-decoration:none;}
-.btn.land-cta:hover{background:var(--blue-100);}
-
-/* ink marquee strip: kit .mq pattern · 26s linear only, pause on hover,
-   reduced motion freezes it via the global kill in base.css */
-.mq{overflow:hidden;white-space:nowrap;background:var(--ink-900);color:#fff;margin-top:-46px;position:relative;z-index:2;transform:rotate(-1.2deg) scale(1.02);}
-.mq .track{display:inline-block;animation:mqslide 26s linear infinite;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:16.5px;letter-spacing:.05em;padding:13px 0;}
-.mq:hover .track{animation-play-state:paused;}
-.mq .track em{font-style:normal;color:var(--orange-500);}
-@keyframes mqslide{to{transform:translateX(-50%);}}
+.ldframe > .ld {
+  height: 100vh;
+  border-radius: 0;
+}

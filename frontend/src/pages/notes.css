@@ -1,0 +1,27 @@
+/*
+ * Notes-page editor frame supplements. kit.css owns every editor class
+ * (.pged, .pgcol, .suggest, .bubble, .lcpop, .hovercard, …); these three
+ * rules are the positioning context kit.css scopes to the spec's #ids
+ * (#pgpop, #pgbubble, #pghover) which the React class-based markup never
+ * matches. .pged carries frameRef, so the absolutely-positioned floating
+ * layers resolve against it.
+ */
+.pged {
+  position: relative;
+}
+
+/* Spec scopes this to #pgpop.float{position:fixed}; the class form needs it too. */
+.lcpop.float {
+  position: absolute;
+  z-index: 25;
+  width: 280px;
+}
+
+/* Link-title ellipsis inside the [[ autocomplete rows. */
+.lcpop .li .lt {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

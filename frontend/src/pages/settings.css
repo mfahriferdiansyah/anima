@@ -1,27 +1,9 @@
 /* =====================================================
-   SETTINGS (U10) · sectioned standing state
-   Composes kit recipes: .subhead dividers, .setrow and
-   .accessrow lists, the inkpanel secret treatment.
+   SETTINGS · connect-agent dialog only
+   The page body uses kit .pgst-* classes directly.
+   These rules dress the secret-shown-once dialog, whose
+   inkpanel inner blocks are not covered by kit recipes.
    ===================================================== */
-
-.settings{max-width:760px;margin:0 auto;}
-
-/* kit .subhead, verbatim: the uppercase label with a hairline tail */
-.subhead{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--gray-600);margin:38px 0 16px;display:flex;align-items:center;gap:12px;}
-.subhead::after{content:"";flex:1;height:1px;background:var(--gray-200);}
-.settings .page-title + .subhead{margin-top:26px;}
-
-/* companion identity: inline field + save */
-.identityrow{display:flex;align-items:flex-start;gap:12px;}
-.identityrow .field{flex:1;}
-.identityrow .btn{margin-top:21px;}
-
-/* agents and devices: access rows with a stroke icon */
-.keymeta{display:flex;align-items:center;gap:12px;min-width:0;}
-.keymeta svg{width:18px;height:18px;color:var(--gray-600);flex:none;}
-.keymeta .al{display:flex;align-items:center;gap:10px;}
-.keymeta .as .mono{font-size:11.5px;}
-.connectrow{margin-top:18px;}
 
 /* connect dialog: the already-issued state mirrors a key row */
 .issuednote{display:flex;align-items:center;gap:12px;}
@@ -37,16 +19,3 @@
 pre.envval{margin:0;white-space:pre;overflow-x:auto;font-family:'JetBrains Mono',monospace;}
 .secretcaption{font-size:12px;color:rgba(255,255,255,.55);margin-top:8px;}
 .envlbl{margin-top:18px;}
-
-/* balances: setrows with mono amounts; low WAL gets the orange agent glyph */
-.settings .setrow{padding:13px 0;}
-.balval{font-size:13px;font-weight:700;}
-.balside{display:flex;align-items:center;gap:12px;}
-.ballow{margin-left:10px;font-size:12px;color:var(--gray-600);}
-.ballow .balglyph{color:var(--orange-500);margin-right:5px;}
-.setsub{display:block;font-size:12px;color:var(--gray-600);margin-top:2px;}
-
-/* danger zone: a red hairline card, the button stays quiet until the wallet */
-.dangercard{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--red-500);border-radius:var(--radius-card);padding:16px 18px;}
-.dangercard .al{font-size:14px;font-weight:500;}
-.dangercard .as{font-size:12px;color:var(--gray-600);margin-top:1px;}

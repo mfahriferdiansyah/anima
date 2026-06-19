@@ -4,7 +4,6 @@ import { Button } from '@/components/Button';
 import { Field } from '@/components/Field';
 import { InkPanel } from '@/components/InkPanel';
 import { Modal } from '@/components/Modal';
-import { Pill } from '@/components/Pill';
 import { ToastStack } from '@/components/ToastStack';
 import type { ToastItem } from '@/components/ToastStack';
 import type { ToastVariant } from '@/components/Toast';
@@ -33,18 +32,17 @@ function KeyIcon({ kind }: { kind: KeyEntry['kind'] }) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {kind === 'device' ? (
         <>
-          <rect width="20" height="14" x="2" y="3" rx="2" />
-          <path d="M8 21h8" />
-          <path d="M12 17v4" />
+          <rect x="2" y="3" width="20" height="14" rx="2" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
         </>
       ) : (
         <>
-          <path d="M12 8V4H8" />
-          <rect width="16" height="12" x="4" y="8" rx="2" />
-          <path d="M2 14h2" />
-          <path d="M20 14h2" />
-          <path d="M15 13v2" />
-          <path d="M9 13v2" />
+          <rect x="3" y="11" width="18" height="10" rx="2" />
+          <circle cx="12" cy="5" r="2" />
+          <path d="M12 7v4" />
+          <line x1="8" y1="16" x2="8" y2="16" />
+          <line x1="16" y1="16" x2="16" y2="16" />
         </>
       )}
     </svg>
@@ -200,36 +198,29 @@ function ConnectAgentDialog({ open, onClose, vaultId, issuedKey, onIssued }: Con
 /** One key in the agents-and-devices list; this device cannot revoke itself. */
 function KeyRow({ entry, onRevoke }: { entry: KeyEntry; onRevoke: (entry: KeyEntry) => void }) {
   return (
-    <div className="accessrow">
-      <div className="keymeta">
-        <KeyIcon kind={entry.kind} />
-        <div>
-          <div className="al">
-            {entry.label}
-            {entry.thisDevice ? (
-              <Pill glyph="✦" glyphColor="blue">
-                this device
-              </Pill>
-            ) : null}
-          </div>
-          <div className="as">
-            <span className="mono" title={entry.address}>
-              {shortAddress(entry.address)}
+    <div className="pgst-key">
+      <KeyIcon kind={entry.kind} />
+      <div className="kb">
+        <div className="kn">
+          {entry.label}
+          {entry.thisDevice ? (
+            <span className="kthis">
+              <i>✦</i>this device
             </span>
-            {' '}· added {entry.addedAt.slice(0, 10)}
-          </div>
+          ) : null}
+        </div>
+        <div className="km" title={entry.address}>
+          {shortAddress(entry.address)} · added {entry.addedAt.slice(0, 10)}
         </div>
       </div>
       {entry.thisDevice ? (
-        <span title="you cannot revoke the key you are using">
-          <Button variant="quiet" size="sm" className="unpub" disabled>
-            Revoke
-          </Button>
-        </span>
-      ) : (
-        <Button variant="quiet" size="sm" className="unpub" onClick={() => onRevoke(entry)}>
+        <button type="button" className="krev" disabled title="you cannot revoke the key you are using">
           Revoke
-        </Button>
+        </button>
+      ) : (
+        <button type="button" className="krev" onClick={() => onRevoke(entry)}>
+          Revoke
+        </button>
       )}
     </div>
   );
@@ -305,79 +296,107 @@ export function Settings() {
   const walLow = settings.balances.wal < WAL_LOW_THRESHOLD;
 
   return (
-    <section className="settings">
-      <h1 className="page-title">Settings</h1>
+    <div className="pgstcol">
+      <h2 className="pgst-title">Settings</h2>
 
-      <div className="subhead">Companion identity</div>
-      <div className="identityrow">
-        <Field
-          label="Companion name"
-          help="renaming is routine, no signature needed"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-        />
-        <Button variant="primary" size="sm" onClick={saveName} disabled={!name.trim()}>
+      <div className="pgh-label">COMPANION IDENTITY</div>
+      <div className="pgst-row">
+        <div className="pgst-id">
+          <label htmlFor="pgstname">Companion name</label>
+          <input
+            type="text"
+            id="pgstname"
+            autoComplete="off"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+          <span className="pgst-help">renaming is routine, no signature needed</span>
+        </div>
+        <button type="button" className="pgbtn primary" onClick={saveName} disabled={!name.trim()}>
           Save
-        </Button>
+        </button>
       </div>
 
-      <div className="subhead">Agents and devices</div>
-      <div className="keylist">
+      <div className="pgh-label">AGENTS AND DEVICES</div>
+      <div className="pgst-keys">
         {settings.keys.map((entry) => (
           <KeyRow key={entry.id} entry={entry} onRevoke={revoke} />
         ))}
       </div>
-      <div className="connectrow">
-        <Button onClick={() => setConnectOpen(true)}>Connect external agent</Button>
-      </div>
+      <button type="button" className="pgbtn pgst-connect" onClick={() => setConnectOpen(true)}>
+        Connect external agent
+      </button>
 
-      <div className="subhead">Balances</div>
-      <div className="setrow">
-        <span className="sl">SUI · pays for transactions</span>
-        <span className="mono balval">{settings.balances.sui.toFixed(2)} SUI</span>
+      <div className="pgh-label">BALANCES</div>
+      <div className="pgst-row">
+        <span className="pgst-k">SUI · pays for transactions</span>
+        <span className="pgst-v">{settings.balances.sui.toFixed(2)} SUI</span>
       </div>
-      <div className="setrow">
-        <span className="sl">
+      <div className="pgst-row">
+        <span className="pgst-k">
           WAL · pays for storage
-          {walLow ? (
-            <span className="ballow">
-              <span className="balglyph" aria-hidden="true">✧</span>
-              running low
-            </span>
-          ) : null}
+          {walLow ? <i className="low">✧ running low</i> : null}
         </span>
-        <span className="balside">
-          <span className="mono balval">{settings.balances.wal.toFixed(2)} WAL</span>
-          {walLow ? (
-            <Button variant="primary" size="sm" onClick={topUp}>
-              Top up
-            </Button>
-          ) : null}
-        </span>
+        <span className="pgst-v">{settings.balances.wal.toFixed(2)} WAL</span>
+        {walLow ? (
+          <button type="button" className="pgbtn primary" onClick={topUp}>
+            Top up
+          </button>
+        ) : null}
       </div>
 
-      <div className="subhead">Export</div>
-      <div className="setrow">
-        <span className="sl">
+      <div className="pgh-label">MILESTONES</div>
+      <div className="pgst-miles">
+        <div className="mrow">
+          <span className="mg ok">✦</span>First seal<span className="md">Jun 2</span>
+        </div>
+        <div className="mrow">
+          <span className="mg ag">✧</span>External agent paired<span className="md">Jun 5</span>
+        </div>
+        <div className="mrow">
+          <span className="mg">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+          </span>
+          First public note<span className="md">Jun 8</span>
+        </div>
+        <div className="mrow dim">
+          <span className="mg">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+          </span>
+          Resurrected<span className="md">not yet</span>
+        </div>
+      </div>
+
+      <div className="pgh-label">EXPORT</div>
+      <div className="pgst-row">
+        <span className="pgst-k">
           Every note as plain JSON, decrypted in this browser
-          <span className="setsub">
+          <br />
+          <span className="pgst-help">
             {notes.length} {notes.length === 1 ? 'note' : 'notes'} · leaving the app never means leaving your data
           </span>
         </span>
-        <Button size="sm" onClick={exportVault}>
+        <button type="button" className="pgbtn" onClick={exportVault}>
           Export vault
-        </Button>
+        </button>
       </div>
 
-      <div className="subhead">Danger zone</div>
-      <div className="dangercard">
+      <div className="pgh-label">DANGER ZONE</div>
+      <div className="pgst-danger">
         <div>
-          <div className="al">Forget everything</div>
-          <div className="as">Erases every memory in the vault, for a signature. Disabled in the mocked build.</div>
+          <b>Forget everything</b>
+          <span className="pgst-help">Erases every memory in the vault, for a signature. Disabled in the mocked build.</span>
         </div>
-        <Button variant="quiet" size="sm" className="unpub" onClick={forgetEverything}>
+        <button type="button" className="pgbtn danger" onClick={forgetEverything}>
           Forget everything
-        </Button>
+        </button>
       </div>
 
       <ConnectAgentDialog
@@ -388,6 +407,6 @@ export function Settings() {
         onIssued={(key) => setIssuedKeyId(key.id)}
       />
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
-    </section>
+    </div>
   );
 }

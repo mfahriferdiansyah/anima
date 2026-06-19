@@ -1,37 +1,35 @@
-/* ============ workspace shell + app chrome (U3) ============ */
+/* ============ app shell glue (kit.css carries the visual system) ============ */
+/* The shell maps the kit's .pgframe.v-single mockup to a full-viewport app:
+   a top bar (.pghead) over a sidebar+content row (.pgbody). kit.css styles
+   .pghead/.pgbody/.pgtree/.pgnav2/.pged etc.; this file only fills the screen
+   and carries app-only chrome (orb, MOCKED badge, toasts, wallet dialog). */
 
-.shell{display:flex;min-height:100vh;background:var(--gray-100);}
+.shell{height:100vh;display:flex;flex-direction:column;min-width:0;background:#fff;overflow:hidden;}
+.shell .pghead{padding:0 22px;}
+.shell .pgtree{width:256px;}
+.shell .pgnav2{text-decoration:none;}
+.shell .pgdisc{background:none;border:none;font-family:inherit;}
 
-/* sidebar: the ink surface — the brand's hero lockup becomes the nav */
-.shell-side{
-  width:228px;flex:none;display:flex;flex-direction:column;gap:3px;padding:22px 14px;
-  background:var(--ink-900);
-}
-.shell-wordmark{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:23px;letter-spacing:-.02em;padding:0 12px 24px;color:#fff;}
-.shell-wordmark .star{color:var(--orange-500);font-size:.62em;vertical-align:.32em;}
-.snav{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:10px;font-size:13.5px;font-weight:500;color:rgba(255,255,255,.66);text-decoration:none;transition:background var(--motion-duration-fast) ease,color var(--motion-duration-fast) ease;}
-.snav:hover{background:rgba(255,255,255,.08);color:#fff;}
-.snav:focus-visible{outline:2.5px solid var(--blue-300);outline-offset:2px;}
-.snav svg{width:16px;height:16px;flex:none;color:currentColor;opacity:.8;}
-.snav.active{background:rgba(255,255,255,.12);color:#fff;font-weight:600;}
-.snav.active svg{color:var(--orange-500);opacity:1;}
+/* utilities the kit references in markup */
+.sg{font-family:'Space Grotesk',sans-serif;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-thumb{background:var(--gray-200);border-radius:3px;}
+::-webkit-scrollbar-track{background:transparent;}
 
-/* header (R2): white bar over the gray workspace */
-.shell-main{flex:1;display:flex;flex-direction:column;min-width:0;}
-.shell-head{display:flex;align-items:center;gap:14px;padding:13px 28px;background:#fff;box-shadow:0 1px 0 var(--gray-200);}
-.shell-agent{font-weight:600;font-size:14px;}
-.shell-agent .glyph{color:var(--orange-500);margin-right:6px;}
-.shell-head .count-pill{margin-left:auto;}
-.shell-addr{font-size:12.5px;color:var(--gray-600);}
-.shell-page{flex:1;padding:28px 32px;overflow:auto;}
+/* the "+ New note" affordance sits as a real button in the rail */
+.shell .pgnew{display:block;width:calc(100% - 16px);text-align:left;}
 
-/* placeholder pages (replaced in U5-U10) */
-.page-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:22px;letter-spacing:-.01em;}
-.page-note{display:block;margin-top:10px;font-size:12.5px;color:var(--gray-600);}
-.empty .btn{margin-top:16px;}
+/* MEMORIES select + wallet-gated forget (the custody asymmetry) */
+.pgtree-sel{border:none;background:none;cursor:pointer;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;color:rgba(22,24,29,.42);transition:color 150ms ease;}
+.pgtree-sel:hover{color:var(--ink-900);}
+.pgrow.sel{background:rgba(47,107,255,.08);color:var(--ink-900);}
+.pgdot.sel{background:var(--blue-600);box-shadow:0 0 0 2px rgba(47,107,255,.25);}
+.shell .pgforget{color:var(--red-500);font-weight:600;}
+.shell .pgforget:hover{background:var(--red-100);color:var(--red-500);}
+.shell .pgforget:disabled{opacity:.45;cursor:not-allowed;}
 
-/* write toasts live bottom-left so the orb corner stays free (U1 handoff note) */
-#toaststack{right:auto;left:20px;}
+/* write toasts live bottom-left so the orb corner stays free */
+#toaststack{position:fixed;left:20px;bottom:20px;right:auto;z-index:80;display:flex;flex-direction:column;gap:10px;}
 
 /* mock wallet dialog */
 .wallet-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;}
@@ -50,7 +48,3 @@
 .mocked-opt:hover{background:rgba(255,255,255,.08);}
 .mocked-opt.on{background:var(--blue-600);font-weight:700;}
 .mocked-row{display:flex;align-items:center;justify-content:space-between;font-size:13px;padding:0 2px;}
-
-/* default buttons sit on the gray workspace now: give them a body */
-.shell-page .btn:not(.btn-primary):not(.btn-accent):not(.btn-ink):not(.btn-danger){background:#fff;box-shadow:inset 0 0 0 1px var(--gray-200);}
-.shell-page .btn:not(.btn-primary):not(.btn-accent):not(.btn-ink):not(.btn-danger):hover{box-shadow:inset 0 0 0 1px var(--gray-200),var(--shadow-softer);}
