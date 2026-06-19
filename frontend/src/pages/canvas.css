@@ -1,0 +1,22 @@
+/* ============================================================================
+   Drawing layer for the shared board. The toolbar's pen / arrow / shape / text
+   tools create real elements here; strokes are monochrome ink, and everything
+   lives in the translated world layer so it pans with the cards. kit.css owns
+   the board chrome (.pgcv, .pgcv-tools, cards); this file only adds drawings.
+   ========================================================================== */
+
+/* the SVG that holds freehand paths, rectangles and arrows; individual shapes
+   opt back into pointer events when the select tool is active (see Canvas.tsx) */
+.pgcv-ink { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+
+/* text elements: an editable box while typing, a plain block once committed */
+.cv-text {
+  position: absolute; font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.4;
+  color: var(--ink-900); white-space: pre-wrap; word-break: break-word; max-width: 340px; cursor: default;
+}
+.cv-text.sel { box-shadow: 0 0 0 1.5px var(--blue-600); border-radius: 4px; }
+.cv-text.editing {
+  border: none; outline: 1.5px solid var(--blue-600); border-radius: 4px;
+  background: rgba(255, 255, 255, .82); padding: 1px 3px; margin: -1px -3px; resize: none; overflow: hidden;
+  min-width: 60px; font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.4; color: var(--ink-900);
+}
