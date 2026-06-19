@@ -9,7 +9,6 @@ import { closePopup, expandPopup, openPopup, setOnCompanionRoute, useChat } from
 import { createNote, forgetNotes, useVault } from '@/hooks/useVault';
 import type { Note } from '@/hooks/useVault';
 import { confirmWithWallet } from '@/hooks/useWallet';
-import { useScenario } from '@/hooks/useScenario';
 import { ChatMessages } from '@/pages/ChatMessages';
 
 export type ReadySession = Extract<SessionState, { phase: 'ready' }>;
@@ -228,7 +227,11 @@ function MemoryTree() {
             navigate(`/app/notes/${id}`);
           }}
         >
-          + New note
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          New note
         </button>
       )}
     </>
@@ -299,38 +302,26 @@ function ChatOrb({ agentName }: { agentName: string }) {
   );
 }
 
-/** The ready-phase workspace: top bar, light rail (nav + memories tree), routed page, chat orb. */
+/** The ready-phase workspace: light rail (nav + memories tree + account), routed page, chat orb. */
 export function AppShell({ session }: { session: ReadySession }) {
-  const count = session.index.count;
-  const { scenario } = useScenario();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  // The drawer is modal on small screens; any navigation dismisses it.
-  useEffect(() => setDrawerOpen(false), [location.pathname]);
+  const [acctOpen, setAcctOpen] = useState(false);
+  // The drawer + account menu are modal; any navigation dismisses them.
+  useEffect(() => {
+    setDrawerOpen(false);
+    setAcctOpen(false);
+  }, [location.pathname]);
   return (
     <div className="shell v-single">
-      <header className="pghead">
-        <button type="button" className="pgburger" aria-label="Toggle menu" aria-expanded={drawerOpen} onClick={() => setDrawerOpen((open) => !open)}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
-        <span className="pgagent">
-          <span className="ag2" aria-hidden="true">✦</span>
-          <span className="agname">{session.agent.name}</span>
-        </span>
-        <span className="pgpill">
-          {count} {count === 1 ? 'memory' : 'memories'}
-        </span>
-        <span className="pgaddr" title={session.vault.owner}>
-          {shortAddress(session.vault.owner)}
-        </span>
-        <button type="button" className="pgdisc" onClick={disconnect}>
-          Disconnect
-        </button>
-      </header>
+      {/* floating menu toggle (small screens only); opens the rail drawer */}
+      <button type="button" className="pgburger" aria-label="Toggle menu" aria-expanded={drawerOpen} onClick={() => setDrawerOpen((open) => !open)}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="3" y1="18" x2="21" y2="18" />
+        </svg>
+      </button>
       <div className="pgbody">
         {drawerOpen ? <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)} aria-hidden="true" /> : null}
         <aside className={drawerOpen ? 'pgtree open' : 'pgtree'}>
@@ -352,7 +343,32 @@ export function AppShell({ session }: { session: ReadySession }) {
             ))}
           </div>
           <MemoryTree />
-          <div className="pgtree-foot">MOCKED · {scenario}</div>
+          <div className="pgrail-acct">
+            <button
+              type="button"
+              className={acctOpen ? 'pgacct open' : 'pgacct'}
+              aria-haspopup="menu"
+              aria-expanded={acctOpen}
+              onClick={() => setAcctOpen((open) => !open)}
+            >
+              <span className="pgacct-av" aria-hidden="true">✦</span>
+              <span className="pgacct-id">
+                <span className="pgacct-name">{session.agent.name}</span>
+                <span className="pgacct-addr">{shortAddress(session.vault.owner)}</span>
+              </span>
+              <span className="pgacct-dot" title="Connected" aria-hidden="true" />
+            </button>
+            {acctOpen ? (
+              <>
+                <div className="pgacct-scrim" onClick={() => setAcctOpen(false)} aria-hidden="true" />
+                <div className="pgacct-menu" role="menu">
+                  <button type="button" className="pgacct-mitem" role="menuitem" onClick={disconnect}>
+                    Disconnect
+                  </button>
+                </div>
+              </>
+            ) : null}
+          </div>
         </aside>
         <Outlet />
       </div>

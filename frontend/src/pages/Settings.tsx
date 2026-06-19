@@ -296,7 +296,9 @@ export function Settings() {
   const walLow = settings.balances.wal < WAL_LOW_THRESHOLD;
 
   return (
-    <div className="pgstcol">
+    <div className="pged">
+      <div className="pged-scroll">
+        <div className="pgstcol">
       <h2 className="pgst-title">Settings</h2>
 
       <div className="pgh-label">COMPANION IDENTITY</div>
@@ -397,6 +399,8 @@ export function Settings() {
         <button type="button" className="pgbtn danger" onClick={forgetEverything}>
           Forget everything
         </button>
+      </div>
+        </div>
       </div>
 
       <ConnectAgentDialog

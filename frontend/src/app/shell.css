@@ -5,10 +5,23 @@
    and carries app-only chrome (orb, MOCKED badge, toasts, wallet dialog). */
 
 .shell{height:100vh;display:flex;flex-direction:column;min-width:0;background:#fff;overflow:hidden;}
-.shell .pghead{padding:0 22px;}
 .shell .pgtree{width:256px;}
 .shell .pgnav2{text-decoration:none;}
-.shell .pgdisc{background:none;border:none;font-family:inherit;}
+
+/* rail footer: a divider, then a compact account chip that opens a menu.
+   Disconnect lives in the menu; the dev MOCKED badge floats separately. */
+.pgrail-acct{position:relative;margin-top:6px;padding:8px;box-shadow:0 -1px 0 rgba(22,24,29,.07);}
+.pgacct{display:flex;align-items:center;gap:9px;width:100%;border:none;cursor:pointer;background:none;padding:6px 8px;border-radius:9px;text-align:left;transition:background 150ms ease;}
+.pgacct:hover,.pgacct.open{background:rgba(22,24,29,.05);}
+.pgacct-av{flex:none;width:28px;height:28px;border-radius:50%;background:var(--ink-900);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;}
+.pgacct-id{display:flex;flex-direction:column;min-width:0;line-height:1.3;}
+.pgacct-name{font-weight:600;font-size:13px;color:var(--ink-900);}
+.pgacct-addr{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:rgba(22,24,29,.42);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pgacct-dot{margin-left:auto;flex:none;width:7px;height:7px;border-radius:50%;background:var(--teal-500);box-shadow:0 0 0 3px rgba(0,196,140,.15);}
+.pgacct-scrim{position:fixed;inset:0;z-index:86;}
+.pgacct-menu{position:absolute;left:8px;right:8px;bottom:calc(100% - 2px);z-index:87;background:#fff;border-radius:10px;padding:5px;box-shadow:var(--shadow-soft),0 0 0 1px rgba(22,24,29,.08);animation:modalin var(--motion-duration-base) var(--motion-easing-enter);}
+.pgacct-mitem{display:block;width:100%;border:none;background:none;cursor:pointer;text-align:left;padding:8px 10px;border-radius:7px;font-size:13px;font-weight:500;color:var(--ink-900);transition:background 150ms ease,color 150ms ease;}
+.pgacct-mitem:hover{background:var(--red-100);color:var(--red-500);}
 
 /* utilities the kit references in markup */
 .sg{font-family:'Space Grotesk',sans-serif;}
@@ -16,8 +29,11 @@
 ::-webkit-scrollbar-thumb{background:var(--gray-200);border-radius:3px;}
 ::-webkit-scrollbar-track{background:transparent;}
 
-/* the "+ New note" affordance sits as a real button in the rail */
-.shell .pgnew{display:block;width:calc(100% - 16px);text-align:left;}
+/* the "New note" affordance: a tidy muted row matching the tree rhythm */
+.shell .pgnew{display:flex;align-items:center;gap:8px;width:calc(100% - 16px);height:30px;margin:4px 8px 6px;padding:0 8px;text-align:left;color:rgba(22,24,29,.55);}
+.shell .pgnew svg{width:14px;height:14px;flex:none;opacity:.7;}
+.shell .pgnew:hover{color:var(--ink-900);}
+.shell .pgnew:hover svg{opacity:1;}
 
 /* MEMORIES select + wallet-gated forget (the custody asymmetry) */
 .pgtree-sel{border:none;background:none;cursor:pointer;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;color:rgba(22,24,29,.42);transition:color 150ms ease;}

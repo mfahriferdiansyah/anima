@@ -12,14 +12,18 @@
 
 /* ----------------------------------------------------------------- <= 1024 */
 @media (max-width: 1024px) {
+  /* no top bar on small screens: the menu toggle floats top-left */
   .pgburger {
     display: flex; align-items: center; justify-content: center;
-    width: 34px; height: 34px; margin: 0 2px 0 -6px;
-    border: none; background: none; cursor: pointer;
-    color: var(--ink-900); border-radius: 8px;
+    position: fixed; top: 12px; left: 12px; z-index: 88;
+    width: 40px; height: 40px; border: none; cursor: pointer;
+    color: var(--ink-900); border-radius: 10px;
+    background: #fff; box-shadow: var(--shadow-softer);
   }
   .pgburger svg { width: 20px; height: 20px; }
-  .pgburger:hover { background: rgba(22, 24, 29, .06); }
+  .pgburger:hover { background: var(--gray-100); }
+  /* clear the floating toggle so it never overlaps page content */
+  .pged { padding-top: 52px; }
 
   /* sidebar becomes an off-canvas drawer */
   .shell .pgtree {
@@ -35,9 +39,12 @@
     animation: fadein var(--motion-duration-base) ease;
   }
 
-  /* Home: the suggestions rail drops under the calendar */
-  .pgh6 { flex-direction: column; }
+  /* Home: the suggestions rail drops under the calendar. align-items:stretch
+     (kit uses flex-start) is critical — without it the column children keep
+     their intrinsic width and the 600px calendar grid overflows the page. */
+  .pgh6 { flex-direction: column; align-items: stretch; }
   .pgh6-rail { width: 100%; flex: none; }
+  .pgcal { width: 100%; }
   .pghcol6 { max-width: 920px; }
 
   /* Canvas: let the board pan, keep the chrome pinned to the viewport */
@@ -60,7 +67,9 @@
   .pgcal-scroll .pgcal-days,
   .pgcal-scroll .pgcal-allday,
   .pgcal-scroll .pgcal-grid { min-width: 600px; }
-  .pgcal-t { flex-wrap: wrap; row-gap: 8px; }
+  /* the two header rows must wrap, else .pgcal (overflow:hidden) clips them */
+  .pgcal-t { flex-wrap: wrap; row-gap: 8px; height: auto; }
+  .pgcal-h { flex-wrap: wrap; row-gap: 8px; height: auto; }
 
   /* editor + chat + settings columns go fluid */
   .pgcol { padding: 36px 22px 80px; }
@@ -71,10 +80,6 @@
 
 /* ------------------------------------------------------------------ <= 480 */
 @media (max-width: 480px) {
-  .shell .pghead { padding: 0 12px; gap: 8px; }
-  .pghead .pgaddr { display: none; }
-  .pghead .pgpill { margin-left: auto; }
-
   /* quick-starts stack */
   .pgh-quick { grid-template-columns: 1fr; }
   .pghcol6 { padding: 22px 14px 56px; }
@@ -89,9 +94,14 @@
   /* chat */
   .pgccol { padding: 18px 14px 20px; }
 
-  /* settings rows wrap their right-aligned values */
+  /* settings: shrink/truncate the long columns instead of wrapping the controls
+     off the row (device rows keep icon + name + Revoke on one line) */
   .pgstcol { padding: 24px 14px 56px; }
-  .pgst-row, .pgst-key, .pgst-k, .pgst-v { flex-wrap: wrap; row-gap: 6px; }
+  .pgst-key .kb { min-width: 0; }
+  .pgst-key .km { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pgst-key .kn { flex-wrap: wrap; row-gap: 2px; }
+  .pgst-row { flex-wrap: wrap; row-gap: 4px; }
+  .pgst-row .pgst-v { margin-left: auto; }
 
   /* drawer takes most of the width on a phone */
   .shell .pgtree { width: 82vw; max-width: 320px; }
