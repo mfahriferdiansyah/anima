@@ -3,10 +3,36 @@ import type { ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/Button';
 import { createNote, useVault } from '@/hooks/useVault';
+import { useFolders } from '@/hooks/useCanvases';
 import { notesMounted } from '@/hooks/useAgentTimeline';
 import { useVaultSession } from '@/hooks/useVaultSession';
+import { buildLibrary } from '@/app/library';
 import { NoteEditor } from './NoteEditor';
 import './notes.css';
+import './sectionhome.css';
+
+function titleCase(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function shortAge(iso: string): string {
+  const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (minutes < 1) return 'now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+/** First meaningful line(s) of a note, with wiki links resolved to titles. */
+function excerptOf(body: string, titles: Map<string, string>): string {
+  return body
+    .replace(/\[\[([^\]]+)\]\]/g, (_, id: string) => titles.get(id) ?? id)
+    .split('\n')
+    .map((line) => line.replace(/^[\s\->#]*(\[[ x]\]\s*)?/, '').trim())
+    .filter(Boolean)
+    .join(' ');
+}
 
 /**
  * The notes surface (section 13). The left rail and the MEMORIES tree now
@@ -61,7 +87,66 @@ export function Notes() {
     );
   }
 
-  return <EditorEmpty title="Pick a memory" detail="Choose a note from the tree, or start a new one." />;
+  return <NotesHome name={name} onNew={newNote} />;
+}
+
+/** Notes home: the overview reached from the Notes nav — every note as a card,
+ *  grouped into the same folders as the sidebar. Open one to edit it. */
+function NotesHome({ name, onNew }: { name: string; onNew: () => void }) {
+  const navigate = useNavigate();
+  const { notes } = useVault();
+  const folderOrder = useFolders();
+  const titles = new Map(notes.map((note) => [note.noteId, note.title || 'Untitled']));
+  const folders = buildLibrary(notes, [], folderOrder).filter((folder) => folder.items.length > 0);
+
+  return (
+    <div className="pged">
+      <div className="pged-top">
+        <span className="pgcrumb">
+          <b>Notes</b> · {notes.length} {notes.length === 1 ? 'note' : 'notes'}
+        </span>
+        <span className="sp" />
+        <button type="button" className="pgbtn primary" onClick={onNew}>
+          New note
+        </button>
+      </div>
+      <div className="pged-scroll">
+        <div className="pghome-scroll">
+          {folders.map((folder) => (
+            <div key={folder.name} className="pglib-fold">
+              <div className="pglib-foldh">
+                <span className="pglib-foldn">{titleCase(folder.name)}</span>
+                <span className="pglib-foldc">{folder.items.length}</span>
+                <span className="hr" />
+              </div>
+              <div className="pglib-grid">
+                {folder.items.map((item) => {
+                  const note = item.note!;
+                  const byAgent = note.author.startsWith('agent');
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="pglib-card"
+                      onClick={() => navigate(`/app/notes/${note.noteId}`)}
+                    >
+                      <div className="pglib-t">{item.title}</div>
+                      <div className="pglib-x">{excerptOf(note.body, titles) || 'Empty note'}</div>
+                      {byAgent ? (
+                        <div className="pglib-m">
+                          <i>✧ {name.toLowerCase()} · {shortAge(note.updatedAt)}</i>
+                        </div>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /** The empty editor: the same .pged worktop, centered .empty block, no open note. */
