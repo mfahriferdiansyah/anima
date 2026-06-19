@@ -7,7 +7,7 @@ import { disconnect } from '@/hooks/useVaultSession';
 import type { SessionState } from '@/hooks/useVaultSession';
 import { closePopup, expandPopup, openPopup, setOnCompanionRoute, useChat } from '@/hooks/useChat';
 import { createNote, useVault } from '@/hooks/useVault';
-import { createCanvas, SHARED_CANVAS_ID, useCanvases, useFolders } from '@/hooks/useCanvases';
+import { createCanvas, useCanvases, useFolders } from '@/hooks/useCanvases';
 import { buildLibrary } from './library';
 import { ManageLibrary } from './ManageLibrary';
 import { ChatMessages } from '@/pages/ChatMessages';
@@ -141,8 +141,10 @@ function MemoryTree() {
   const navigate = useNavigate();
   const location = useLocation();
   const openId = activeNoteId(location.pathname);
-  const canvasMatch = location.pathname.match(/^\/app\/canvas(?:\/(.+))?$/);
-  const activeCanvasId = canvasMatch ? decodeURIComponent(canvasMatch[1] ?? SHARED_CANVAS_ID) : null;
+  // Only an actual board (/app/canvas/:id) highlights a canvas row; the gallery
+  // (/app/canvas, no id) highlights nothing.
+  const canvasMatch = location.pathname.match(/^\/app\/canvas\/(.+)$/);
+  const activeCanvasId = canvasMatch ? decodeURIComponent(canvasMatch[1]) : null;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<DocFilter>('all');

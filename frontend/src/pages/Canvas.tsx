@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { createNote, useVault } from '@/hooks/useVault';
 import type { Note } from '@/hooks/useVault';
 import { SHARED_CANVAS_ID, useCanvases } from '@/hooks/useCanvases';
+import { CanvasHome } from './CanvasHome';
 import { moveNote, startPresence, stopPresence, usePresence } from '@/hooks/usePresence';
 import type { Peer } from '@/hooks/usePresence';
 import { scheduleAgentNote } from '@/hooks/useAgentTimeline';
@@ -140,9 +141,10 @@ export function Canvas() {
   const navigate = useNavigate();
   const { canvasId } = useParams();
   const canvases = useCanvases();
-  // The seed board shows the shared note constellation; created boards are blank.
-  const isShared = !canvasId || canvasId === SHARED_CANVAS_ID;
-  const boardDoc = canvases.find((c) => c.canvasId === (canvasId ?? SHARED_CANVAS_ID));
+  // No id -> the canvas home (gallery); only the seed canvas shows the shared
+  // note constellation, every other board is blank.
+  const isShared = canvasId === SHARED_CANVAS_ID;
+  const boardDoc = canvases.find((c) => c.canvasId === canvasId);
   const boardTitle = boardDoc?.title ?? 'Untitled canvas';
   const boardDesc = boardDoc?.desc ?? '';
   const { notes } = useVault();
@@ -257,6 +259,8 @@ export function Canvas() {
   }, [notes, titles]);
 
   if (session.phase !== 'ready') return null;
+  // The Canvas nav (no id) lands on the gallery; a board opens at /app/canvas/:id.
+  if (!canvasId) return <CanvasHome />;
   const name = session.agent.name;
 
   const newNote = () => navigate(`/app/notes/${createNote()}`);
