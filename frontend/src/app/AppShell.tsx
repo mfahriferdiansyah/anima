@@ -122,16 +122,44 @@ function activeNoteId(pathname: string): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+/** Type glyphs that sit before a title so notes and the board read distinctly. */
+const NOTE_GLYPH = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z" />
+    <polyline points="14 2 14 8 20 8" />
+  </svg>
+);
+const CANVAS_GLYPH = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="3" width="7" height="7" rx="1.5" />
+    <rect x="14" y="3" width="7" height="7" rx="1.5" />
+    <rect x="3" y="14" width="7" height="7" rx="1.5" />
+    <rect x="14" y="14" width="7" height="7" rx="1.5" />
+  </svg>
+);
+
 /** The persistent MEMORIES tree in the rail: folders of notes, dots and agent marks. */
 function MemoryTree() {
   const { notes } = useVault();
   const navigate = useNavigate();
   const location = useLocation();
   const openId = activeNoteId(location.pathname);
+  const onCanvas = location.pathname === '/app/canvas';
   const folders = buildFolders(notes);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [query, setQuery] = useState('');
+
+  // Title filter. While searching, folders force-open so matches surface.
+  const q = query.trim().toLowerCase();
+  const visibleFolders = q
+    ? folders
+        .map((folder) => ({ ...folder, notes: folder.notes.filter((n) => (n.title || 'Untitled').toLowerCase().includes(q)) }))
+        .filter((folder) => folder.notes.length > 0)
+    : folders;
+  const showCanvas = !q || 'shared board canvas'.includes(q);
+  const noMatches = q.length > 0 && visibleFolders.length === 0 && !showCanvas;
 
   const toggleSelectMode = () => {
     setSelecting((prev) => !prev);
@@ -163,15 +191,47 @@ function MemoryTree() {
 
   return (
     <>
+      <div className="pgsearch">
+        <svg className="pgsearch-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        <input
+          type="text"
+          placeholder="Search notes"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          aria-label="Search notes"
+        />
+        {query ? (
+          <button type="button" className="pgsearch-x" aria-label="Clear search" onClick={() => setQuery('')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+            </svg>
+          </button>
+        ) : null}
+      </div>
+
+      {showCanvas && !selecting ? (
+        <button
+          type="button"
+          className={onCanvas ? 'pgrow pinned on' : 'pgrow pinned'}
+          onClick={() => navigate('/app/canvas')}
+        >
+          <span className="pgtype canvas" aria-hidden="true">{CANVAS_GLYPH}</span>
+          <span className="nt2">Shared board</span>
+        </button>
+      ) : null}
+
       <div className="pgtree-h">
-        <b>MEMORIES</b>
+        <b>NOTES</b>
         <button type="button" className="pgtree-sel" onClick={toggleSelectMode}>
           {selecting ? 'Done' : 'Select'}
         </button>
       </div>
       <div className="pgtree-scroll">
-        {folders.map((folder) => {
-          const isClosed = collapsed[folder.name] ?? false;
+        {visibleFolders.map((folder) => {
+          const isClosed = q ? false : (collapsed[folder.name] ?? false);
           return (
             <div key={folder.name}>
               <div
@@ -198,7 +258,7 @@ function MemoryTree() {
                       {selecting ? (
                         <span className={isSel ? 'pgdot sel' : 'pgdot draft'} aria-hidden="true" />
                       ) : (
-                        <span className={isOpen ? 'pgdot open' : 'pgdot none'} aria-hidden="true" />
+                        <span className="pgtype doc" aria-hidden="true">{NOTE_GLYPH}</span>
                       )}
                       <span className="nt2">{note.title || 'Untitled'}</span>
                       {byAgent ? <span className="pgagentmark" aria-hidden="true">✦</span> : null}
@@ -208,6 +268,7 @@ function MemoryTree() {
             </div>
           );
         })}
+        {noMatches ? <div className="pgempty2">No notes match “{query}”.</div> : null}
       </div>
       {selecting ? (
         <button

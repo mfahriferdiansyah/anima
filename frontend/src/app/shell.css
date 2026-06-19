@@ -35,7 +35,7 @@
 .shell .pgnew:hover{color:var(--ink-900);}
 .shell .pgnew:hover svg{opacity:1;}
 
-/* MEMORIES select + wallet-gated forget (the custody asymmetry) */
+/* NOTES select + wallet-gated forget (the custody asymmetry) */
 .pgtree-sel{border:none;background:none;cursor:pointer;font-family:'Inter',sans-serif;font-size:11px;font-weight:600;color:rgba(22,24,29,.42);transition:color 150ms ease;}
 .pgtree-sel:hover{color:var(--ink-900);}
 .pgrow.sel{background:rgba(47,107,255,.08);color:var(--ink-900);}
@@ -43,6 +43,28 @@
 .shell .pgforget{color:var(--red-500);font-weight:600;}
 .shell .pgforget:hover{background:var(--red-100);color:var(--red-500);}
 .shell .pgforget:disabled{opacity:.45;cursor:not-allowed;}
+
+/* Sidebar search: a title filter above the typed list. */
+.shell .pgsearch{position:relative;margin:2px 8px 6px;}
+.shell .pgsearch input{width:100%;height:30px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;padding:0 26px 0 28px;font-family:'Inter',sans-serif;font-size:12.5px;color:var(--ink-900);transition:border-color 150ms ease;}
+.shell .pgsearch input::placeholder{color:rgba(22,24,29,.4);}
+.shell .pgsearch input:focus{outline:none;border-color:var(--blue-300);}
+.shell .pgsearch-i{position:absolute;left:9px;top:50%;transform:translateY(-50%);width:13px;height:13px;color:rgba(22,24,29,.4);pointer-events:none;}
+.shell .pgsearch-x{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;border:none;background:none;cursor:pointer;color:rgba(22,24,29,.4);padding:4px;border-radius:5px;}
+.shell .pgsearch-x svg{width:12px;height:12px;}
+.shell .pgsearch-x:hover{color:var(--ink-900);background:rgba(22,24,29,.06);}
+
+/* Two distinct item types, told by a glyph before the title: the board (pinned,
+   grid glyph) and notes (doc glyph). The glyph replaces the old status dot. */
+.shell .pgrow{padding-left:14px;gap:8px;}
+.shell .pgtype{flex:none;width:15px;height:15px;display:flex;align-items:center;justify-content:center;color:rgba(22,24,29,.42);}
+.shell .pgtype svg{width:14px;height:14px;}
+.shell .pgrow.on .pgtype{color:var(--ink-900);}
+.shell .pgtype.canvas{color:var(--orange-500);opacity:.85;}
+.shell .pgrow.pinned{width:calc(100% - 16px);margin:0 8px 2px;padding-left:8px;border:none;background:none;font-family:'Inter',sans-serif;font-size:13px;color:rgba(22,24,29,.78);}
+.shell .pgrow.pinned.on{background:rgba(22,24,29,.08);color:var(--ink-900);font-weight:600;}
+.shell .pgrow.pinned.on .pgtype.canvas{opacity:1;}
+.shell .pgempty2{padding:10px 14px;font-size:12px;color:rgba(22,24,29,.42);}
 
 /* write toasts live bottom-left so the orb corner stays free */
 #toaststack{position:fixed;left:20px;bottom:20px;right:auto;z-index:80;display:flex;flex-direction:column;gap:10px;}
