@@ -1727,8 +1727,34 @@
   .lp-glass {
     padding: 34px 26px 30px;
   }
+  /* hero scene: 5 desktop-positioned cards pile up on a phone — thin to 3 and
+     spread them so they don't overlap the nav, each other, or run off-screen. */
+  /* two compact framing cards in the top corners; keep them small and high so
+     their bottoms clear the anima✦ logo + kicker + headline below. */
   .lp-cardel {
-    width: 150px;
+    width: 148px;
+    padding: 9px 12px;
+  }
+  .lp-cardel .ct {
+    font-size: 12px;
+  }
+  .lp-cardel .lp-ln {
+    font-size: 9px;
+    line-height: 1.45;
+  }
+  .lp-cardel--mhide {
+    display: none;
+  }
+  .lp-cardel:not(.lp-cardel--mhide) {
+    top: 10% !important; /* raise both kept cards into the top corners */
+  }
+  .lp-cardel.writing {
+    left: 55% !important; /* top-right, mirroring Lisbon top-left */
+  }
+  /* the cursor chips drift across the centered copy on a phone — drop them; the
+     card labels (✧ scout / ✧ nova) still carry the "agents" signal. */
+  .lp-cur {
+    display: none;
   }
 
   /* memory pipeline turns vertical — the 4 horizontal stages overflow a phone */

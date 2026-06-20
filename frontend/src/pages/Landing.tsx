@@ -99,7 +99,7 @@ function HeroScene() {
         </div>
       </div>
 
-      <div className="lp-cardel" style={{ left: '40%', top: '13%', ['--fd' as string]: '12s', ['--dl' as string]: '-6s' }}>
+      <div className="lp-cardel lp-cardel--mhide" style={{ left: '40%', top: '13%', ['--fd' as string]: '12s', ['--dl' as string]: '-6s' }}>
         <div className="ct">Sources</div>
         <div className="cmeta">research · 4 refs</div>
         <div className="cbody">
@@ -108,7 +108,7 @@ function HeroScene() {
         </div>
       </div>
 
-      <div className="lp-cardel" style={{ left: '8%', top: '66%', ['--fd' as string]: '9.5s', ['--dl' as string]: '-4s' }}>
+      <div className="lp-cardel lp-cardel--mhide" style={{ left: '8%', top: '66%', ['--fd' as string]: '9.5s', ['--dl' as string]: '-4s' }}>
         <div className="ct">Launch checklist</div>
         <div className="cmeta">work · 1 left</div>
         <div className="cbody">
@@ -118,7 +118,7 @@ function HeroScene() {
         </div>
       </div>
 
-      <div className="lp-cardel" style={{ left: '76%', top: '66%', ['--fd' as string]: '11s', ['--dl' as string]: '-1s' }}>
+      <div className="lp-cardel lp-cardel--mhide" style={{ left: '76%', top: '66%', ['--fd' as string]: '11s', ['--dl' as string]: '-1s' }}>
         <div className="ct">Research dump <span className="cag">✧ claude</span></div>
         <div className="cmeta">walrus · 6 notes</div>
         <div className="cbody">
