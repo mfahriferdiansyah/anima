@@ -1,0 +1,16 @@
+/* ============================================================================
+   Modal system. kit.css owns .overlay / .dialog / .dh / .db (one card, one set
+   of paddings); these add the wide + scrollable variant and a quiet-destructive
+   button. Every modal renders through <Modal>, so spacing and chrome are shared,
+   not hand-synced.
+   ========================================================================== */
+
+/* a roomier card for management panels (e.g. Organize) */
+.dialog-wide { max-width: 560px; }
+
+/* a body region that scrolls inside the fixed header, for long lists */
+.db-scroll { max-height: 46vh; overflow: auto; margin: 2px -8px 0; padding: 0 8px; }
+
+/* destructive actions no longer go through a confirm step, so they read red */
+.btn-quiet.is-danger { color: var(--red-500); }
+.btn-quiet.is-danger:hover { background: var(--red-100); }

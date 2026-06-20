@@ -150,7 +150,6 @@ export function Canvas() {
   const isShared = canvasId === SHARED_CANVAS_ID;
   const boardDoc = canvases.find((c) => c.canvasId === canvasId);
   const boardTitle = boardDoc?.title ?? 'Untitled canvas';
-  const boardDesc = boardDoc?.desc ?? '';
   const { notes } = useVault();
   const { peers, layout, savingLayout, materializedNoteId } = usePresence();
   const dragRef = useRef<DragState | null>(null);
@@ -517,8 +516,7 @@ export function Canvas() {
     <div className="pged">
       <div className="pged-top">
         <span className="pgcrumb">
-          <b>Canvas</b> · {boardTitle}
-          {boardDesc ? <span className="pgcrumb-d"> — {boardDesc}</span> : null}
+          Canvas / <b>{boardTitle}</b>
         </span>
         <span className="sp" />
         {savingLayout ? (
@@ -527,7 +525,7 @@ export function Canvas() {
           </span>
         ) : null}
         <button type="button" className="pgbtn" onClick={() => setSharing(true)}>
-          Share canvas
+          Share
         </button>
       </div>
       <ShareDialog open={sharing} onClose={() => setSharing(false)} noteId={canvasId} title={boardTitle} kind="canvas" />

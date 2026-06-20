@@ -274,7 +274,7 @@ function MemoryTree() {
         </button>
       </div>
 
-      {manageOpen ? <ManageLibrary onClose={() => setManageOpen(false)} /> : null}
+      <ManageLibrary open={manageOpen} onClose={() => setManageOpen(false)} />
     </>
   );
 }
@@ -367,10 +367,10 @@ export function AppShell({ session }: { session: ReadySession }) {
         {drawerOpen ? <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)} aria-hidden="true" /> : null}
         <aside className={drawerOpen ? 'pgtree open' : 'pgtree'}>
           <div className="pgtree-top">
-            <div className="pgmark2">
+            <NavLink to="/app" end className="pgmark2" aria-label={`${BRAND_NAME} home`}>
               {BRAND_NAME}
               <i>✦</i>
-            </div>
+            </NavLink>
             {NAV.map((item) => (
               <NavLink
                 key={item.to}

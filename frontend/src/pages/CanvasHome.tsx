@@ -88,7 +88,7 @@ export function CanvasHome() {
           {folders.length === 0 ? <div className="pghome-empty">No canvases match “{query}”.</div> : null}
         </div>
       </div>
-      {manageOpen ? <ManageLibrary onClose={() => setManageOpen(false)} /> : null}
+      <ManageLibrary open={manageOpen} onClose={() => setManageOpen(false)} />
     </div>
   );
 }

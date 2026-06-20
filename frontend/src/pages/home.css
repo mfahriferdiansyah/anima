@@ -9,8 +9,6 @@
    pinned, so Home stays a single screen and the week scrolls internally. The
    height is set per-view (.pgag-scroll below); this carries the shared chrome. */
 .pghpaper .pgcal-gridscroll {
-  min-height: 240px;
-  overflow-y: auto;
   overflow-x: hidden;
 }
 .pghpaper .pgcal-gridscroll::-webkit-scrollbar { width: 8px; }
@@ -20,8 +18,10 @@
 /* Calendar card header. Under the big page greeting the kit's "Your week" title
    read quiet and its subtitle sat at 48% ink — lift the title's size/weight and
    darken the subtitle so the header is legible at a glance. */
-.pghpaper .pgcal-t > div > b { font-size: 20px; font-weight: 700; letter-spacing: -.015em; }
-.pghpaper .pgcal-t > div > span { font-size: 12.5px; color: rgba(22, 24, 29, .62); }
+.pghpaper .pgcal-t { align-items: center; padding: 12px 18px 8px; }
+.pghpaper .pgcal-mlabel { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 18px; letter-spacing: -.015em; color: var(--ink-900); margin-right: 4px; }
+.pghpaper .pgcal-h { padding: 4px 18px 10px; }
+.pghpaper .pgcal-h .srcchip { font-size: 12px; }
 
 /* The week is a day-grouped agenda list, not a 7-column time grid: 80px columns
    forced titles to truncate ("Walrus stor…") no matter how they were clamped, so
@@ -29,7 +29,6 @@
    source dot + title + source line + right-aligned time; colour stays reserved
    for the source (teal Seals / orange Nova / blue Google) and today wayfinding. */
 .pghpaper .pgag { padding: 2px 0 10px; }
-.pghpaper .pgag-scroll { height: calc(100vh - 376px); }
 
 /* day header: weekday + date, a hairline rule, blue TODAY pill on the current day */
 .pghpaper .pgagd { display: flex; align-items: baseline; gap: 10px; padding: 15px 18px 7px; }
@@ -67,21 +66,28 @@
 /* plans rail rows are buttons that open their source note */
 .pghpaper .plrow { background: none; border: none; font: inherit; text-align: left; cursor: pointer; -webkit-appearance: none; appearance: none; }
 
-/* Fit one page: tighten the column padding and the rhythm above the grid so
-   the greeting + quick-starts + calendar sit within a single viewport. */
-.pghpaper .pghcol6 { padding: 24px 40px 26px; }
+/* Home scrolls naturally (it is not locked to one viewport); keep the column
+   padding tight at the top with a little breathing room at the bottom. */
+.pghpaper .pghcol6 { padding: 24px 40px 48px; }
 .pghpaper .pgh6-quick { margin: 14px 0 16px; }
+
+/* quick-start cards mix the two brand colours so Home is not all-orange: blue
+   for the product actions (New note, Open canvas), orange for Nova (Chat). */
+.pghpaper .pgh-quick button:nth-child(1) svg,
+.pghpaper .pgh-quick button:nth-child(2) svg { color: var(--blue-600); }
+.pghpaper .pgh-quick button:nth-child(3) svg { color: var(--orange-500); }
 
 /* Rail cards: a full-width hairline under the header (title + description) so
    it reads as a distinct header, not another list item. */
 .pghpaper .railt { margin: 0 -17px 12px; padding: 0 17px 11px; box-shadow: 0 1px 0 rgba(22, 24, 29, .08); }
 
 /* ---- Month view: a calm overview (dots + a couple of labels per day), not a
-   dense chip grid. Fills the remaining viewport so it stays a single page. ---- */
-.pghpaper .pgcal-month-wrap { display: flex; flex-direction: column; height: calc(100vh - 370px); min-height: 320px; }
+   dense chip grid. Natural height with uniform rows so no week gets cropped;
+   the page scrolls if it runs past the viewport. ---- */
+.pghpaper .pgcal-month-wrap { display: flex; flex-direction: column; }
 .pghpaper .pgcal-mhead { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); padding: 4px 0 9px; }
 .pghpaper .pgcal-mhead span { text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: rgba(22, 24, 29, .62); }
-.pghpaper .pgcal-month { flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid rgba(22, 24, 29, .07); border-left: 1px solid rgba(22, 24, 29, .07); }
+.pghpaper .pgcal-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: minmax(96px, auto); border-top: 1px solid rgba(22, 24, 29, .07); border-left: 1px solid rgba(22, 24, 29, .07); }
 .pghpaper .pgcm-cell {
   display: flex; flex-direction: column; gap: 2px; align-items: stretch; min-width: 0; overflow: hidden;
   padding: 5px 6px; background: #fff; cursor: pointer; text-align: left; font: inherit;

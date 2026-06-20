@@ -164,7 +164,7 @@ function NotesHome({ name, onNew }: { name: string; onNew: () => void }) {
           {folders.length === 0 ? <div className="pghome-empty">No notes match “{query}”.</div> : null}
         </div>
       </div>
-      {manageOpen ? <ManageLibrary onClose={() => setManageOpen(false)} /> : null}
+      <ManageLibrary open={manageOpen} onClose={() => setManageOpen(false)} />
     </div>
   );
 }

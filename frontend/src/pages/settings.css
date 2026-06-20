@@ -17,5 +17,8 @@
 .secretrow .inner{flex:1;min-width:0;}
 .secretval{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 pre.envval{margin:0;white-space:pre;overflow-x:auto;font-family:'JetBrains Mono',monospace;}
-.secretcaption{font-size:12px;color:rgba(255,255,255,.55);margin-top:8px;}
+.secretcaption{font-size:12px;color:var(--gray-600);margin-top:8px;}
 .envlbl{margin-top:18px;}
+
+/* "this device" marker: a subtle current-device blue, not flat black */
+.pgst-key .kthis{background:var(--blue-100);color:var(--blue-700);}

@@ -17,7 +17,6 @@ import {
 import type { KeyEntry } from '@/hooks/useSettings';
 import { useVault } from '@/hooks/useVault';
 import { renameCompanion, useVaultSession } from '@/hooks/useVaultSession';
-import { confirmWithWallet } from '@/hooks/useWallet';
 import './settings.css';
 
 const WAL_LOW_THRESHOLD = 1;
@@ -113,10 +112,8 @@ function ConnectAgentDialog({ open, onClose, vaultId, issuedKey, onIssued }: Con
     setStep('secret');
   };
 
-  const regenerate = async () => {
+  const regenerate = () => {
     if (!issuedKey) return;
-    const approved = await confirmWithWallet('regenerate agent key');
-    if (!approved) return;
     const next = regenerateAgentSecret(issuedKey.id);
     if (!next) return;
     setSecret(next);
@@ -256,9 +253,7 @@ export function Settings() {
     pushToast('success', 'Companion renamed');
   };
 
-  const revoke = async (entry: KeyEntry) => {
-    const approved = await confirmWithWallet(`revoke ${entry.label}`);
-    if (!approved) return;
+  const revoke = (entry: KeyEntry) => {
     revokeKey(entry.id);
     pushToast('success', 'Key revoked', entry.label);
   };
@@ -286,9 +281,7 @@ export function Settings() {
     pushToast('success', 'Vault exported', 'anima-vault-export.json');
   };
 
-  const forgetEverything = async () => {
-    const approved = await confirmWithWallet('forget the entire vault');
-    if (!approved) return;
+  const forgetEverything = () => {
     pushToast('info', 'Not in the demo', 'forgetting everything is disabled in the mocked build');
   };
 

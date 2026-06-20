@@ -6,5 +6,5 @@ export function useShare(): ShareState {
   return useSyncExternalStore(shareStore.subscribe, shareStore.getSnapshot);
 }
 
-export { publish, unpublish } from '../mocks/shareStore';
-export type { ShareState, ShareMode, PublishedCopy } from '../mocks/shareStore';
+export { createShareLink, setLinkAccess, setLinkPassword, newSharePassword } from '../mocks/shareStore';
+export type { ShareState, ShareLink, LinkAccess } from '../mocks/shareStore';

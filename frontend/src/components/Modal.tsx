@@ -1,14 +1,19 @@
 import { useEffect } from 'react';
 import type { MouseEvent, ReactNode } from 'react';
+import './modal.css';
 
 export interface ModalProps {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
+  /** 'wide' = a roomier card with a scrollable body (e.g. the Organize panel). */
+  size?: 'default' | 'wide';
 }
 
-/** Kit overlay + dialog: 320ms ceremony enter (modalin), Escape and click-outside close. */
-export function Modal({ open, onClose, children }: ModalProps) {
+/** Kit overlay + dialog: one centered primitive for every modal — scrim, enter
+ * animation, Escape and click-outside close all live here so no modal can drift
+ * on spacing or chrome. */
+export function Modal({ open, onClose, children, size = 'default' }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
@@ -26,7 +31,7 @@ export function Modal({ open, onClose, children }: ModalProps) {
 
   return (
     <div className="overlay open" onMouseDown={onOverlayMouseDown}>
-      <div className="dialog" role="dialog" aria-modal="true">
+      <div className={size === 'wide' ? 'dialog dialog-wide' : 'dialog'} role="dialog" aria-modal="true">
         {children}
       </div>
     </div>

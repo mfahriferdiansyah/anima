@@ -7,13 +7,16 @@
 .shell{height:100vh;display:flex;flex-direction:column;min-width:0;background:#fff;overflow:hidden;}
 .shell .pgtree{width:256px;}
 .shell .pgnav2{text-decoration:none;}
+/* brand wordmark links home */
+.shell a.pgmark2{text-decoration:none;color:var(--ink-900);cursor:pointer;display:inline-flex;align-items:baseline;transition:opacity 150ms ease;}
+.shell a.pgmark2:hover{opacity:.7;}
 
 /* rail footer: a divider, then a compact account chip that opens a menu.
    Disconnect lives in the menu; the dev MOCKED badge floats separately. */
 .pgrail-acct{position:relative;margin-top:6px;padding:8px;box-shadow:0 -1px 0 rgba(22,24,29,.07);}
 .pgacct{display:flex;align-items:center;gap:9px;width:100%;border:none;cursor:pointer;background:none;padding:6px 8px;border-radius:9px;text-align:left;transition:background 150ms ease;}
 .pgacct:hover,.pgacct.open{background:rgba(22,24,29,.05);}
-.pgacct-av{flex:none;width:28px;height:28px;border-radius:50%;background:var(--ink-900);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;}
+.pgacct-av{flex:none;width:28px;height:28px;border-radius:50%;background:var(--orange-500);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;}
 .pgacct-id{display:flex;flex-direction:column;min-width:0;line-height:1.3;}
 .pgacct-name{font-weight:600;font-size:13px;color:var(--ink-900);}
 .pgacct-addr{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:rgba(22,24,29,.42);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -79,19 +82,12 @@
 .shell .pgfoot{display:flex;align-items:center;gap:5px;padding:6px 8px;box-shadow:0 -1px 0 rgba(22,24,29,.06);}
 .shell .pgfoot .pgnew{flex:1;width:auto;min-width:0;margin:0;justify-content:center;gap:6px;font-size:12px;padding:0 6px;white-space:nowrap;}
 
-/* organize-library modal (opened by the gear beside search) */
-.mlib-scrim{position:fixed;inset:0;z-index:96;background:rgba(22,24,29,.40);animation:fadein var(--motion-duration-base) ease;}
-.mlib{position:fixed;z-index:97;top:50%;left:50%;transform:translate(-50%,-50%);width:min(560px,calc(100vw - 32px));max-height:min(660px,calc(100vh - 48px));display:flex;flex-direction:column;background:#fff;border-radius:16px;box-shadow:var(--shadow-soft),0 0 0 1px rgba(22,24,29,.08);animation:fadein var(--motion-duration-base) ease;overflow:hidden;}
-.mlib-h{display:flex;align-items:flex-start;gap:12px;padding:18px 20px 14px;box-shadow:0 1px 0 rgba(22,24,29,.07);}
-.mlib-h b{display:block;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;color:var(--ink-900);}
-.mlib-h span{display:block;font-size:12.5px;color:var(--gray-600);margin-top:2px;}
-.mlib-x{margin-left:auto;flex:none;border:none;background:none;cursor:pointer;color:var(--gray-600);padding:6px;border-radius:8px;line-height:0;}
-.mlib-x svg{width:16px;height:16px;}
-.mlib-x:hover{background:var(--gray-100);color:var(--ink-900);}
-.mlib-add{display:flex;gap:8px;padding:14px 20px;box-shadow:0 1px 0 rgba(22,24,29,.06);}
+/* organize-library: renders through the shared <Modal>, so chrome (scrim, card,
+   header, close, enter animation) all come from kit .overlay/.dialog/.dh. Only
+   the add-folder row and the scrollable folder list are styled here. */
+.mlib-add{display:flex;gap:8px;margin-bottom:12px;}
 .mlib-add input{flex:1;min-width:0;height:32px;border:1px solid var(--gray-200);border-radius:8px;padding:0 11px;font-family:'Inter',sans-serif;font-size:13px;color:var(--ink-900);}
 .mlib-add input:focus{outline:none;border-color:var(--blue-300);}
-.mlib-body{flex:1;overflow:auto;padding:8px 12px 16px;}
 .mlib-fold{margin-top:10px;}
 .mlib-foldh{display:flex;align-items:center;gap:8px;padding:6px 8px;}
 .mlib-foldn{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;color:var(--ink-900);}
@@ -129,14 +125,58 @@
 .overlay.open{z-index:110;}
 .wallet-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;}
 
-/* popup chat orb + compact chat panel (above the MOCKED badge) */
-.orbfab{position:fixed;right:22px;bottom:64px;z-index:85;width:50px;height:50px;border:none;border-radius:50%;background:#fff;box-shadow:var(--shadow-soft);cursor:pointer;display:flex;align-items:center;justify-content:center;}
+/* ---- radius + button standardization ----
+   kit ships 999px pill buttons and 20px cards, which read too rounded. Tighten
+   to one sharper system: 8px buttons, 14px modals, 10px capsules. Chips, the
+   toggle track and avatars keep their round shape on purpose. */
+.btn{border-radius:8px;font-weight:600;}
+.btn-lg{border-radius:10px;}
+.pgbtn{border-radius:8px;}
+.copybtn{border-radius:8px;}
+.dialog{border-radius:14px;}
+.sharebar{border-radius:10px;}
+
+/* editor top bar (note + canvas): the breadcrumb truncates to one line so a long
+   title never wraps past the fixed 44px bar; the action buttons stay pinned right. */
+.pged-top .pgcrumb{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* popup chat orb: the companion launcher — a filled orange circle (the companion
+   colour) with a white living star, so it's easy to spot and clearly Nova. */
+.orbfab{position:fixed;right:22px;bottom:64px;z-index:85;width:52px;height:52px;border:none;border-radius:50%;background:var(--orange-500);box-shadow:0 10px 22px rgba(255,92,26,.34),0 0 0 1px rgba(255,92,26,.5);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform var(--motion-duration-fast) ease,box-shadow var(--motion-duration-base) ease;}
+.orbfab:hover{transform:translateY(-2px);box-shadow:0 14px 28px rgba(255,92,26,.42),0 0 0 1px rgba(255,92,26,.62);}
 .orbfab:focus-visible{outline:2.5px solid var(--blue-600);outline-offset:2px;}
+.orbfab .oglyph{color:#fff;}
+
+/* the companion "living element": an orange star that breathes when idle and
+   spins while working. Standalone orbs (chat/session) show it orange on light;
+   the launcher recolours it white (rule above). */
+.orb{position:relative;display:inline-flex;align-items:center;justify-content:center;}
+.oglyph{display:inline-block;line-height:1;color:var(--blue-600);animation:orbbreathe 3.6s ease-in-out infinite;}
+.orb-sm .oglyph{font-size:15px;}
+.orb-md .oglyph{font-size:23px;}
+.orb-lg .oglyph{font-size:30px;}
+.orb.working .oglyph{animation:spinstar 1.1s linear infinite;}
+.obadge{position:absolute;top:-1px;right:-1px;width:10px;height:10px;border-radius:50%;background:var(--teal-500);box-shadow:0 0 0 2px #fff;}
+@keyframes orbbreathe{0%,100%{transform:scale(1);}50%{transform:scale(1.12);}}
+
+/* Colour split: ORANGE = the companion's persistent presence (the FAB orb, her
+   avatars, her cursor); BLUE = the decorative ✦ "sparkle" stars (greeting, empty
+   state, loading orb, companion hello). The greeting/hello stars (.horb/.gorb)
+   keep the kit's brand-blue (no override); the empty-state ghost is bumped from
+   the kit's pale tint to that same blue. */
+.empty .ghost{color:var(--blue-600);}
+/* breathing room between the empty-state copy and its action button */
+.empty .btn{margin-top:18px;}
 .orbpanel{position:fixed;right:22px;bottom:126px;z-index:85;width:380px;}
 .orbpanel .chat{max-height:480px;animation:modalin var(--motion-duration-slow) var(--motion-easing-enter);}
 
-/* MOCKED badge + scenario switcher */
+/* MOCKED badge + scenario switcher. The dev flag should recede, not dominate:
+   a quiet white pill with a hairline and a small amber status dot reads as
+   "mock mode" instead of the harsh solid-black blob the kit's .pill-ink gives. */
 .mocked{position:fixed;right:20px;bottom:20px;z-index:95;border:none;cursor:pointer;}
+.mocked.pill-ink{background:#fff;color:rgba(22,24,29,.58);font-weight:600;box-shadow:var(--shadow-softer),0 0 0 1px var(--gray-200);}
+.mocked.pill-ink:hover{color:var(--ink-900);}
+.mocked.pill-ink::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:var(--orange-500);}
 .mocked-panel{position:fixed;right:20px;bottom:60px;z-index:95;width:230px;background:var(--ink-900);color:#fff;border-radius:16px;padding:14px;box-shadow:var(--shadow-soft);display:flex;flex-direction:column;gap:8px;}
 .mocked-panel .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.55);}
 .mocked-opt{display:flex;align-items:center;border:none;cursor:pointer;background:transparent;color:#fff;font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 10px;border-radius:9px;text-align:left;transition:background var(--motion-duration-fast) ease;}

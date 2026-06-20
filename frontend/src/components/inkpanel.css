@@ -1,0 +1,15 @@
+/* ============================================================================
+   InkPanel — a muted "stale" panel, not flat black. Used for the agent secret
+   (Settings) and the mock-wallet step (onboarding); both read fine on light
+   gray. kit.css styles the dark version of .inkpanel; this overrides it.
+   ========================================================================== */
+
+.inkpanel { background: var(--gray-100); color: var(--ink-900); }
+.inkpanel b.lbl { color: rgba(22, 24, 29, .5); }
+.inkpanel .lead { color: var(--blue-700); }
+.inkpanel .inner { background: #fff; color: var(--ink-900); box-shadow: inset 0 0 0 1px var(--gray-200); }
+
+/* warm onboarding accent: the "one signature" moment reads as brand energy */
+.inkpanel.tone-orange { background: var(--orange-500); color: #fff; }
+.inkpanel.tone-orange b.lbl { color: rgba(255, 255, 255, .72); }
+.inkpanel.tone-orange .inner { background: rgba(255, 255, 255, .16); color: #fff; box-shadow: none; }

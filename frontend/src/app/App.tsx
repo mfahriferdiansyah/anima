@@ -1,12 +1,8 @@
 import { useEffect } from 'react';
-import { BrowserRouter } from 'react-router-dom';
-import { Button } from '@/components/Button';
-import { InkPanel } from '@/components/InkPanel';
-import { Modal } from '@/components/Modal';
+import { BrowserRouter, useLocation } from 'react-router-dom';
 import { WriteStateCard } from '@/components/WriteStateCard';
 import { dismissWriteEvent, retryWrite, useWriteEvents } from '@/hooks/useVault';
 import type { WriteEvent } from '@/hooks/useVault';
-import { approveWalletPrompt, rejectWalletPrompt, useWallet } from '@/hooks/useWallet';
 import { AppRoutes } from './routes';
 import { MockedBadge } from './MockedBadge';
 import './shell.css';
@@ -47,26 +43,10 @@ function WriteToasts() {
   );
 }
 
-/** Mock wallet confirmation: destructive actions only, the asymmetry is the pitch. */
-function WalletDialog() {
-  const { pending } = useWallet();
-  return (
-    <Modal open={pending !== null} onClose={rejectWalletPrompt}>
-      {pending ? (
-        <div className="db">
-          <InkPanel label="Wallet confirmation">{pending.action}</InkPanel>
-          <div className="wallet-actions">
-            <Button variant="quiet" onClick={rejectWalletPrompt}>
-              Reject
-            </Button>
-            <Button variant="primary" onClick={approveWalletPrompt}>
-              Approve
-            </Button>
-          </div>
-        </div>
-      ) : null}
-    </Modal>
-  );
+/** The mock badge belongs to the workspace, not the public landing. */
+function GatedMockedBadge() {
+  const { pathname } = useLocation();
+  return pathname.startsWith('/app') ? <MockedBadge /> : null;
 }
 
 export function App() {
@@ -74,8 +54,7 @@ export function App() {
     <BrowserRouter>
       <AppRoutes />
       <WriteToasts />
-      <WalletDialog />
-      <MockedBadge />
+      <GatedMockedBadge />
     </BrowserRouter>
   );
 }

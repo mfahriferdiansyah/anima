@@ -5,8 +5,12 @@
    the board chrome (.pgcv, .pgcv-tools, cards); this file only adds drawings.
    ========================================================================== */
 
-/* canvas description, muted, after the title in the breadcrumb */
-.pgcrumb-d { color: rgba(22, 24, 29, .42); }
+/* the companion (agent) presence carries the brand's warm accent, not flat ink:
+   its avatar and "is writing" cursor read as orange energy (matching the agent
+   chips elsewhere) instead of dotting the light board with harsh black. */
+.pgcv-avs .av.n { background: var(--orange-500); }
+.pgcv-cursor.agent span { background: var(--orange-500); }
+.pgcv-cursor.agent span i { color: rgba(255, 255, 255, .72); }
 
 /* the SVG that holds freehand paths, rectangles and arrows; individual shapes
    opt back into pointer events when the select tool is active (see Canvas.tsx) */

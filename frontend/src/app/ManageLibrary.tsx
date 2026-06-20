@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { Button } from '@/components/Button';
+import { Modal } from '@/components/Modal';
 import { forgetNotes, setNoteFolder, useVault } from '@/hooks/useVault';
 import {
   addFolder,
@@ -9,7 +11,6 @@ import {
   useCanvases,
   useFolders,
 } from '@/hooks/useCanvases';
-import { confirmWithWallet } from '@/hooks/useWallet';
 import { buildLibrary, type LibItem } from './library';
 
 function titleCase(value: string): string {
@@ -19,22 +20,14 @@ function titleCase(value: string): string {
 /**
  * Organize library: add and reorder folders, move notes/canvases between them
  * (a per-item folder picker — drag-and-drop is a later layer), edit a canvas's
- * title + description, and delete (forgetting a note is wallet-gated). Opened
- * from the gear beside the sidebar search; reuses the kit's modal chrome.
+ * title + description, and delete. Renders through the shared <Modal>, so its
+ * chrome, spacing and close behaviour match every other dialog.
  */
-export function ManageLibrary({ onClose }: { onClose: () => void }) {
+export function ManageLibrary({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { notes } = useVault();
   const canvases = useCanvases();
   const folders = useFolders();
   const [newName, setNewName] = useState('');
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   const library = buildLibrary(notes, canvases, folders);
   const folderOptions = library.map((f) => f.name);
@@ -49,31 +42,22 @@ export function ManageLibrary({ onClose }: { onClose: () => void }) {
     else setNoteFolder(item.id, folder);
   };
 
-  const removeItem = async (item: LibItem) => {
+  // Destructive, but the real wallet confirms on-chain later — no stub modal.
+  const removeItem = (item: LibItem) => {
     if (item.kind === 'canvas') {
       if (!item.canvas?.seed) deleteCanvas(item.id);
       return;
     }
-    const ok = await confirmWithWallet(`Forget memory: ${item.title}`);
-    if (ok) forgetNotes([item.id]);
+    forgetNotes([item.id]);
   };
 
   return (
-    <>
-      <div className="mlib-scrim" onClick={onClose} aria-hidden="true" />
-      <div className="mlib" role="dialog" aria-modal="true" aria-label="Organize library">
-        <div className="mlib-h">
-          <div>
-            <b>Organize</b>
-            <span>Add folders, move notes and canvases between them, edit a canvas.</span>
-          </div>
-          <button type="button" className="mlib-x" aria-label="Close" onClick={onClose}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
-            </svg>
-          </button>
-        </div>
-
+    <Modal open={open} onClose={onClose} size="wide">
+      <div className="dh">
+        <div className="dt">Organize</div>
+        <div className="dd2">Add folders, move notes and canvases between them, edit a canvas.</div>
+      </div>
+      <div className="db">
         <div className="mlib-add">
           <input
             type="text"
@@ -84,12 +68,12 @@ export function ManageLibrary({ onClose }: { onClose: () => void }) {
               if (e.key === 'Enter') addNew();
             }}
           />
-          <button type="button" className="pgbtn" disabled={!newName.trim()} onClick={addNew}>
+          <button type="button" className="pgbtn primary" disabled={!newName.trim()} onClick={addNew}>
             Add folder
           </button>
         </div>
 
-        <div className="mlib-body">
+        <div className="mlib-body db-scroll">
           {library.map((folder, i) => {
             const inOrder = folders.includes(folder.name);
             return (
@@ -162,7 +146,13 @@ export function ManageLibrary({ onClose }: { onClose: () => void }) {
             );
           })}
         </div>
+
+        <div className="wallet-actions">
+          <Button variant="primary" onClick={onClose}>
+            Done
+          </Button>
+        </div>
       </div>
-    </>
+    </Modal>
   );
 }

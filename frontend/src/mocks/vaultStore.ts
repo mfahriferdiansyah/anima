@@ -149,8 +149,8 @@ export function failNextWrite(): void {
 
 /**
  * Forget = enumerate, remove, scrub. Returns the scrub event and appends
- * the transcript-scrub line to the shared chat store. Wallet gating
- * happens at the UI layer (walletStore.confirmWithWallet) before calling.
+ * the transcript-scrub line to the shared chat store. In production a wallet
+ * signs this destructive action; the mock build calls it directly.
  */
 export function forgetNotes(ids: string[]): ScrubEvent {
   const idSet = new Set(ids);
