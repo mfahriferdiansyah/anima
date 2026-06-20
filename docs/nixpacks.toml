@@ -1,0 +1,7 @@
+# Nixpacks build config for the Coolify deploy of docs.anima.app.
+# Pin Node so the build is reproducible. pnpm is detected from pnpm-lock.yaml
+# by Nixpacks' Node provider. If the build picks the wrong Node, set
+# NIXPACKS_NODE_VERSION in Coolify or adjust the pin below, and verify on the
+# first deploy.
+[phases.setup]
+nixPkgs = ["nodejs_22"]
