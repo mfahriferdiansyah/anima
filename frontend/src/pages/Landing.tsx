@@ -521,6 +521,34 @@ function CanvasMock() {
   );
 }
 
+/** One beat's visual — a live page preview, the canvas mock, the memory
+ *  pipeline, or the agents hub. Shared by the pinned deck and the static list. */
+function BeatVisual({ b, ready }: { b: Beat; ready: ReadySession | null }) {
+  if (b.kind === 'page') {
+    return (
+      <div className="lp-page">
+        {ready ? <ScreenPreview route={b.route} session={ready} /> : <div className="lp-page-boot">waking the workspace</div>}
+        {b.overlay}
+      </div>
+    );
+  }
+  if (b.kind === 'canvas') {
+    return (
+      <div className="lp-page">
+        <CanvasMock />
+      </div>
+    );
+  }
+  if (b.render === 'memory') {
+    return (
+      <div className="lp-page lp-page--story">
+        <MemoryStory />
+      </div>
+    );
+  }
+  return <AgentsMini />;
+}
+
 function StackSection({ staticMode }: { staticMode: boolean }) {
   const sectionRef = useRef<HTMLElement>(null);
   const layers = useRef<(HTMLDivElement | null)[]>([]);
@@ -606,8 +634,33 @@ function StackSection({ staticMode }: { staticMode: boolean }) {
     };
   }, [staticMode]);
 
+  // Small screens / reduced motion: a plain interleaved list — each beat's
+  // caption sits directly above its own screen. No pinned scroll, no refs.
+  if (staticMode) {
+    return (
+      <section id="workspace" className="lp-stack is-static">
+        <div className="lp-stack-stage">
+          <div className="lp-stack-eyebrow">the workspace</div>
+          {BEATS.map((b) => (
+            <div key={b.step} className="lp-mbeat">
+              <div className="lp-scap">
+                {b.tag ? <div className="lp-scap-tag">{b.tag}</div> : null}
+                <div className="step">{b.step}</div>
+                <h2>{b.title}</h2>
+                <p>{b.body}</p>
+              </div>
+              <div className="lp-mvis">
+                <BeatVisual b={b} ready={ready} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section ref={sectionRef} id="workspace" className={`lp-stack${staticMode ? ' is-static' : ''}`}>
+    <section ref={sectionRef} id="workspace" className="lp-stack">
       <div className="lp-stack-stage">
         <div className="lp-stack-eyebrow">the workspace</div>
 
@@ -650,22 +703,7 @@ function StackSection({ staticMode }: { staticMode: boolean }) {
               }}
               style={{ zIndex: i + 1 } as CSSProperties}
             >
-              {b.kind === 'page' ? (
-                <div className="lp-page">
-                  {ready ? <ScreenPreview route={b.route} session={ready} /> : <div className="lp-page-boot">waking the workspace</div>}
-                  {b.overlay}
-                </div>
-              ) : b.kind === 'canvas' ? (
-                <div className="lp-page">
-                  <CanvasMock />
-                </div>
-              ) : b.render === 'memory' ? (
-                <div className="lp-page">
-                  <MemoryStory />
-                </div>
-              ) : (
-                <AgentsMini />
-              )}
+              <BeatVisual b={b} ready={ready} />
             </div>
           ))}
         </div>
@@ -841,7 +879,7 @@ function Pricing({ onConnect }: { onConnect: () => void }) {
               <span className="badge">after beta</span>
             </div>
             <div className="lp-tier-price">
-              <span className="amt">$0</span>
+              <span className="amt">FREE</span>
               <span className="per">available after the beta</span>
             </div>
             <p className="lp-tier-desc">For solo notes and one agent.</p>
@@ -865,7 +903,8 @@ function Pricing({ onConnect }: { onConnect: () => void }) {
               <span className="badge on">Recommended</span>
             </div>
             <div className="lp-tier-price">
-              <span className="amt">$0</span>
+              <span className="was">$20</span>
+              <span className="amt">FREE</span>
               <span className="per">free during the beta</span>
             </div>
             <p className="lp-tier-desc">For you and your whole team.</p>
@@ -889,7 +928,7 @@ function Pricing({ onConnect }: { onConnect: () => void }) {
               <span className="badge">your keys</span>
             </div>
             <div className="lp-tier-price">
-              <span className="amt">$0</span>
+              <span className="amt">FREE</span>
               <span className="per">open source, self-host</span>
             </div>
             <p className="lp-tier-desc">For full control of your data.</p>

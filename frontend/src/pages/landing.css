@@ -1504,6 +1504,17 @@
   letter-spacing: -0.03em;
   color: var(--ink);
 }
+.lp-tier-price .was {
+  font-family: var(--sg);
+  font-weight: 700;
+  font-size: 23px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #e5484d;
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: #e5484d;
+}
 .lp-tier-price .per {
   font-size: 13px;
   color: var(--gray-600);
@@ -1643,7 +1654,10 @@
   transform: translateY(0);
 }
 
-/* deck static fallback (small / reduced motion) */
+/* Static layout (small screens / reduced motion). The pinned scroll deck does
+   not run here — the rAF handler bails on staticMode and StackSection renders a
+   plain interleaved list: each beat is its caption stacked directly above its
+   own screen, so the screen never drifts away from the words that explain it. */
 .lp-stack.is-static {
   height: auto;
 }
@@ -1653,34 +1667,37 @@
   display: block;
   padding: 88px 24px;
 }
-.lp-stack.is-static .lp-stack-rail {
-  display: none;
+/* one beat = caption + its screen, kept together */
+.lp-mbeat {
+  margin-bottom: 56px;
 }
-.lp-stack.is-static .lp-stack-caps {
-  padding-left: 0;
+.lp-mbeat:last-child {
+  margin-bottom: 0;
 }
-.lp-stack.is-static .lp-stack-caps::before {
-  display: none;
-}
-.lp-stack.is-static .lp-scap {
+.lp-mbeat .lp-scap {
   position: static;
   transform: none;
   opacity: 1;
   left: 0;
   max-width: 60ch;
-  margin-bottom: 12px;
+  margin-bottom: 18px;
 }
-.lp-stack.is-static .lp-deck {
-  margin-bottom: 48px;
+/* each beat's screen sits in flow with a real height (the .lp-page default is
+   position:absolute, which would collapse to 0). */
+.lp-mvis .lp-page {
+  position: relative;
+  aspect-ratio: 16 / 10; /* matches ScreenPreview's 1440x900 app — fits, no crop */
 }
-.lp-stack.is-static .lp-layer {
+/* the memory pipeline is variable-height (vertical on phones), not a fixed-ratio
+   embed → let its page grow to the content instead of clipping it. */
+.lp-mvis .lp-page--story {
+  aspect-ratio: auto;
+}
+.lp-mvis .lp-page--story .lpms {
   position: relative;
   inset: auto;
-  transform: none !important;
-  opacity: 1 !important;
-  margin-bottom: 24px;
 }
-.lp-stack.is-static .lp-mini {
+.lp-mvis .lp-mini {
   position: relative;
   left: auto;
   top: auto;
@@ -1707,6 +1724,79 @@
   }
   .lp-cardel {
     width: 150px;
+  }
+
+  /* memory pipeline turns vertical — the 4 horizontal stages overflow a phone */
+  .lpms {
+    padding: 24px 20px 20px;
+  }
+  .lpms-flow {
+    gap: 16px;
+  }
+  .lpms-row {
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .lpms-stage {
+    width: auto;
+  }
+  .lpms-tile {
+    width: 104px;
+    height: 104px;
+    border-radius: 22px;
+  }
+  .lpms-conn {
+    flex: none;
+    width: 2px;
+    height: 22px;
+    max-width: none;
+    margin: 7px 0;
+    background: repeating-linear-gradient(180deg, var(--blue-300) 0 6px, transparent 6px 12px);
+  }
+  .lpms-conn::after {
+    right: auto;
+    left: 50%;
+    top: auto;
+    bottom: 0;
+    transform: translate(-50%, 1px) rotate(135deg); /* point the arrow down */
+  }
+  .lpms-conn i {
+    left: 50%;
+    top: 50%;
+    transform: translate(11px, -50%); /* label beside the vertical connector */
+  }
+  .lpms-foot {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 9px;
+  }
+
+  /* CTA proof points stack; drop the inline · so no separator dangles at a line end */
+  .lp-cta-proof {
+    flex-direction: column;
+    gap: 7px;
+  }
+  .lp-cta-proof .d {
+    display: none;
+  }
+
+  /* canvas mock: the cards are fixed-width and don't scale, so they crowd the
+     small phone board — shrink them and their type to fit. */
+  .lpc-card {
+    width: 104px;
+    padding: 8px 10px;
+  }
+  .lpc-card .t {
+    font-size: 10px;
+  }
+  .lpc-card .b {
+    font-size: 8.5px;
+    margin-top: 4px;
+  }
+  .lpc-note {
+    width: 92px;
+    padding: 8px 9px 9px;
   }
 }
 
