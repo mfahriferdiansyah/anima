@@ -1,6 +1,96 @@
 ---
 title: Quickstart
-description: Connect your own agent to Anima.
+description: Connect your own agent to a vault over anima-mcp in about ten minutes.
 ---
 
-Connect your own agent to a vault over anima-mcp and read and write your notes. Full quickstart lands here.
+Connect an agent you already use (Claude Code, Cursor, or any MCP client) to an Anima vault, so it reads and writes the same notes you do. Every write it makes is signed with its own key and sealed to storage you own.
+
+## What you need
+
+- A Sui wallet that owns an Anima vault.
+- The anima repo checked out, with pnpm and Node. The pairing command and anima-mcp run from the repo (they are not a published package yet), so an external agent connects through your local checkout.
+
+## 1. Pair an agent
+
+The pairing command authorizes a fresh agent on your vault and funds it so it can write. Adding an agent is owner-only, so it needs your owner key. Pass it as an environment variable, never as a command argument:
+
+```bash
+export ANIMA_OWNER_KEY=suiprivkey…   # your vault owner key; signs the registration
+export ANIMA_VAULT_ID=0x…            # optional; auto-discovered from the owner key if omitted
+pnpm pair
+```
+
+This registers and funds a new agent, then writes the four values your agent needs to `.anima-agent.env` (gitignored):
+
+```
+ANIMA_AGENT_KEY=suiprivkey…   # the agent's own key, the one secret here
+ANIMA_VAULT_ID=0x…            # public
+ANIMA_OWNER_ADDRESS=0x…       # public
+ANIMA_AGENT_NAME=mcp-agent    # how this agent's writes are attributed
+```
+
+:::caution
+`ANIMA_AGENT_KEY` grants full read and write of the whole vault. Treat it like a password: keep it in your environment or a secret store, never commit it, never paste it into a chat. You can revoke it any time (see below).
+:::
+
+## 2. Add anima to your agent's MCP config
+
+Point your MCP client at the local anima-mcp server with the four values from step 1. For Claude Code that is `.mcp.json`; for Cursor, `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "anima": {
+      "command": "npx",
+      "args": ["-y", "tsx", "chain/mcp/src/index.ts"],
+      "env": {
+        "ANIMA_AGENT_KEY": "suiprivkey…",
+        "ANIMA_VAULT_ID": "0x…",
+        "ANIMA_OWNER_ADDRESS": "0x…",
+        "ANIMA_AGENT_NAME": "claude-code"
+      }
+    }
+  }
+}
+```
+
+`ANIMA_OWNER_ADDRESS` and `ANIMA_VAULT_ID` are public on-chain identifiers. Only `ANIMA_AGENT_KEY` is secret.
+
+## 3. Read and write
+
+Restart your agent so it loads the server, then try it:
+
+- "What do you know about my sister?" runs `recall` and answers from your notes.
+- "Remember that I prefer morning meetings" runs `remember`. The first write takes ten to twenty seconds, because it encrypts the note and stores it on Walrus.
+
+If a tool returns an error, the message is actionable. The [FAQ](/build/faq/) covers the common cases (unfunded agent, a stale index, a revoked key).
+
+## Revoke an agent
+
+An agent key is a standing credential. To cut it off:
+
+```bash
+pnpm pair revoke 0x<agent-address>
+```
+
+The agent is denied on its next session.
+
+## Point your agent at these docs
+
+These docs are agent-readable. To let your coding agent query them directly, add the docs pointer alongside the anima server:
+
+```json
+{
+  "mcpServers": {
+    "anima-docs": {
+      "command": "uvx",
+      "args": ["--from", "mcpdoc", "mcpdoc", "--urls", "Anima:https://docs.anima.app/llms.txt", "--transport", "stdio"]
+    }
+  }
+}
+```
+
+## Next
+
+- [MCP tool reference](/build/mcp-reference/): every tool your agent can call.
+- [How Anima works](/build/concepts/custody-and-ownership/): custody, Seal, Walrus, and resurrection.
