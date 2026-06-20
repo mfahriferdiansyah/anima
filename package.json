@@ -14,7 +14,10 @@
     "dev": "vite --config frontend/vite.config.ts",
     "build": "vite build --config frontend/vite.config.ts",
     "preview": "vite preview --config frontend/vite.config.ts",
-    "mcp:smoke": "tsx chain/mcp/src/smoke.ts"
+    "mcp:smoke": "tsx chain/mcp/src/smoke.ts",
+    "pair": "tsx scripts/pair.ts",
+    "pair:smoke": "tsx scripts/pair-smoke.ts",
+    "test:scripts": "vitest run --dir scripts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

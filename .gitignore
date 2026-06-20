@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+.anima-agent.env
 
 # node
 node_modules/
