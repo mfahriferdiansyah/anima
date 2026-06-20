@@ -11,6 +11,14 @@ deepened: 2026-06-20
      docs copy follows it: sentence case, lowercase "ai", no em dashes, AI-tell blocklist,
      do-not-say list. Commits in this repo carry no AI attribution. -->
 
+<!-- MIGRATION NOTE (2026-06-20, post-completion): the site was BUILT per this plan, then the
+     engine was migrated from Starlight to FUMADOCS (Next.js, static export) because the user
+     preferred its aesthetic. Live site = the self-contained Fumadocs package at `docs-site/`
+     (build -> static `out/`). The unit scope + content + agent-readable goals all shipped, but
+     on Fumadocs: llms.txt / llms-full.txt / per-page `.md` / the copy-markdown button are
+     Fumadocs built-ins; Coolify publishes `out/`; the Starlight files under `docs/` were removed.
+     U4 (scripts/pair.ts) is engine-independent and unchanged. See memory anima-docs-site-decisions. -->
+
 # feat: Anima public docs site (Starlight on Coolify)
 
 ## Summary
