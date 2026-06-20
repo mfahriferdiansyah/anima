@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "check": "node scripts/check-agent-layer.mjs",
+    "check:serving": "node scripts/check-serving.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.40.0",

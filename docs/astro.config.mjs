@@ -5,7 +5,7 @@ import starlightLlmsTxt from 'starlight-llms-txt';
 
 // Subdomain deploy (docs.anima.app): set `site`, no `base` path.
 // Sidebar order is pinned via explicit `items` (not autogenerate), so Starlight
-// does not alphabetize the tracks. Pages are added as later units land.
+// does not alphabetize the tracks.
 export default defineConfig({
   site: 'https://docs.anima.app',
   integrations: [
@@ -35,11 +35,32 @@ export default defineConfig({
       sidebar: [
         {
           label: 'Use Anima',
-          items: [{ slug: 'use/getting-started' }],
+          items: [
+            { slug: 'use/getting-started' },
+            { slug: 'use/notes' },
+            { slug: 'use/publishing-and-export' },
+            { slug: 'use/companion' },
+          ],
         },
         {
           label: 'Build with Anima',
-          items: [{ slug: 'build/quickstart' }],
+          items: [
+            { slug: 'build/quickstart' },
+            { slug: 'build/mcp-reference' },
+            { slug: 'build/faq' },
+            { slug: 'build/self-hosting' },
+            {
+              label: 'How it works',
+              items: [
+                { slug: 'build/concepts/custody-and-ownership' },
+                { slug: 'build/concepts/two-key-model' },
+                { slug: 'build/concepts/seal-encryption' },
+                { slug: 'build/concepts/walrus-storage' },
+                { slug: 'build/concepts/resurrection' },
+                { slug: 'build/concepts/signed-attribution' },
+              ],
+            },
+          ],
         },
       ],
     }),

@@ -4,15 +4,21 @@ description: Docs for Anima, an agentic notes and canvas workspace.
 template: splash
 hero:
   tagline: Notes on a shared canvas. Your own ai tools read and write them too.
-  actions:
-    - text: Use Anima
-      link: /use/getting-started/
-      icon: right-arrow
-      variant: primary
-    - text: Build with Anima
-      link: /build/quickstart/
-      icon: right-arrow
-      variant: secondary
 ---
 
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
 Anima is an agentic workspace where your own AI agents and your team read and write the same notes and canvas, sealed to storage you own, so it survives any app.
+
+<CardGrid>
+  <LinkCard
+    title="Use Anima"
+    href="/use/getting-started/"
+    description="Capture notes, ask the companion, publish and export."
+  />
+  <LinkCard
+    title="Build with Anima"
+    href="/build/quickstart/"
+    description="Connect your own agent to a vault via anima-mcp."
+  />
+</CardGrid>
