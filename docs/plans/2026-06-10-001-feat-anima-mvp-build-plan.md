@@ -7,6 +7,8 @@ origin: docs/brainstorms/2026-06-10-anima-requirements.md
 deepened: 2026-06-10
 ---
 
+<!-- Historical plan, dated 2026-06-10. Point-in-time build record; build facts here are authoritative. For current brand and positioning (anima is an agentic workspace; the companion is a bundled default, not the product), see ../positioning.md. -->
+
 # feat: ANIMA MVP — owned agent-memory vault + companion
 
 ## Summary

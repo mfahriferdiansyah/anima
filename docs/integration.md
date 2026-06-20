@@ -3,6 +3,8 @@
 > For the design/frontend agent. Everything here is BUILT and testnet-verified
 > unless marked **[planned]**. The UI kit can swap every visual; these are the
 > data contracts and flows underneath. Updated 2026-06-10.
+>
+> Brand/narrative framing is canonical in `positioning.md` (names below like the `anima` companion and "memory" are engineering terms, not the product pitch).
 
 ## 1. The mental model
 

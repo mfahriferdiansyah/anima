@@ -9,6 +9,8 @@ The user owns an ANIMA vault: encrypted markdown memories on Walrus, owned by
 their Sui wallet. You have a paired agent key via the `anima` MCP server.
 Writes are attributed to you (`author` field) and visible in their app.
 
+> This skill operates the vault. For Anima's product framing (it is an agentic workspace; "memory vault" here is the engineering term, not the pitch), the anima repo's `docs/positioning.md` is canonical.
+
 ## Tools and when to use them
 
 - `recall(query)` — ALWAYS try this before answering questions about the

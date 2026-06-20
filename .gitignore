@@ -32,3 +32,5 @@ contract/Published.toml
 
 # frontend screenshot artifacts (verification sweeps)
 frontend/.shots/
+.shots/
+frontend/src/pages/01-home-light.png

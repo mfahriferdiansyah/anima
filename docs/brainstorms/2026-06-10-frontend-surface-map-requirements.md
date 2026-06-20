@@ -3,6 +3,8 @@ date: 2026-06-10
 topic: frontend-surface-map
 ---
 
+> Historical (2026-06-10). Point-in-time surface map; the companion-as-hero framing here is superseded. For current direction see `../positioning.md` (companion is a bundled default; the moat is your own external agents, non-custody, and surviving the app).
+
 # Frontend Surface Map (Mocked React Build)
 
 ## Summary

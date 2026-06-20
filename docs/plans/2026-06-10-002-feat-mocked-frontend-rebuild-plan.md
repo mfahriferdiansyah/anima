@@ -6,6 +6,8 @@ date: 2026-06-10
 origin: docs/brainstorms/2026-06-10-frontend-surface-map-requirements.md
 ---
 
+<!-- Historical plan, dated 2026-06-10. Point-in-time build record; build facts here are authoritative. For current brand and positioning (anima is an agentic workspace; the companion is a bundled default, not the product), see ../positioning.md. -->
+
 # feat: Mocked frontend rebuild (kit-faithful React app)
 
 ## Summary

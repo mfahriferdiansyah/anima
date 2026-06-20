@@ -13,6 +13,18 @@ export default defineConfig({
       title: 'Anima',
       description:
         'Docs for Anima, an agentic notes and canvas workspace where your own ai tools read and write the same notes.',
+      customCss: ['./src/styles/anima.css'],
+      head: [
+        { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.googleapis.com' } },
+        { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: true } },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'stylesheet',
+            href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@500;600;700&display=swap',
+          },
+        },
+      ],
       plugins: [
         // Agent-readable layer: emits /llms.txt, /llms-full.txt, /llms-small.txt.
         // The "Build with Anima" customSet is the developer-only subset (R13).

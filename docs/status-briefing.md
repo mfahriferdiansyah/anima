@@ -6,16 +6,17 @@
 > Authoritative companions: `docs/frontend-handoff.md` (what YOU build if you
 > are the brand-kit agent) · `docs/integration.md` (full system contracts) ·
 > `docs/plans/2026-06-10-001-feat-anima-mvp-build-plan.md` (origin plan).
+> For brand and narrative (NOT build facts), `docs/positioning.md` is canonical and supersedes the framing in section 1.
 
 ## 1. What ANIMA is (one paragraph)
 
-An Obsidian-style **memory vault for AI agents**: every memory is a
+An agentic workspace where your own external agents read and write the same notes and canvas as your team: every note is a
 human-readable markdown note, Seal-encrypted, stored on Walrus, with the blob
-**owned by the user's Sui wallet** — plus a companion chat that lives in the
-vault, a multiplayer canvas where humans AND external agents (Claude Code via
+**owned by the user's Sui wallet**, plus a companion chat that lives in the
+workspace as a bundled default, a multiplayer canvas where humans AND external agents (Claude Code via
 MCP) are peers, per-note publishing to the permaweb, and the "resurrection"
 beat: the app dies, a different client (different brand, different LLM) wakes
-the same soul from the wallet alone. Sui Overflow 2026, Walrus track
+the same notes from the wallet alone. Sui Overflow 2026, Walrus track
 ("Programmable Storage for AI Agents & Agentic Workflows" — $35k 1st).
 
 ## 2. Build status: WORKING SYSTEM, not concept

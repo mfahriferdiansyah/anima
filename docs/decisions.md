@@ -1,5 +1,7 @@
 # Build Decisions (living log)
 
+> Build/technical facts only. Brand and positioning are canonical in `positioning.md`.
+
 ## U1 commit gate — 2026-06-10 — **GO** ✅
 
 All checks passed on Sui testnet (epoch ~424). Evidence: `chain/core/spike-results.json`, `chain/core/spike-seal-results.json`, spike sources `chain/core/src/spike{,-seal}.ts`.

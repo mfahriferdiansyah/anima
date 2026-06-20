@@ -3,6 +3,8 @@ date: 2026-06-10
 topic: anima-owned-agent-memory-vault
 ---
 
+> Historical brainstorm (2026-06-10). Point-in-time record, not current direction. Canonical positioning lives in `../positioning.md` (anima is an agentic workspace; "notes on a shared canvas"; the moat is your own external agents on non-custodial, wallet-owned, Seal-on-Walrus data that survives the app). The "memory vault + companion" framing below is superseded; build facts (architecture, signing model, dependencies) remain valid.
+
 # ANIMA — An Obsidian-style Memory Vault for AI Agents, with a Companion That Lives In It
 
 ## Summary

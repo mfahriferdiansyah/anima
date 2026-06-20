@@ -1,0 +1,385 @@
+/* Anima brand theme for Starlight.
+   Tokens mirror anima/frontend/src/theme/kit.css:
+   blue #2F6BFF primary, orange #FF5C1A accent, ink #16181D,
+   Space Grotesk display, Inter body, JetBrains Mono code, soft cards.
+
+   Strategy: override Starlight's own --sl-* design tokens (type scale,
+   color ramp, widths) rather than brute-forcing element selectors, so the
+   theme tracks the framework. Brute selectors only where Starlight has no
+   token (active nav state, link cards, hero layout). */
+
+:root {
+  --sl-font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --sl-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Brand palette */
+  --anima-blue: #2f6bff;
+  --anima-blue-deep: #1e50d6;
+  --anima-blue-tint: #eaf1ff;
+  --anima-orange: #ff5c1a;
+  --anima-ink: #16181d;
+  --anima-teal: #00c48c;
+  --anima-text-2: #5a6170;
+  --anima-hairline: #e6eaf2;
+  --anima-raised: #f1f4fa;
+
+  --anima-radius: 16px;
+  --anima-radius-sm: 12px;
+  --anima-shadow: 0 14px 36px rgba(22, 24, 29, 0.09);
+  --anima-shadow-sm: 0 6px 18px rgba(22, 24, 29, 0.06);
+
+  /* Slightly wider measure + roomier sidebar for a premium feel. */
+  --sl-content-width: 47rem;
+  --sl-sidebar-width: 17.5rem;
+  --sl-nav-height: 4rem;
+
+  /* Tamed, refined type scale (default Starlight runs large). */
+  --sl-text-h1: 2.6rem;
+  --sl-text-h2: 1.65rem;
+  --sl-text-h3: 1.25rem;
+  --sl-text-h4: 1.05rem;
+  --sl-line-height: 1.7;
+
+  /* Accent ramp = Anima blue (dark-mode shades; light overrides below). */
+  --sl-color-accent-low: #16244a;
+  --sl-color-accent: #4d82ff;
+  --sl-color-accent-high: #cdddff;
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #eaf1ff;
+  --sl-color-accent: #2f6bff;
+  --sl-color-accent-high: #1e50d6;
+  --sl-color-text-accent: #1e50d6;
+
+  /* Cooler neutral ink for headings + a hairline that matches the brand. */
+  --sl-color-white: #16181d;
+  --sl-color-gray-1: #2b2f38;
+  --sl-color-gray-2: #5a6170;
+  --sl-color-gray-3: #7a8190;
+  --sl-color-hairline: #e6eaf2;
+  --sl-color-hairline-light: #eef1f7;
+}
+
+:root[data-theme='dark'] {
+  /* Warmer, deeper ink-toned surfaces (default Starlight is blue-gray). */
+  --sl-color-bg: #101216;
+  --sl-color-bg-nav: #14161b;
+  --sl-color-bg-sidebar: #101216;
+  --sl-color-hairline: #23262e;
+  --sl-color-hairline-light: #2a2e37;
+}
+
+/* ---------------------------------------------------------------- *
+ * Typography: Space Grotesk display face for title + all headings. *
+ * ---------------------------------------------------------------- */
+.site-title,
+.site-title span,
+.sl-markdown-content :is(h1, h2, h3, h4, h5, h6),
+.hero h1 {
+  font-family: 'Space Grotesk', var(--sl-font);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.sl-markdown-content h1,
+.hero h1 {
+  letter-spacing: -0.03em;
+}
+
+.site-title span {
+  font-size: 1.2rem;
+  letter-spacing: -0.03em;
+}
+
+/* Heading rhythm: generous space above, snug below; lighter H2 weight. */
+.sl-markdown-content :is(h2, h3, h4) {
+  margin-top: 2.4em;
+}
+.sl-markdown-content h2 {
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--sl-color-hairline);
+  line-height: 1.25;
+}
+.sl-markdown-content h3 {
+  margin-top: 1.9em;
+}
+.sl-markdown-content p,
+.sl-markdown-content li {
+  color: var(--sl-color-gray-1);
+}
+
+/* Links: brand color, refined underline. */
+.sl-markdown-content a {
+  color: var(--sl-color-text-accent);
+  text-decoration-color: color-mix(in srgb, var(--sl-color-text-accent) 35%, transparent);
+  text-underline-offset: 0.18em;
+  font-weight: 500;
+}
+.sl-markdown-content a:hover {
+  text-decoration-color: currentColor;
+}
+
+/* ---------------------------------------------------------------- *
+ * Splash hero: single confident column, no reserved image gap,     *
+ * a soft brand tint band behind it.                                *
+ * ---------------------------------------------------------------- */
+.hero {
+  padding-block: clamp(2.5rem, 6vw, 4.5rem) clamp(1rem, 2vw, 1.5rem);
+}
+/* On the splash, pull the lead paragraph + fork cards up toward the hero. */
+.hero ~ .sl-markdown-content {
+  margin-top: 0;
+}
+.hero > .stack {
+  /* Splash reserves a 2-col grid for an image we don't have. Collapse it. */
+  display: block;
+  max-width: 52rem;
+}
+.hero .copy {
+  gap: 0.9rem;
+}
+.hero h1 {
+  font-size: clamp(3rem, 7vw, 4.75rem);
+  line-height: 0.98;
+  background: linear-gradient(180deg, var(--anima-ink) 0%, #353a45 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+:root[data-theme='dark'] .hero h1 {
+  background: linear-gradient(180deg, #ffffff 0%, #b9c0cf 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hero .tagline {
+  font-size: clamp(1.15rem, 2.4vw, 1.5rem);
+  line-height: 1.4;
+  color: var(--sl-color-gray-2);
+  max-width: 34ch;
+  margin-top: 0.4rem;
+}
+/* Eyebrow ✦ mark above the headline (brand-only glyph). */
+.hero .copy::before {
+  content: '✦ docs';
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--sl-font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--anima-orange);
+  margin-bottom: 0.9rem;
+}
+
+/* Lead paragraph on the splash (first prose block after the hero). */
+.hero + .sl-markdown-content > p:first-child,
+.sl-markdown-content > p:first-child {
+  font-size: 1.18rem;
+  line-height: 1.55;
+  color: var(--sl-color-gray-2);
+  max-width: 46ch;
+}
+
+/* ---------------------------------------------------------------- *
+ * Fork cards (.sl-link-card): the real centerpiece of the splash.  *
+ * ---------------------------------------------------------------- */
+.card-grid {
+  gap: 1.25rem;
+  margin-top: 2.5rem;
+}
+.sl-link-card {
+  position: relative;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: var(--anima-radius);
+  padding: 1.6rem 1.7rem;
+  background: var(--sl-color-bg);
+  box-shadow: var(--anima-shadow-sm);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
+}
+:root[data-theme='light'] .sl-link-card {
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+}
+.sl-link-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--anima-blue) 45%, var(--sl-color-hairline));
+  box-shadow: var(--anima-shadow);
+}
+/* Brand blue accent rule that grows on hover. */
+.sl-link-card::before {
+  content: '';
+  position: absolute;
+  inset-block: 1.4rem;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--anima-blue);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.sl-link-card:hover::before {
+  opacity: 1;
+}
+.sl-link-card .title {
+  font-family: 'Space Grotesk', var(--sl-font);
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  color: var(--sl-color-white);
+}
+.sl-link-card .description {
+  color: var(--sl-color-gray-2);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin-top: 0.45rem;
+}
+.sl-link-card .icon {
+  color: var(--anima-blue);
+  transition: transform 0.18s ease;
+}
+.sl-link-card:hover .icon {
+  transform: translateX(3px);
+}
+
+/* ---------------------------------------------------------------- *
+ * Header + site title.                                             *
+ * ---------------------------------------------------------------- */
+.site-title {
+  gap: 0.4rem;
+}
+header.header {
+  border-bottom: 1px solid var(--sl-color-hairline);
+  backdrop-filter: saturate(140%) blur(8px);
+  background: color-mix(in srgb, var(--sl-color-bg-nav) 88%, transparent);
+}
+
+/* ---------------------------------------------------------------- *
+ * Sidebar: soften the heavy solid-blue active block to a tint +    *
+ * blue text + a left accent bar.                                   *
+ * ---------------------------------------------------------------- */
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover {
+  position: relative;
+  background: var(--sl-color-accent-low);
+  color: var(--sl-color-text-accent);
+  font-weight: 600;
+  border-radius: 8px;
+}
+:root[data-theme='dark'] .sidebar-content a[aria-current='page'] {
+  color: var(--sl-color-accent-high);
+}
+.sidebar-content a[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: -0.5rem;
+  inset-block: 0.35rem;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--anima-blue);
+}
+.sidebar-content a {
+  border-radius: 8px;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.sidebar-content a:hover {
+  background: var(--sl-color-gray-7, var(--sl-color-accent-low));
+  color: var(--sl-color-white);
+}
+/* Group labels: small-caps mono, brand cadence. */
+.sidebar-content .large,
+summary .large {
+  font-family: 'Space Grotesk', var(--sl-font);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Right-hand "On this page" TOC: brand active state. */
+starlight-toc a[aria-current='true'] {
+  color: var(--sl-color-text-accent);
+  font-weight: 600;
+}
+starlight-toc a {
+  border-inline-start: 2px solid transparent;
+}
+starlight-toc a[aria-current='true'] {
+  border-inline-start-color: var(--anima-blue);
+}
+
+/* ---------------------------------------------------------------- *
+ * Code blocks + inline code.                                       *
+ * ---------------------------------------------------------------- */
+.sl-markdown-content pre,
+.expressive-code .frame.is-terminal,
+.expressive-code .frame pre,
+.expressive-code .frame.is-terminal .header {
+  border-radius: var(--anima-radius-sm);
+}
+.expressive-code .frame pre {
+  border: 1px solid var(--sl-color-hairline);
+}
+:root[data-theme='light'] .expressive-code .frame pre {
+  background: #fbfcfe;
+}
+
+/* Inline code: neutral mono pill. Blue is reserved for links, so code stays
+   near-body ink on a faint raised surface (premium docs render it neutral;
+   coloring every identifier collides with link color and reads as AI slop). */
+.sl-markdown-content :not(pre) > code {
+  font-family: var(--sl-font-mono);
+  font-size: 0.83em;
+  padding: 0.12em 0.4em;
+  border-radius: 6px;
+  background: var(--anima-raised);
+  color: var(--sl-color-gray-1);
+  border: 1px solid var(--sl-color-hairline);
+}
+:root[data-theme='dark'] .sl-markdown-content :not(pre) > code {
+  background: color-mix(in srgb, var(--sl-color-white) 7%, var(--sl-color-bg));
+  color: var(--sl-color-gray-2);
+}
+/* Code inside a link inherits the link color so it still reads as a link. */
+.sl-markdown-content a > code {
+  color: inherit;
+}
+
+/* ---------------------------------------------------------------- *
+ * Asides keyed to brand colors, soft brand radius + tint.          *
+ * ---------------------------------------------------------------- */
+.starlight-aside {
+  border-radius: var(--anima-radius-sm);
+  border-inline-start-width: 3px;
+  padding: 1rem 1.2rem;
+}
+.starlight-aside--note {
+  border-color: var(--anima-blue);
+  background: color-mix(in srgb, var(--anima-blue) 7%, var(--sl-color-bg));
+}
+.starlight-aside--tip {
+  border-color: var(--anima-teal);
+  background: color-mix(in srgb, var(--anima-teal) 8%, var(--sl-color-bg));
+}
+.starlight-aside--caution {
+  border-color: var(--anima-orange);
+  background: color-mix(in srgb, var(--anima-orange) 7%, var(--sl-color-bg));
+}
+.starlight-aside--danger {
+  border-color: #f5222d;
+  background: color-mix(in srgb, #f5222d 6%, var(--sl-color-bg));
+}
+.starlight-aside__title {
+  font-family: 'Space Grotesk', var(--sl-font);
+  letter-spacing: -0.01em;
+}
+
+/* Buttons / pill actions on splash, if added later. */
+.hero .actions a,
+.sl-link-button {
+  border-radius: 999px;
+}
