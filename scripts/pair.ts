@@ -18,7 +18,7 @@
  *   pnpm pair revoke 0x<agent>   owner-signed revoke of an agent address
  */
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, chmodSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   createSuiClient,
@@ -138,25 +138,39 @@ async function main(): Promise<void> {
   }
 
   // pair: reuse ANIMA_AGENT_KEY if provided (idempotent re-pair), else mint a fresh agent.
+  // Validate symmetrically with loadOwner: a malformed key must error, not silently
+  // mint and fund a new agent (which would also overwrite the only stored copy).
   const existing = process.env.ANIMA_AGENT_KEY?.trim();
-  const agent =
-    existing && existing.startsWith('suiprivkey')
-      ? Ed25519Keypair.fromSecretKey(existing)
-      : Ed25519Keypair.generate();
+  if (existing && !existing.startsWith('suiprivkey')) {
+    throw new Error(
+      'ANIMA_AGENT_KEY is set but is not a suiprivkey… secret. Unset it to mint a fresh agent, or fix the value.',
+    );
+  }
+  const reusing = Boolean(existing);
+  const agent = existing ? Ed25519Keypair.fromSecretKey(existing) : Ed25519Keypair.generate();
   const agentName = process.env.ANIMA_AGENT_NAME?.trim() || 'mcp-agent';
 
   const res = await pairAgent({ suiClient, owner, vaultId, agent });
   if (res.ok) {
     log(`agent funded: ${res.sui} MIST SUI, ${res.wal} FROST WAL — ready to read and write.`);
   } else {
+    // An already-paired agent skips the owner-signed funding tx, so topping the
+    // owner wallet does nothing; only a direct top-up of the agent address helps.
+    const tip = res.alreadyPaired
+      ? `This agent was already registered, so no funding tx ran. Send SUI directly to ${res.agentAddr} and re-run, or revoke it and pair a fresh agent.`
+      : 'Top up the owner wallet (it funds the agent) and re-run.';
     log(
-      `warning: the agent is still under threshold (sui ${res.sui}, wal ${res.wal}; need ${MIN_AGENT_SUI} SUI and ${MIN_AGENT_WAL} WAL). ` +
-        'Top up the agent address or the owner wallet and re-run.',
+      `warning: the agent is still under threshold (sui ${res.sui}, wal ${res.wal}; need ${MIN_AGENT_SUI} SUI and ${MIN_AGENT_WAL} WAL). ${tip}`,
     );
   }
 
   // Emit env: write all four vars to a gitignored file (0600); print non-secret
   // vars to stdout, and the agent secret only behind --print-key.
+  if (!reusing && existsSync(ENV_FILE)) {
+    log(
+      `note: overwriting an existing ${ENV_FILE}. Any previously paired agent stays authorized until you revoke it (pnpm pair revoke <its-address>).`,
+    );
+  }
   const secret = agent.getSecretKey();
   writeFileSync(
     ENV_FILE,
@@ -169,6 +183,9 @@ async function main(): Promise<void> {
     ].join('\n'),
     { mode: 0o600 },
   );
+  // writeFileSync's mode option only applies when the file is created; enforce
+  // 0600 on re-runs too so the full-vault agent secret is never left readable.
+  chmodSync(ENV_FILE, 0o600);
   log(`\nWrote the agent env to ${ENV_FILE} (gitignored). Paste these into your agent's MCP config:`);
 
   const printKey = args.includes('--print-key');
