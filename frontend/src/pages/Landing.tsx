@@ -479,7 +479,7 @@ function CanvasMock() {
           <div className="nl" />
           <div className="nl s" />
         </div>
-        <div className="lpc-cur" style={{ left: '38%', top: '44%' }}>
+        <div className="lpc-cur" style={{ left: '30%', top: '60%' }}>
           <svg width="20" height="20" viewBox="0 0 24 24">
             <path fill="#FF4D8D" d="M5 3l14 7-6.5 1.5L9 18z" />
           </svg>
@@ -534,7 +534,7 @@ function BeatVisual({ b, ready }: { b: Beat; ready: ReadySession | null }) {
   }
   if (b.kind === 'canvas') {
     return (
-      <div className="lp-page">
+      <div className="lp-page lp-page--canvas">
         <CanvasMock />
       </div>
     );

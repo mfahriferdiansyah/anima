@@ -1697,6 +1697,11 @@
   position: relative;
   inset: auto;
 }
+/* the canvas mock places cards at fixed % on the board; a 16:10 box is too short
+   on a phone so they pile up — give it a taller board to spread them out. */
+.lp-mvis .lp-page--canvas {
+  aspect-ratio: 4 / 5;
+}
 .lp-mvis .lp-mini {
   position: relative;
   left: auto;
