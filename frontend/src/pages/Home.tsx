@@ -145,7 +145,11 @@ function WeekCalendar() {
   return (
     <div className="pgcal">
       <div className="pgcal-t">
-        <b className="pgcal-mlabel">{headLabel}</b>
+        <div>
+          <b>Your schedule</b>
+          <span>What happened and what is scheduled, one place.</span>
+        </div>
+        <span className="sp" />
         <button type="button" className="pgcal-nav" aria-label="Previous" onClick={goPrev}>
           <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 1 3 5l4 4" /></svg>
         </button>
@@ -155,13 +159,14 @@ function WeekCalendar() {
         <button type="button" className="pgbtn" onClick={goToday}>
           Today
         </button>
-        <span className="sp" />
         <span className="pgcal-seg">
           {segBtn('week', 'Week')}
           {segBtn('month', 'Month')}
         </span>
       </div>
       <div className="pgcal-h">
+        <b>{headLabel}</b>
+        <span className="sp" />
         <button type="button" className={layers.seal ? 'srcchip on' : 'srcchip'} onClick={() => toggleLayer('seal')}>
           <span className="ld tl" />Seals
         </button>
@@ -171,7 +176,6 @@ function WeekCalendar() {
         <button type="button" className={layers.gcal ? 'srcchip on' : 'srcchip'} onClick={() => toggleLayer('gcal')}>
           <span className="ld bl" />Google
         </button>
-        <span className="sp" />
         <span className="pgcal-g">
           <CalIcon>
             <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -190,7 +194,7 @@ function WeekCalendar() {
               <span key={n}>{n}</span>
             ))}
           </div>
-          <div className="pgcal-month" style={{ gridTemplateRows: `repeat(${monthWeeks}, minmax(0, 1fr))` }}>
+          <div className="pgcal-month">
             {monthCells.map((d, i) => {
               const k = dateKey(d);
               const inMonth = d.getMonth() === cursor.getMonth();
@@ -201,7 +205,7 @@ function WeekCalendar() {
                 ...(ad ? [{ t: ad.t, k: 'agent' as EventKind, note: ad.note }] : []),
                 ...timed.map((ev) => ({ t: ev.t, k: ev.k, note: ev.note })),
               ];
-              const shown = items.slice(0, 3);
+              const shown = items.slice(0, 2);
               const extra = items.length - shown.length;
               return (
                 <button

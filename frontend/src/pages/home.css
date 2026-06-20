@@ -5,23 +5,32 @@
    calmer colour, readable blocks, and a grid you can actually scroll.
    ========================================================================== */
 
-/* The agenda scrolls inside a fixed viewport while the toolbar + header stay
-   pinned, so Home stays a single screen and the week scrolls internally. The
-   height is set per-view (.pgag-scroll below); this carries the shared chrome. */
+/* The week agenda fills the calendar card (which stretches to the rail), so the
+   week view has no empty band below the list either. */
 .pghpaper .pgcal-gridscroll {
+  flex: 1;
   overflow-x: hidden;
 }
 .pghpaper .pgcal-gridscroll::-webkit-scrollbar { width: 8px; }
 .pghpaper .pgcal-gridscroll::-webkit-scrollbar-thumb { background: rgba(22, 24, 29, .14); border-radius: 4px; }
 .pghpaper .pgcal-gridscroll::-webkit-scrollbar-track { background: transparent; }
 
-/* Calendar card header. Under the big page greeting the kit's "Your week" title
-   read quiet and its subtitle sat at 48% ink — lift the title's size/weight and
-   darken the subtitle so the header is legible at a glance. */
-.pghpaper .pgcal-t { align-items: center; padding: 12px 18px 8px; }
-.pghpaper .pgcal-mlabel { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 18px; letter-spacing: -.015em; color: var(--ink-900); margin-right: 4px; }
-.pghpaper .pgcal-h { padding: 4px 18px 10px; }
+/* Calendar card header: "Your schedule" + a short description, lifted for
+   legibility under the big page greeting; then a controls row and source strip. */
+.pghpaper .pgcal-t { padding: 14px 18px 8px; }
+.pghpaper .pgcal-t > div > b { font-size: 18px; font-weight: 700; letter-spacing: -.015em; }
+.pghpaper .pgcal-t > div > span { display: block; font-size: 12.5px; color: rgba(22, 24, 29, .62); margin-top: 2px; }
+.pghpaper .pgcal-h { padding: 2px 18px 10px; }
 .pghpaper .pgcal-h .srcchip { font-size: 12px; }
+
+/* The calendar card stretches to match the rail and the month grid fills it, so
+   there is no empty space below the month: both columns read as equal height. */
+/* fill the column to the bottom: the scroll area and column become flex columns
+   so the calendar+rail row (.pgh6) grows to fill, and both cards stretch with it.
+   On short viewports the content keeps its natural min height and the page scrolls. */
+.pghpaper .pged-scroll { display: flex; flex-direction: column; }
+.pghpaper .pgh6 { flex: 1; align-items: stretch; }
+.pghpaper .pgcal { display: flex; flex-direction: column; }
 
 /* The week is a day-grouped agenda list, not a 7-column time grid: 80px columns
    forced titles to truncate ("Walrus stor…") no matter how they were clamped, so
@@ -68,8 +77,8 @@
 
 /* Home scrolls naturally (it is not locked to one viewport); keep the column
    padding tight at the top with a little breathing room at the bottom. */
-.pghpaper .pghcol6 { padding: 24px 40px 48px; }
-.pghpaper .pgh6-quick { margin: 14px 0 16px; }
+.pghpaper .pghcol6 { padding: 14px 40px 14px; flex: 1; display: flex; flex-direction: column; }
+.pghpaper .pgh6-quick { margin: 10px 0 12px; }
 
 /* quick-start cards mix the two brand colours so Home is not all-orange: blue
    for the product actions (New note, Open canvas), orange for Nova (Chat). */
@@ -82,12 +91,12 @@
 .pghpaper .railt { margin: 0 -17px 12px; padding: 0 17px 11px; box-shadow: 0 1px 0 rgba(22, 24, 29, .08); }
 
 /* ---- Month view: a calm overview (dots + a couple of labels per day), not a
-   dense chip grid. Natural height with uniform rows so no week gets cropped;
-   the page scrolls if it runs past the viewport. ---- */
-.pghpaper .pgcal-month-wrap { display: flex; flex-direction: column; }
+   dense chip grid. The grid fills the card (rows stretch from an 80px floor so
+   3 items never crop), so the calendar reaches the bottom with no empty band. ---- */
+.pghpaper .pgcal-month-wrap { display: flex; flex-direction: column; flex: 1; }
 .pghpaper .pgcal-mhead { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); padding: 4px 0 9px; }
 .pghpaper .pgcal-mhead span { text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: rgba(22, 24, 29, .62); }
-.pghpaper .pgcal-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: minmax(96px, auto); border-top: 1px solid rgba(22, 24, 29, .07); border-left: 1px solid rgba(22, 24, 29, .07); }
+.pghpaper .pgcal-month { flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: minmax(80px, 1fr); border-top: 1px solid rgba(22, 24, 29, .07); border-left: 1px solid rgba(22, 24, 29, .07); }
 .pghpaper .pgcm-cell {
   display: flex; flex-direction: column; gap: 2px; align-items: stretch; min-width: 0; overflow: hidden;
   padding: 5px 6px; background: #fff; cursor: pointer; text-align: left; font: inherit;
