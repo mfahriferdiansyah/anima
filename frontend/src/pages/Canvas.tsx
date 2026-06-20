@@ -3,7 +3,8 @@ import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createNote, useVault } from '@/hooks/useVault';
 import type { Note } from '@/hooks/useVault';
-import { SHARED_CANVAS_ID, useCanvases } from '@/hooks/useCanvases';
+import { SHARED_CANVAS_ID, updateCanvas, useCanvases } from '@/hooks/useCanvases';
+import { CoverPicker } from '@/components/CoverPicker';
 import { CanvasHome } from './CanvasHome';
 import { ShareDialog } from './ShareDialog';
 import { moveNote, startPresence, stopPresence, usePresence } from '@/hooks/usePresence';
@@ -150,6 +151,13 @@ export function Canvas() {
   const isShared = canvasId === SHARED_CANVAS_ID;
   const boardDoc = canvases.find((c) => c.canvasId === canvasId);
   const boardTitle = boardDoc?.title ?? 'Untitled canvas';
+  const boardCover = boardDoc?.image ?? '';
+  const [coverOpen, setCoverOpen] = useState(false);
+  const setCover = (src: string) => {
+    if (!canvasId) return;
+    updateCanvas(canvasId, { image: src });
+    setCoverOpen(false);
+  };
   const { notes } = useVault();
   const { peers, layout, savingLayout, materializedNoteId } = usePresence();
   const dragRef = useRef<DragState | null>(null);
@@ -524,6 +532,12 @@ export function Canvas() {
             <span className="spin" aria-hidden="true">✦</span> saving layout…
           </span>
         ) : null}
+        <span className="pgcv-cover-wrap">
+          <button type="button" className="pgbtn" onClick={() => setCoverOpen((o) => !o)}>
+            {boardCover ? 'Change cover' : 'Add cover'}
+          </button>
+          {coverOpen ? <CoverPicker onPick={setCover} /> : null}
+        </span>
         <button type="button" className="pgbtn" onClick={() => setSharing(true)}>
           Share
         </button>

@@ -23,9 +23,9 @@ export interface CanvasDoc {
 export const SHARED_CANVAS_ID = 'shared';
 
 const seed: CanvasDoc[] = [
-  { canvasId: SHARED_CANVAS_ID, title: 'Shared canvas', desc: 'The whole vault as one live constellation.', folder: 'research', image: '/covers/ink.svg', seed: true },
-  { canvasId: 'c-lisbon', title: 'Lisbon planning canvas', desc: 'Routes, places and bookings on one board.', folder: 'trips', image: '/covers/dusk.svg' },
-  { canvasId: 'c-demo', title: 'Demo day canvas', desc: 'Storyboard for the seven-minute walkthrough.', folder: 'work', image: '/covers/ember.svg' },
+  { canvasId: SHARED_CANVAS_ID, title: 'Shared canvas', desc: 'The whole vault as one live constellation.', folder: 'research', image: '/covers/ethos-graph.svg', seed: true },
+  { canvasId: 'c-lisbon', title: 'Lisbon planning canvas', desc: 'Routes, places and bookings on one board.', folder: 'trips', image: '/covers/ethos-quilt.svg' },
+  { canvasId: 'c-demo', title: 'Demo day canvas', desc: 'Storyboard for the seven-minute walkthrough.', folder: 'work', image: '/covers/ethos-pulse.svg' },
 ];
 
 const store = createStore<CanvasDoc[]>([...seed, ...seedCanvases]);

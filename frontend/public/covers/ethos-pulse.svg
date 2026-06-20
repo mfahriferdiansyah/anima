@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#000"/>
+      <stop offset="0.72" stop-color="#111"/>
+      <stop offset="1" stop-color="#1a1a1a"/>
+    </linearGradient>
+    <pattern id="micro" width="210" height="74" patternUnits="userSpaceOnUse">
+      <text x="0" y="50" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="20" font-weight="900" letter-spacing="5" fill="#fff" opacity="0.1">ANIMA</text>
+      <circle cx="172" cy="24" r="3" fill="#777" opacity="0.34"/>
+    </pattern>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="active"><rect x="0" y="0" width="1200" height="274"/></clipPath>
+  </defs>
+  <rect width="1200" height="360" fill="url(#bg)"/>
+  <rect width="1200" height="284" fill="url(#micro)"/>
+  <g clip-path="url(#active)">
+    <circle cx="600" cy="138" r="300" fill="url(#halo)"/>
+    <g fill="none" stroke-linecap="round">
+      <circle cx="600" cy="138" r="66" stroke="#e6e6e6" stroke-width="3" opacity="0.85"/>
+      <circle cx="600" cy="138" r="132" stroke="#bdbdbd" stroke-width="2.5" opacity="0.58"/>
+      <circle cx="600" cy="138" r="206" stroke="#8f8f8f" stroke-width="2" opacity="0.4"/>
+      <circle cx="600" cy="138" r="288" stroke="#6a6a6a" stroke-width="1.6" opacity="0.26"/>
+      <circle cx="600" cy="138" r="376" stroke="#555" stroke-width="1.4" opacity="0.18"/>
+    </g>
+    <g stroke="#cfcfcf" stroke-width="2.5" opacity="0.7" stroke-linecap="round">
+      <line x1="150" y1="138" x2="534" y2="138"/>
+      <line x1="1050" y1="138" x2="666" y2="138"/>
+      <line x1="372" y1="58" x2="558" y2="106"/>
+      <line x1="828" y1="222" x2="642" y2="170"/>
+    </g>
+  </g>
+  <g>
+    <circle cx="150" cy="138" r="14" fill="#cfcfcf"/>
+    <circle cx="372" cy="58" r="12" fill="#9a9a9a"/>
+    <circle cx="828" cy="222" r="13" fill="#8d8d8d"/>
+    <circle cx="1050" cy="138" r="16" fill="#fff"/><circle cx="1050" cy="138" r="6" fill="#000"/>
+    <circle cx="600" cy="138" r="36" fill="#fff"/><circle cx="600" cy="138" r="15" fill="#000"/>
+  </g>
+  <rect x="0" y="274" width="1200" height="86" fill="#111" opacity="0.96"/>
+  <path d="M0 274 C160 282 300 284 470 277 C640 270 800 274 980 285 C1070 290 1140 286 1200 277 L1200 360 L0 360 Z" fill="#191919"/>
+</svg>

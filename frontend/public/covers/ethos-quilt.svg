@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#050505"/>
+      <stop offset="0.55" stop-color="#111"/>
+      <stop offset="1" stop-color="#000"/>
+    </linearGradient>
+    <pattern id="words" width="370" height="86" patternUnits="userSpaceOnUse">
+      <text x="-8" y="60" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="40" font-weight="900" letter-spacing="2" fill="#fff" opacity="0.08">WALRUS QUILT</text>
+      <text x="150" y="26" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="19" font-weight="900" letter-spacing="5" fill="#777" opacity="0.26">SEALED MEMORY</text>
+    </pattern>
+    <pattern id="patches" width="86" height="66" patternUnits="userSpaceOnUse">
+      <rect x="7" y="7" width="72" height="52" rx="7" fill="#202020" stroke="#323232" stroke-width="1.5"/>
+    </pattern>
+    <clipPath id="active"><rect x="0" y="0" width="1200" height="270"/></clipPath>
+  </defs>
+  <rect width="1200" height="360" fill="url(#bg)"/>
+  <rect width="1200" height="270" fill="url(#words)"/>
+  <g clip-path="url(#active)">
+    <rect x="-20" y="22" width="1240" height="232" fill="url(#patches)"/>
+    <g>
+      <rect x="179" y="95" width="72" height="52" rx="7" fill="#fff"/>
+      <rect x="351" y="29" width="72" height="52" rx="7" fill="#c9c9c9"/>
+      <rect x="523" y="161" width="72" height="52" rx="7" fill="#fff"/>
+      <rect x="609" y="95" width="72" height="52" rx="7" fill="#8d8d8d"/>
+      <rect x="781" y="95" width="72" height="52" rx="7" fill="#fff"/>
+      <rect x="867" y="29" width="72" height="52" rx="7" fill="#b5b5b5"/>
+      <rect x="953" y="161" width="72" height="52" rx="7" fill="#fff"/>
+      <rect x="265" y="161" width="72" height="52" rx="7" fill="#6a6a6a"/>
+    </g>
+    <rect x="169" y="19" width="528" height="204" rx="16" fill="none" stroke="#e6e6e6" stroke-width="2.5" stroke-dasharray="2 10" opacity="0.6"/>
+  </g>
+  <g transform="translate(58 296)">
+    <text x="0" y="0" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="20" font-weight="900" letter-spacing="6" fill="#cfcfcf">ONE BLOB, MANY PATCHES</text>
+  </g>
+  <rect x="0" y="270" width="1200" height="90" fill="#0f0f0f" opacity="0.9"/>
+  <path d="M0 270 C172 262 316 282 476 274 C658 266 808 262 962 274 C1058 281 1134 278 1200 270 L1200 360 L0 360 Z" fill="#181818"/>
+</svg>

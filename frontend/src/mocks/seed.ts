@@ -58,7 +58,7 @@ export const seedNotes: Note[] = [
     "links": [],
     "title": "Sui object ownership model, the part that matters for a vault",
     "body": "Three ownership flavors and only one fits a personal vault.\n- Owned objects: a single address holds them, transfers cost a signature, this is custody\n- Shared objects: anyone can touch them under the contract rules, wrong for private notes\n- Immutable objects: frozen forever, useful for a published snapshot, not a working note\nThe blob object and the Seal policy should both be owned. That is what makes leaving the app not mean leaving the data.",
-    "image": "/covers/tide.svg"
+    "image": "/covers/ethos-graph.svg"
   },
   {
     "noteId": "seed-research-5",
@@ -72,7 +72,7 @@ export const seedNotes: Note[] = [
     "links": [],
     "title": "Client-side encryption flow, end to end on save",
     "body": "Walking the save path once so the demo narration is exact.\n1. Serialize the note in the browser\n2. Seal encrypts it against the policy, plaintext never leaves the tab\n3. The ciphertext goes to Walrus, packed into a quilt with its siblings\n4. The returned blob id is written to the Sui object the wallet owns\nThe whole loop is one signature. Decryption reverses it after a wallet check, nowhere on a server.",
-    "image": "/covers/ember.svg"
+    "image": "/covers/ethos-pulse.svg"
   },
   {
     "noteId": "seed-trips-1",
@@ -86,7 +86,7 @@ export const seedNotes: Note[] = [
     "links": [],
     "title": "Alfama walking loop (morning, before the heat)",
     "body": "Start at Largo das Portas do Sol for the miradouro view, then drop downhill into the lanes.\n- Se Cathedral early, fewer crowds before 10\n- Tram 28 gets packed by mid-morning, walk it instead\n- Fado spots open ~19:00, book Mesa de Frades ahead\nCool stone streets, get lost on purpose here.",
-    "image": "/covers/dawn.svg"
+    "image": "/covers/ethos-field.svg"
   },
   {
     "noteId": "seed-trips-2",
@@ -126,7 +126,7 @@ export const seedNotes: Note[] = [
     "links": [],
     "title": "Budget + transit notes",
     "body": "Get the Viva Viagem card, load zapping not single tickets.\n- Metro/tram/bus ~1.65 EUR a ride with zapping\n- Daily food + transit target: 55-70 EUR\n- Skip taxis in center, hills are walkable; Bolt for late nights\nMiradouros are free and the best part of the city.",
-    "image": "/covers/tide.svg"
+    "image": "/covers/ethos-quilt.svg"
   },
   {
     "noteId": "seed-trips-5",
@@ -151,7 +151,7 @@ export const seedNotes: Note[] = [
       "demo"
     ],
     "links": [],
-    "image": "/covers/dawn.svg",
+    "image": "/covers/ethos-strata.svg",
     "title": "Demo day run of show",
     "body": "Seven minutes, three beats, no slides until beat two.\n- 0:00 Cold open, ask Nova what moved in the vault this week\n- 2:30 Save a note live, let the write states play to the seal\n- 5:00 Forget a memory, show the wallet stepping in for the destructive part\nClose on the one line: the memory is yours on chain, not ours on a server."
   },
@@ -204,7 +204,7 @@ export const seedNotes: Note[] = [
       "launch"
     ],
     "links": [],
-    "image": "/covers/tide.svg",
+    "image": "/covers/ethos-quilt.svg",
     "title": "Launch checklist",
     "body": "Ship gate before the demo goes public.\n- [ ] Wallet funded, SUI for gas and WAL for writes\n- [ ] Backup vault seeded in case the network sulks\n- [x] Onboarding restyled, empty vault first run verified\n- [ ] Roadmap page trimmed to three tracks\n- [ ] HDMI adapter packed, the venue never has one\n- [ ] Closing line you can say twice without losing it"
   },
@@ -218,7 +218,7 @@ export const seedNotes: Note[] = [
       "local-first"
     ],
     "links": [],
-    "image": "/covers/paper.svg",
+    "image": "/covers/ethos-graph.svg",
     "title": "Local-First Software (Ink & Switch)",
     "body": "Kleppmann, Wiggins, van Hardenberg, McGranaghan. The essay that named the whole category.\n\nTakeaway: seven ideals for software that keeps your data on your device and still syncs.\n\n- CRDTs are the sync engine, not the feature\n- The cloud becomes a relay, never the owner\n- Re-read the offline-collaboration section before the demo"
   },
@@ -245,7 +245,7 @@ export const seedNotes: Note[] = [
       "crypto"
     ],
     "links": [],
-    "image": "/covers/tide.svg",
+    "image": "/covers/ethos-field.svg",
     "title": "How to Generate and Exchange Secrets (Yao, 1986)",
     "body": "Andrew Yao. The garbled-circuits paper that started secure multiparty computation.\n\nTakeaway: two parties can compute on shared inputs without either revealing theirs.\n\n- Useful framing for why Seal's threshold model isn't just \"encryption\"\n- Dense, but the millionaires' problem makes it click"
   },
@@ -298,7 +298,7 @@ export const seedNotes: Note[] = [
       "competitive"
     ],
     "links": [],
-    "image": "/covers/tide.svg",
+    "image": "/covers/ethos-orbit.svg",
     "title": "Teardown: Mem0 and Letta own portability, not custody",
     "body": "Mem0 and OpenMemory already do cross-vendor memory, you can move it between models. Letta does the long-running agent state well. So portability is a crowded claim, not our wedge.\n\n- Mem0: memory lives on their backend, you do not hold it\n- Letta: rich state, still a server account underneath\n- Notion AI: notes are theirs to read, the model sits on top of their store\n\nThe open angle is non-custody. They cannot read your notes, and the storage is yours, not an account with us."
   },
@@ -325,7 +325,7 @@ export const seedNotes: Note[] = [
       "naming"
     ],
     "links": [],
-    "image": "/covers/dawn.svg",
+    "image": "/covers/ethos-strata.svg",
     "title": "Naming: why Nova for the companion",
     "body": "Shortlist was Nova, Echo, Margin, Vault. Landed on Nova.\n\n- Echo reads passive, a companion that only repeats is the wrong promise\n- Margin is clever but no one says it out loud the same way twice\n- Vault collides with the storage layer, confusing in the same product\n\nNova is short, says out loud cleanly, and reads as a presence rather than a feature. It does not over-claim intelligence either."
   },
@@ -350,7 +350,7 @@ export const seedCanvases: CanvasDoc[] = [
     "title": "Storage stack canvas",
     "desc": "Walrus, Seal and Sui objects laid out as one save path.",
     "folder": "research",
-    "image": "/covers/ink.svg"
+    "image": "/covers/ethos-quilt.svg"
   },
   {
     "canvasId": "cv-research-2",
@@ -363,7 +363,7 @@ export const seedCanvases: CanvasDoc[] = [
     "folder": "trips",
     "title": "Lisbon 5-day itinerary canvas",
     "desc": "Day-by-day plan linking neighborhoods, meals, and transit into one board.",
-    "image": "/covers/dusk.svg"
+    "image": "/covers/ethos-field.svg"
   },
   {
     "canvasId": "cv-trips-2",
@@ -376,7 +376,7 @@ export const seedCanvases: CanvasDoc[] = [
     "title": "Pitch storyboard canvas",
     "desc": "The narrative spine laid out beat by beat before the deck exists.",
     "folder": "work",
-    "image": "/covers/paper.svg"
+    "image": "/covers/ethos-orbit.svg"
   },
   {
     "canvasId": "cv-work-2",
@@ -389,7 +389,7 @@ export const seedCanvases: CanvasDoc[] = [
     "title": "Reading map canvas",
     "desc": "Essays and books grouped by theme, with the threads between them.",
     "folder": "reading",
-    "image": "/covers/dawn.svg"
+    "image": "/covers/ethos-graph.svg"
   },
   {
     "canvasId": "cv-reading-2",
@@ -402,7 +402,7 @@ export const seedCanvases: CanvasDoc[] = [
     "title": "Product strategy canvas",
     "desc": "Wedge, comps and positioning bets on one board.",
     "folder": "product",
-    "image": "/covers/paper.svg"
+    "image": "/covers/ethos-pulse.svg"
   },
   {
     "canvasId": "cv-product-2",

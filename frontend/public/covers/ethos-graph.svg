@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#000"/>
+      <stop offset="0.6" stop-color="#111"/>
+      <stop offset="1" stop-color="#1a1a1a"/>
+    </linearGradient>
+    <pattern id="micro" width="210" height="74" patternUnits="userSpaceOnUse">
+      <text x="0" y="50" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="20" font-weight="900" letter-spacing="5" fill="#fff" opacity="0.1">ANIMA</text>
+      <circle cx="172" cy="24" r="3" fill="#777" opacity="0.34"/>
+    </pattern>
+    <clipPath id="active"><rect x="0" y="0" width="1200" height="274"/></clipPath>
+  </defs>
+  <rect width="1200" height="360" fill="url(#bg)"/>
+  <rect width="1200" height="284" fill="url(#micro)"/>
+  <g clip-path="url(#active)" stroke-linecap="round">
+    <g stroke="#6f6f6f" stroke-width="2" opacity="0.5">
+      <line x1="150" y1="92" x2="372" y2="170"/>
+      <line x1="372" y1="170" x2="560" y2="74"/>
+      <line x1="372" y1="170" x2="588" y2="208"/>
+      <line x1="560" y1="74" x2="788" y2="128"/>
+      <line x1="588" y1="208" x2="788" y2="128"/>
+      <line x1="788" y1="128" x2="980" y2="62"/>
+      <line x1="788" y1="128" x2="1018" y2="206"/>
+      <line x1="980" y1="62" x2="1132" y2="150"/>
+      <line x1="150" y1="92" x2="252" y2="222"/>
+      <line x1="252" y1="222" x2="588" y2="208"/>
+    </g>
+    <g stroke="#d9d9d9" stroke-width="3" opacity="0.85">
+      <line x1="372" y1="170" x2="788" y2="128"/>
+      <line x1="560" y1="74" x2="980" y2="62"/>
+    </g>
+  </g>
+  <g>
+    <circle cx="150" cy="92" r="18" fill="#fff"/><circle cx="150" cy="92" r="7" fill="#000"/>
+    <circle cx="372" cy="170" r="27" fill="#fff"/><circle cx="372" cy="170" r="11" fill="#000"/>
+    <circle cx="560" cy="74" r="14" fill="#cfcfcf"/>
+    <circle cx="588" cy="208" r="16" fill="#8d8d8d"/>
+    <circle cx="252" cy="222" r="12" fill="#b5b5b5"/>
+    <circle cx="788" cy="128" r="31" fill="#fff"/><circle cx="788" cy="128" r="13" fill="#000"/>
+    <circle cx="980" cy="62" r="20" fill="#fff"/><circle cx="980" cy="62" r="8" fill="#000"/>
+    <circle cx="1018" cy="206" r="15" fill="#9a9a9a"/>
+    <circle cx="1132" cy="150" r="22" fill="#fff"/><circle cx="1132" cy="150" r="9" fill="#000"/>
+  </g>
+  <rect x="0" y="274" width="1200" height="86" fill="#111" opacity="0.96"/>
+  <path d="M0 274 C148 280 276 286 420 280 C598 272 752 276 922 286 C1032 292 1124 288 1200 276 L1200 360 L0 360 Z" fill="#191919"/>
+</svg>

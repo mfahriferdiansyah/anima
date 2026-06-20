@@ -115,9 +115,10 @@
 .mlib-del:hover:not(:disabled){background:var(--red-100);color:var(--red-500);}
 .mlib-del:disabled{opacity:.3;cursor:not-allowed;}
 
-/* write toasts: bottom-right, stacked above the companion orb so they clear the
-   sidebar (they used to sit bottom-left, overlapping the rail's account chip) */
-#toaststack{position:fixed;right:20px;bottom:122px;left:auto;z-index:84;display:flex;flex-direction:column;align-items:flex-end;gap:10px;}
+/* write toasts: top-center, clear of the companion orb (bottom-right) and the
+   content/calendar they used to overlap; they rise in from just below as they
+   appear (the .toast children animate translateY; the stack itself is centred) */
+#toaststack{position:fixed;top:20px;left:50%;right:auto;bottom:auto;transform:translateX(-50%);z-index:84;display:flex;flex-direction:column;align-items:center;gap:10px;}
 
 /* mock wallet dialog. Lift the shared overlay above the organize modal (97) so
    the forget confirmation it triggers lands on top, not behind. The overlay is

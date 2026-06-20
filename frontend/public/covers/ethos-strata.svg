@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#000"/>
+      <stop offset="0.7" stop-color="#111"/>
+      <stop offset="1" stop-color="#191919"/>
+    </linearGradient>
+    <pattern id="words" width="370" height="86" patternUnits="userSpaceOnUse">
+      <text x="-8" y="60" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="46" font-weight="900" letter-spacing="2" fill="#fff" opacity="0.12">WALRUS SUI</text>
+      <text x="184" y="28" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="21" font-weight="900" letter-spacing="5" fill="#777" opacity="0.28">SEALED MEMORY</text>
+    </pattern>
+    <clipPath id="topfade">
+      <rect x="0" y="0" width="1200" height="274"/>
+    </clipPath>
+  </defs>
+  <rect width="1200" height="360" fill="url(#bg)"/>
+  <g clip-path="url(#topfade)">
+    <rect x="-60" y="-20" width="1320" height="282" fill="url(#words)" transform="rotate(-3 600 140)"/>
+  </g>
+  <g opacity="0.26">
+    <path d="M0 62 C148 30 254 98 414 58 C590 14 690 54 830 42 C986 28 1080 0 1200 28 L1200 93 C1072 68 958 100 802 103 C650 107 526 70 382 110 C244 149 132 80 0 112 Z" fill="#fff"/>
+    <path d="M0 98 C165 138 300 78 452 114 C604 150 724 90 862 120 C1012 152 1096 114 1200 136 L1200 178 C1042 158 946 190 786 157 C640 128 536 188 380 148 C236 112 126 166 0 138 Z" fill="#8d8d8d"/>
+    <path d="M0 144 C138 122 250 174 398 163 C570 150 688 184 844 154 C986 128 1102 160 1200 148 L1200 212 C1058 230 942 178 792 208 C644 238 532 202 374 211 C218 220 112 172 0 196 Z" fill="#fff"/>
+  </g>
+  <g transform="translate(58 50)">
+    <text x="0" y="88" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="82" font-weight="900" letter-spacing="0" fill="#fff">ANIMA</text>
+    <text x="4" y="128" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="22" font-weight="900" letter-spacing="7" fill="#bdbdbd">SEALED MEMORY</text>
+  </g>
+  <g transform="translate(420 85)">
+    <path d="M-45 122 C72 86 166 154 286 110 C430 58 530 104 672 68 C760 46 838 44 912 62 L912 104 C798 82 716 112 604 132 C484 154 396 104 274 148 C148 194 58 132 -45 164 Z" fill="#000"/>
+    <path d="M-24 113 C88 87 174 139 286 102 C420 58 530 94 654 66 C750 44 834 48 896 64" fill="none" stroke="#fff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M-8 149 C106 116 210 176 342 137 C466 100 572 142 700 110 C790 88 852 94 912 112" fill="none" stroke="#b7b7b7" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M16 190 C134 162 240 211 370 184 C492 158 604 184 724 154 C810 133 866 146 926 166" fill="none" stroke="#fff" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M62 228 C186 208 292 238 414 220 C540 202 646 228 770 206 C842 193 900 204 958 220" fill="none" stroke="#6a6a6a" stroke-width="31" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <rect x="0" y="270" width="1200" height="90" fill="#0f0f0f" opacity="0.88"/>
+  <path d="M0 270 C172 260 316 282 476 274 C658 264 808 260 962 273 C1058 281 1134 278 1200 270 L1200 360 L0 360 Z" fill="#181818"/>
+</svg>

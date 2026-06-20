@@ -7,7 +7,7 @@ import type { ToastItem } from '@/components/ToastStack';
 import { createNote, saveNote, useVault } from '@/hooks/useVault';
 import type { Note } from '@/hooks/useVault';
 import { clearSuggestion, useAgentTimeline } from '@/hooks/useAgentTimeline';
-import { COVERS } from '@/mocks/covers';
+import { CoverPicker } from '@/components/CoverPicker';
 import { ShareDialog } from './ShareDialog';
 
 /* ---------- markdown-lite: fixture bodies -> kit-classed blocks ---------- */
@@ -274,20 +274,10 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
   const [sharing, setSharing] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [coverOpen, setCoverOpen] = useState(false);
-  const coverFileRef = useRef<HTMLInputElement>(null);
 
   const setCover = (src: string) => {
     saveNote(note.noteId, { image: src });
     setCoverOpen(false);
-  };
-  const onCoverUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => setCover(String(reader.result));
-      reader.readAsDataURL(file);
-    }
-    event.target.value = '';
   };
   const removeCover = () => {
     saveNote(note.noteId, { image: '' });
@@ -528,24 +518,10 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
   const folder = note.tags[0] ?? 'unsorted';
   const folderLabel = folder.charAt(0).toUpperCase() + folder.slice(1);
 
-  const coverMenu = (
-    <div className="pgcover-menu" role="menu">
-      <div className="pgcover-grid">
-        {COVERS.map((cover) => (
-          <button key={cover.id} type="button" className="pgcover-opt" title={cover.label} onClick={() => setCover(cover.src)}>
-            <img src={cover.src} alt={cover.label} />
-          </button>
-        ))}
-      </div>
-      <button type="button" className="pgcover-upload" onClick={() => coverFileRef.current?.click()}>
-        Upload an image…
-      </button>
-    </div>
-  );
+  const coverMenu = <CoverPicker onPick={setCover} />;
 
   return (
     <div className="pged" ref={frameRef}>
-      <input ref={coverFileRef} type="file" accept="image/*" hidden onChange={onCoverUpload} />
       <div className="pged-top">
         <span className="pgcrumb">
           {folderLabel} / <b>{note.title || 'Untitled note'}</b>
@@ -560,11 +536,13 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
       </div>
       <div className="pged-scroll">
         {note.image ? (
-          <div className="pgbanner">
-            <img src={note.image} alt="" />
-            <div className="pgbanner-acts">
-              <button type="button" className="pgbn-btn" onClick={() => setCoverOpen((o) => !o)}>Change cover</button>
-              <button type="button" className="pgbn-btn" onClick={removeCover}>Remove</button>
+          <div className="pgbanner-wrap">
+            <div className="pgbanner">
+              <img src={note.image} alt="" />
+              <div className="pgbanner-acts">
+                <button type="button" className="pgbn-btn" onClick={() => setCoverOpen((o) => !o)}>Change cover</button>
+                <button type="button" className="pgbn-btn" onClick={removeCover}>Remove</button>
+              </div>
             </div>
             {coverOpen ? coverMenu : null}
           </div>

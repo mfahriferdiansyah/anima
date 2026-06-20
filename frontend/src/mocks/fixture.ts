@@ -41,7 +41,7 @@ const demoNotes: Note[] = [
     author: OWNER_AUTHOR,
     tags: ['research', 'storage'],
     links: ['n-seal', 'n-quilts'],
-    image: '/covers/ink.svg',
+    image: '/covers/ethos-orbit.svg',
     title: 'Walrus storage notes',
     body: [
       'Walrus stores blobs erasure coded across nodes, and the blob object on Sui is what proves custody. The part that matters for us: the blob object can be owned by the user wallet, so storage is not an account with a provider, it is property.',
@@ -137,7 +137,7 @@ const demoNotes: Note[] = [
     author: OWNER_AUTHOR,
     tags: ['trips', 'lisbon'],
     links: ['n-packing', 'n-flights'],
-    image: '/covers/dusk.svg',
+    image: '/covers/ethos-strata.svg',
     title: 'Lisbon trip plan',
     body: [
       'Four days, late June. Alfama first, then a slow day in Belem.',

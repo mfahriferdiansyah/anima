@@ -5,6 +5,10 @@
    the board chrome (.pgcv, .pgcv-tools, cards); this file only adds drawings.
    ========================================================================== */
 
+/* cover picker on the board top bar; the chosen cover shows on the gallery card */
+.pgcv-cover-wrap { position: relative; }
+.pgcv-cover-wrap .pgcover-menu { right: 0; top: calc(100% + 6px); }
+
 /* the companion (agent) presence carries the brand's warm accent, not flat ink:
    its avatar and "is writing" cursor read as orange energy (matching the agent
    chips elsewhere) instead of dotting the light board with harsh black. */

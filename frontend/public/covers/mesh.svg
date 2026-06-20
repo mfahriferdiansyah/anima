@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="a" cx="0.18" cy="0.28" r="0.85">
+      <stop offset="0" stop-color="#2F6BFF"/>
+      <stop offset="1" stop-color="#2F6BFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="b" cx="0.82" cy="0.18" r="0.75">
+      <stop offset="0" stop-color="#00C48C"/>
+      <stop offset="1" stop-color="#00C48C" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="c" cx="0.66" cy="0.95" r="0.8">
+      <stop offset="0" stop-color="#FF5C1A"/>
+      <stop offset="1" stop-color="#FF5C1A" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" result="n"/>
+      <feColorMatrix in="n" type="saturate" values="0"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.08"/></feComponentTransfer>
+    </filter>
+  </defs>
+  <rect width="1200" height="360" fill="#1E50D6"/>
+  <rect width="1200" height="360" fill="url(#a)"/>
+  <rect width="1200" height="360" fill="url(#b)"/>
+  <rect width="1200" height="360" fill="url(#c)"/>
+  <rect width="1200" height="360" filter="url(#grain)"/>
+</svg>

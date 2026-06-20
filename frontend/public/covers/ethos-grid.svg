@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#050505"/>
+      <stop offset="0.55" stop-color="#111"/>
+      <stop offset="1" stop-color="#000"/>
+    </linearGradient>
+    <pattern id="typegrid" width="318" height="92" patternUnits="userSpaceOnUse">
+      <text x="-2" y="34" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="31" font-weight="900" letter-spacing="3" fill="#fff" opacity="0.28">SEALED</text>
+      <text x="118" y="72" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="31" font-weight="900" letter-spacing="3" fill="#8f8f8f" opacity="0.34">MEMORY</text>
+      <text x="246" y="34" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="18" font-weight="900" letter-spacing="5" fill="#fff" opacity="0.2">SUI</text>
+    </pattern>
+    <mask id="shardmask">
+      <rect width="1200" height="360" fill="#fff"/>
+      <path d="M650 -40 L1190 0 L735 368 L426 368 Z" fill="#000"/>
+    </mask>
+  </defs>
+  <rect width="1200" height="360" fill="url(#bg)"/>
+  <rect x="-80" y="-40" width="1360" height="330" fill="url(#typegrid)" transform="rotate(-8 600 150)" mask="url(#shardmask)"/>
+  <g opacity="0.68">
+    <path d="M670 -42 L1200 0 L748 360 L436 360 Z" fill="#f4f4f4"/>
+    <path d="M708 -22 L1200 18 L770 360 L604 360 Z" fill="#000"/>
+    <path d="M792 0 L1200 34 L882 292 L760 326 Z" fill="#bdbdbd"/>
+    <path d="M1018 18 L1200 34 L966 222 L882 292 Z" fill="#fff"/>
+  </g>
+  <g transform="translate(54 74)">
+    <text x="0" y="60" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="25" font-weight="900" letter-spacing="8" fill="#9b9b9b">ON-CHAIN</text>
+    <text x="0" y="142" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="74" font-weight="900" letter-spacing="0" fill="#fff">SEALED</text>
+    <text x="0" y="198" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="42" font-weight="900" letter-spacing="7" fill="#d1d1d1">BY DEFAULT</text>
+  </g>
+  <g transform="translate(894 85)" opacity="0.88">
+    <text x="0" y="0" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="18" font-weight="900" letter-spacing="5" fill="#000">MEMORY</text>
+    <text x="38" y="36" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="18" font-weight="900" letter-spacing="5" fill="#000">WALRUS</text>
+    <text x="-18" y="72" font-family="'Arial Black', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="18" font-weight="900" letter-spacing="5" fill="#000">OWNED</text>
+  </g>
+  <rect x="0" y="274" width="1200" height="86" fill="#101010" opacity="0.94"/>
+  <path d="M0 274 L1200 274 L1200 360 L0 360 Z" fill="#151515"/>
+  <path d="M0 274 L398 274 L368 360 L0 360 Z" fill="#0b0b0b"/>
+  <path d="M880 274 L1200 274 L1200 360 L742 360 Z" fill="#202020"/>
+</svg>
