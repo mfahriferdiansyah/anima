@@ -18,12 +18,11 @@ export default async function Page(props: {
   if (!page) notFound();
 
   const MDXContent = page.data.body;
-  // Raw markdown of this page, served by the per-page `.md` route under /md.
-  // The copy button fetches it; agents can also request it directly.
-  // page.url is `/docs/<slug>`, so `/md/<slug>.md`. The docs root (/docs) is a
-  // nav hub with no `.md` of its own, so the button only shows on real pages.
+  // Every real page is also raw markdown at `/md/<slug>.md`. page.url is now
+  // root-based (e.g. /build/quickstart -> /md/build/quickstart.md). The root
+  // index has no slug, so the copy button only shows on real content pages.
   const hasSlug = (params.slug?.length ?? 0) > 0;
-  const markdownUrl = `/md${page.url.slice('/docs'.length)}.md`;
+  const markdownUrl = `/md${page.url}.md`;
 
   return (
     <DocsPage toc={page.data.toc} full={page.data.full}>

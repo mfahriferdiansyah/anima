@@ -5,12 +5,39 @@ import type { Metadata } from 'next';
 import { inter, spaceGrotesk, jetbrainsMono } from '@/lib/fonts';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://docs.anima.app'),
   title: {
     template: '%s — Anima docs',
-    default: 'Anima',
+    default: 'Anima docs',
   },
   description:
-    'Notes on a shared canvas. Your own ai tools read and write them too.',
+    'Anima is an agentic workspace where your own ai tools and your team read and write the same notes and canvas, sealed to storage you own. Docs for using Anima and connecting your own agent over anima-mcp.',
+  keywords: [
+    'Anima',
+    'agentic workspace',
+    'notes',
+    'canvas',
+    'anima-mcp',
+    'MCP',
+    'AI agents',
+    'Sui',
+    'Walrus',
+    'Seal',
+  ],
+  openGraph: {
+    type: 'website',
+    siteName: 'Anima docs',
+    url: 'https://docs.anima.app',
+    title: 'Anima docs',
+    description:
+      'Notes on a shared canvas. Your own ai tools read and write them too.',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Anima docs',
+    description:
+      'Notes on a shared canvas. Your own ai tools read and write them too.',
+  },
 };
 
 export default function Layout({ children }: { children: ReactNode }) {

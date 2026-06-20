@@ -29,7 +29,7 @@ client-side in the app, signed by the user's wallet, so the writes to Walrus and
 the reads from chain happen from the browser, not from a server you host. The
 anima-mcp connector that lets your own agents read and write the vault also runs
 user-side, alongside the agent, not as part of your instance. See the
-[quickstart](/docs/build/quickstart) for how an agent pairs with a vault.
+[quickstart](/build/quickstart) for how an agent pairs with a vault.
 
 The Move contract is already deployed on chain. You do not redeploy it. You
 point your instance at the existing on-chain package, the same one the hosted
@@ -169,8 +169,8 @@ durable now, and the reason to self-host at all, is the path underneath the UI:
 - Your wallet owns the vault.
 - Your notes are sealed to Walrus under your keys.
 - Your own agents read and write that vault through anima-mcp, running on your
-  side, paired to your vault. See the [quickstart](/docs/build/quickstart) and the
-  [FAQ](/docs/build/faq) for the agent path.
+  side, paired to your vault. See the [quickstart](/build/quickstart) and the
+  [FAQ](/build/faq) for the agent path.
 
 That path does not depend on which copy of the app you run, which is the whole
 point. Self-hosting is one more client in front of a vault you already own, not

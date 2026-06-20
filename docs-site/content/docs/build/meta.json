@@ -1,4 +1,5 @@
 {
   "title": "Build with Anima",
+  "defaultOpen": true,
   "pages": ["quickstart", "mcp-reference", "faq", "self-hosting", "concepts"]
 }
