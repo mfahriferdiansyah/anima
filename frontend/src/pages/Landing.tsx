@@ -712,16 +712,30 @@ function StackSection({ staticMode }: { staticMode: boolean }) {
   );
 }
 
+/** Reactive media query — re-renders when the match state changes (e.g. the
+ *  viewport crosses a breakpoint), not only on mount, so the deck switches
+ *  between its pinned and static layouts live on resize, not just on reload. */
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(
+    () => typeof window !== 'undefined' && !!window.matchMedia?.(query).matches,
+  );
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatches(mql.matches);
+    onChange();
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, [query]);
+  return matches;
+}
+
 /* ---------------- page ---------------- */
 
 export function Landing() {
   const navigate = useNavigate();
-  const [small] = useState(
-    () => typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 860px)').matches,
-  );
-  const [reduced] = useState(
-    () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
-  );
+  const small = useMediaQuery('(max-width: 860px)');
+  const reduced = useMediaQuery('(prefers-reduced-motion: reduce)');
   const connect = () => navigate('/app');
 
   // Fade the hero's bottom marquee out as the hero scrolls away, so it never
