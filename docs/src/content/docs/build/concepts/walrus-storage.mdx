@@ -1,0 +1,24 @@
+---
+title: Walrus storage
+description: Notes are human-readable markdown stored on Walrus, batched into quilts, owned by your wallet, durable and deletable.
+---
+
+Anima's notes live on Walrus, Sui's decentralized blob storage. The shape of the data is deliberate: it is built to be read by a person, a different app, or a different agent, with Anima as just one reader among them.
+
+## Notes are markdown
+
+Every memory is a markdown file with a small frontmatter block (note id, version, author, tags, links) followed by a title and body. There is no proprietary format and no database row to decode. If you decrypt a note, you get a `.md` file you could open in any editor. That is the file-over-app receipt: the data is portable by construction, and exporting your whole vault is just zipping up those files.
+
+## Quilts
+
+Writing one tiny blob per note would be wasteful, so small notes are batched together. Anima writes one quilt per chat turn: a single Walrus blob holding the notes from that turn, each as its own encrypted patch inside it. Reading a quilt pulls every note back out and decrypts them.
+
+## Ownership and durability
+
+Each quilt's blob object is owned by your wallet on-chain. Storage on Walrus is paid ahead for a span of epochs and is renewable, so durability is real but not magic: it is storage you have paid for and can keep paying for, not an unconditional "forever."
+
+Because you own the blob, you also control its end. Walrus blobs here are deletable, and only your wallet can delete them. That single property powers two features at once: **forget** (delete note blobs you own) and **unpublish** (delete a published copy).
+
+## Why this enables resurrection
+
+Since the notes and the canvas layout all sit on Walrus as wallet-owned blobs, your full state is reconstructable from the chain alone. Open a fresh client, connect your wallet, and it can find your vault, pull the quilts, and rebuild. The app's local index is just a cache. The source of truth is on Walrus.

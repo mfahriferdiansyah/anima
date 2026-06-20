@@ -1,0 +1,30 @@
+---
+title: The two-key model
+description: One wallet that owns everything and signs only the consequential moves, plus per-device and per-agent keys that write silently.
+---
+
+Anima splits authority across two kinds of keys. The split is what lets agents work continuously without nagging you for a signature, while still keeping every consequential action under your control.
+
+## The wallet key
+
+Your Sui wallet owns everything: the vault and the note blobs. It signs only a short list of moves, all of them things you should consciously approve:
+
+- **onboarding**: creating your vault and funding its first agent (one transaction).
+- **pairing**: registering a new device or external agent into the vault, and funding it.
+- **forget**: deleting note blobs you own.
+- **revoke**: removing an agent's access.
+- **unpublish**: deleting a published copy of a note.
+
+These are the moments where you, the owner, decide. They are deliberately the only times Anima asks your wallet to sign.
+
+## The per-device and per-agent keys
+
+Every paired device and every external agent (Claude Code, Cursor, the built-in companion, or any agent you bring) gets its own keypair. An agent's key is generated and shown once when you pair it, then it lives in that agent's environment or your browser storage.
+
+These keys do the ordinary work: they write notes, transfer the resulting blob to your wallet, and decrypt notes they are allowlisted for. All of that happens silently, without a wallet prompt, so an agent can read and write your notes in a loop the way it needs to.
+
+## The custody asymmetry
+
+This is the rule to remember: **writes are silent, destruction is signed.**
+
+An allowlisted key can add to your vault all day without bothering you. But forgetting a note, revoking an agent, or unpublishing a share moves a wallet-owned blob or changes who can decrypt, so each of those requires your wallet signature. Convenience for the routine, a deliberate gate for the irreversible.

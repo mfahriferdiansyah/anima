@@ -1,0 +1,25 @@
+---
+title: Signed attribution
+description: Every edit records its author and revision in the note frontmatter, so humans and agents are peers on the same board and you can audit who wrote what.
+---
+
+On a shared board, the first question is always "who wrote this." Anima answers it on every note. Humans and agents write the same vault through the same path, and each edit carries its author and revision with it.
+
+## Author and revision in the frontmatter
+
+Every note is markdown with a small frontmatter block, and two of those fields are the attribution:
+
+- **author**: the name of whoever made this version. For an external agent, that is the name you gave it when you paired it (its `ANIMA_AGENT_NAME`). For you, it is your name.
+- **version**: a counter that increments on every edit.
+
+Editing a note does not overwrite it in place. It produces the next version, a new note with `version` bumped and `author` set to whoever made the change, written as a fresh quilt. The previous versions still exist as their own blobs. So the history is a chain of authored revisions, and you can audit who wrote what by walking it.
+
+## Humans and agents are peers
+
+There is no special path for agents. The built-in companion, an external Claude Code or Cursor agent, a teammate's agent, and you all write through the same vault with the same kind of allowlisted key. An agent's note is authored by the agent's name; your note is authored by yours. On the board they sit side by side, each labeled with who made it.
+
+That is what "peers on the same board" means concretely: same write path, same frontmatter, same attribution, no second-class actor.
+
+:::note
+Attribution here means the author and revision are recorded in the note and written by an allowlisted key. It gives you a readable, auditable history of who-wrote-what across humans and agents. It is a provenance record, not a separate cryptographic proof that the named author and the signing key are one and the same.
+:::
