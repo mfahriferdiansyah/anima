@@ -1,0 +1,29 @@
+---
+title: Resurrection
+description: Kill the app, open a different client with a different model, connect your wallet, and your full notes and canvas layout come back.
+---
+
+Resurrection is the test that proves the custody story is real. If the data truly outlives the app, then a brand-new client should be able to wake your full memory with nothing but your wallet. It can.
+
+## What comes back
+
+Open a different client, with a different model behind it, and connect the same wallet. From there:
+
+1. The client discovers your vault from the chain (it scans for the vault your wallet created).
+2. You approve one pairing transaction so this new client is an allowlisted agent that can decrypt.
+3. It pulls your quilts from Walrus and rebuilds, decrypting as it goes. You see it work through them, quilt by quilt.
+
+When it finishes, your notes are all there. So is your canvas layout: the arrangement of note cards on the board is itself stored as a durable note, so the constellation comes back intact too. Nothing about this depends on Anima being alive. It depends only on the chain and your wallet.
+
+<Callout type="info">
+"Connect your wallet" is not zero-signature. A fresh client has to register itself as an agent before it can decrypt, which is one wallet pairing transaction. After that one approval, the rebuild runs on its own.
+</Callout>
+
+## What does not come back
+
+Resurrection restores what was meant to persist, and only that. Two things are ephemeral by design:
+
+- **Live presence** (cursors, who is on the board, "X is writing") is never stored. It is relayed and forgotten, so there is nothing to resurrect.
+- **Chat transcripts** do not persist. Only the notes distilled from a conversation are written to your vault. The raw back-and-forth is gone; the distilled memory is what survives.
+
+This is not a limitation so much as the point. The durable layer (your notes and your layout) is wallet-owned and resurrectable. The transient layer (presence and chat) is deliberately left to evaporate.

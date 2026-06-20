@@ -1,0 +1,123 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+@source '../node_modules/fumadocs-ui/dist/**/*.js';
+
+/* =====================================================
+   ANIMA BRAND — Fumadocs theme override
+   Tokens mirror anima/frontend/src/theme/kit.css.
+   Fumadocs is Tailwind v4: theme is driven by --color-fd-*
+   CSS variables, declared as hsl() color functions.
+   ===================================================== */
+
+/* Anima brand colors as named tokens, reused below + in components. */
+@theme {
+  --color-anima-blue: hsl(223, 100%, 59.2%); /* #2F6BFF */
+  --color-anima-blue-deep: hsl(224, 75.4%, 47.8%); /* #1E50D6 */
+  --color-anima-blue-tint: hsl(220, 100%, 95.9%); /* #EAF1FF */
+  --color-anima-orange: hsl(17, 100%, 55.1%); /* #FF5C1A */
+  --color-anima-orange-tint: hsl(21, 100%, 95.5%); /* #FFF0E8 */
+  --color-anima-ink: hsl(223, 13.7%, 10%); /* #16181D */
+  --color-anima-text-2: hsl(221, 10.9%, 39.6%); /* #5A6170 */
+  --color-anima-hairline: hsl(220, 31.6%, 92.5%); /* #E6EAF2 */
+  --color-anima-surface-raised: hsl(220, 47.4%, 96.3%); /* #F1F4FA */
+  --color-anima-teal: hsl(163, 100%, 38.4%); /* #00C48C */
+
+  /* next/font exposes hashed family names via these CSS variables (set in lib/fonts.ts). */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --font-heading: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+
+  /* Soft card radius (~14px). */
+  --radius-lg: 0.875rem;
+  --radius-xl: 1rem;
+}
+
+/* Light theme: primary = Anima blue, surfaces warmed to the kit. */
+:root {
+  --color-fd-primary: hsl(223, 100%, 59.2%);
+  --color-fd-primary-foreground: hsl(0, 0%, 100%);
+  --color-fd-ring: hsl(223, 100%, 59.2%);
+  --color-fd-background: hsl(0, 0%, 100%);
+  --color-fd-foreground: hsl(223, 13.7%, 10%);
+  --color-fd-muted: hsl(220, 47.4%, 96.3%);
+  --color-fd-muted-foreground: hsl(221, 10.9%, 39.6%);
+  --color-fd-border: hsl(220, 31.6%, 92.5%);
+  --color-fd-card: hsl(0, 0%, 100%);
+  --color-fd-card-foreground: hsl(223, 13.7%, 10%);
+  --color-fd-popover: hsl(0, 0%, 100%);
+  --color-fd-popover-foreground: hsl(223, 13.7%, 10%);
+  --color-fd-secondary: hsl(220, 47.4%, 96.3%);
+  --color-fd-secondary-foreground: hsl(223, 13.7%, 10%);
+  --color-fd-accent: hsl(220, 100%, 95.9%);
+  --color-fd-accent-foreground: hsl(224, 75.4%, 47.8%);
+}
+
+/* Dark theme: lift blue so it stays legible on near-black ink. */
+.dark {
+  --color-fd-primary: hsl(223, 100%, 72%);
+  --color-fd-primary-foreground: hsl(223, 13.7%, 10%);
+  --color-fd-ring: hsl(223, 100%, 72%);
+  --color-fd-background: hsl(223, 14%, 7%);
+  --color-fd-foreground: hsl(220, 16%, 92%);
+  --color-fd-muted: hsl(223, 13%, 13%);
+  --color-fd-muted-foreground: hsl(220, 12%, 65%);
+  --color-fd-border: hsla(220, 20%, 60%, 0.16);
+  --color-fd-card: hsl(223, 13%, 11%);
+  --color-fd-card-foreground: hsl(220, 16%, 92%);
+  --color-fd-popover: hsl(223, 13%, 11%);
+  --color-fd-popover-foreground: hsl(220, 16%, 92%);
+  --color-fd-secondary: hsl(223, 13%, 13%);
+  --color-fd-secondary-foreground: hsl(220, 16%, 92%);
+  --color-fd-accent: hsla(223, 60%, 50%, 0.18);
+  --color-fd-accent-foreground: hsl(220, 16%, 92%);
+}
+
+/* Font split: Space Grotesk for headings + the logo, Inter for body. */
+body {
+  font-family: var(--font-sans);
+}
+
+h1, h2, h3, h4, h5, h6,
+#nd-page article h1,
+#nd-page article h2,
+#nd-page article h3 {
+  font-family: var(--font-heading);
+  letter-spacing: -0.02em;
+}
+
+code, kbd, pre, .font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Inline prose links read as Anima blue, not underlined body text. */
+#nd-page article a:not(.not-prose):not([data-card]) {
+  color: var(--color-fd-primary);
+  text-decoration-color: color-mix(in srgb, var(--color-fd-primary) 35%, transparent);
+  text-underline-offset: 3px;
+}
+#nd-page article a:not(.not-prose):not([data-card]):hover {
+  text-decoration-color: var(--color-fd-primary);
+}
+
+/* Brand-blue focus ring instead of the browser default. */
+a:focus-visible,
+button:focus-visible {
+  outline: 2.5px solid var(--color-fd-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* The brand mark: a small orange star, used sparingly. */
+.anima-star {
+  color: var(--color-anima-orange);
+}
+
+/* Brand title in the nav uses Space Grotesk. */
+.anima-logo {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-size: 1.0625rem;
+}

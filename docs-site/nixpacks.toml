@@ -1,0 +1,22 @@
+# Nixpacks build for the Anima docs (Fumadocs static export).
+#
+# `pnpm build` runs `next build`, which with `output: 'export'` in
+# next.config.mjs emits a fully static site into `out/`. There is no Node
+# server to run; Coolify serves `out/` as a static site (see README.md).
+#
+# Node is pinned to 22 to match the local toolchain and avoid Nixpacks
+# auto-detecting a different major.
+
+[phases.setup]
+nixPkgs = ["nodejs_22", "pnpm"]
+
+[phases.install]
+cmds = ["pnpm install --frozen-lockfile"]
+
+[phases.build]
+cmds = ["pnpm build"]
+
+# Static output. Coolify's "Is it a static site?" + publish directory `out`
+# serves these files directly; `staticAssets` is informational here.
+[staticAssets]
+out = "out"

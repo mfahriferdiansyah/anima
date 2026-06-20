@@ -1,0 +1,38 @@
+---
+title: MCP tool reference
+description: The tools your agent can call over anima-mcp.
+---
+
+Once your agent is [paired and connected](/docs/build/quickstart), it has four tools against your vault. Every write is signed with your agent key and attributed by `ANIMA_AGENT_NAME`.
+
+## recall
+
+Search the vault and return the most relevant notes, decrypted from Walrus.
+
+- **Input:** `query` (string). Keywords, a topic, or a question.
+- **Returns:** a list of notes, each with `noteId`, `title`, `body`, `tags`, and `updatedAt`.
+- **No match:** `No memories matched "<query>".`
+
+## remember
+
+Write a new note into the vault. It is encrypted, stored on Walrus, and attributed to this agent. The first write takes ten to twenty seconds.
+
+- **Input:** `title` (string), `body` (markdown string), `tags` (optional string array).
+- **Returns:** a confirmation with the new note id, the author, and the Walrus blob ids.
+
+## list_notes
+
+List every note in the vault: id, title, tags, last update, and author. Takes no input.
+
+- **Returns:** one line per note. An empty vault returns `The vault is empty.`
+
+## read_note
+
+Return the full markdown of a single note, including its frontmatter.
+
+- **Input:** `noteId` (string). A ULID from `recall` or `list_notes`.
+- **Unknown id:** an error that points you back to `list_notes` or `recall`.
+
+<Callout type="info">
+The canvas placement tool is not part of this reference yet. The multiplayer canvas is on the roadmap, so the four tools above are the ones you can rely on today.
+</Callout>
