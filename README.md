@@ -4,7 +4,7 @@
 
 Your notes and canvas live on one shared board where you, your team, and your own AI tools all work. Claude Code, Codex, or any agent you already use can connect and read and write the same notes, each edit signed (name + rev). Every note is human-readable markdown stored on [Walrus](https://walrus.xyz), sealed with [Seal](https://seal-docs.wal.app) under your [Sui](https://sui.io) wallet, so it outlives any app, including ours.
 
-Built for [Sui Overflow 2026](https://overflow.sui.io), Walrus track. Brand and narrative are canonical in [`docs/positioning.md`](docs/positioning.md).
+Built for [Sui Overflow 2026](https://overflow.sui.io), Walrus track.
 
 ## Why
 

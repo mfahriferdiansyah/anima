@@ -4,7 +4,7 @@ A Go chi server that proxies chat to OpenRouter. **Stateless by design**: no
 database, no session store, no logged content. Statelessness is the product's
 custody claim — kill this server and the vault survives.
 
-> Build facts only. Brand and positioning are canonical in `../docs/positioning.md`.
+> Build facts only.
 
 ## Endpoints
 
