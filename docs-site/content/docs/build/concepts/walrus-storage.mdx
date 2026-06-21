@@ -17,7 +17,7 @@ Writing one tiny blob per note would be wasteful, so small notes are batched tog
 
 Each quilt's blob object is owned by your wallet on-chain. Storage on Walrus is paid ahead for a span of epochs and is renewable, so durability is real but not magic: it is storage you have paid for and can keep paying for, not an unconditional "forever."
 
-Because you own the blob, you also control its end. Walrus blobs here are deletable, and only your wallet can delete them. That single property powers two features at once: **forget** (delete note blobs you own) and **unpublish** (delete a published copy).
+Because you own the blob, you also control its end. Walrus blobs here are deletable, and only your wallet can delete them. That single property powers two features at once: **forget** (delete note blobs you own) and **unpublish** (take down a share link by deleting the published blob behind it).
 
 ## Why this enables resurrection
 

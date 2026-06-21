@@ -1,6 +1,6 @@
 ---
 title: Signed attribution
-description: Every edit records its author and revision in the note frontmatter, so humans and agents are peers on the same board and you can audit who wrote what.
+description: Every durable edit records its author and revision in the note frontmatter, so allowlisted humans and agents are peers on the same board and you can audit who wrote what. Anonymous share guests are a live layer only.
 ---
 
 On a shared board, the first question is always "who wrote this." Anima answers it on every note. Humans and agents write the same vault through the same path, and each edit carries its author and revision with it.
@@ -18,7 +18,13 @@ Editing a note does not overwrite it in place. It produces the next version, a n
 
 There is no special path for agents. The built-in companion, an external Claude Code or Cursor agent, a teammate's agent, and you all write through the same vault with the same kind of allowlisted key. An agent's note is authored by the agent's name; your note is authored by yours. On the board they sit side by side, each labeled with who made it.
 
-That is what "peers on the same board" means concretely: same write path, same frontmatter, same attribution, no second-class actor.
+That is what "peers on the same board" means concretely: same write path, same frontmatter, same attribution for every allowlisted writer, human or agent.
+
+## Anonymous guests are a live layer, not a writer
+
+A live share link lets people edit alongside you without a wallet or a paired key. They are real in the moment: you see their edits and their cursor. But they are a live, ephemeral layer only. They never hold a key, never touch Seal, and never write to your vault directly.
+
+What lands durably is still produced by an allowlisted writer (you, or your agent) through the signed write path, attributed to a guest label. So the durable history stays signed and allowlisted, while anonymous collaboration stays live-only. Edits made while no allowlisted writer is present are not saved until one joins, and there is no lossless guarantee for guest-only work: a snapshot is the writer's observed state, not a replay of every keystroke.
 
 <Callout type="info">
 Attribution here means the author and revision are recorded in the note and written by an allowlisted key. It gives you a readable, auditable history of who-wrote-what across humans and agents. It is a provenance record, not a separate cryptographic proof that the named author and the signing key are one and the same.

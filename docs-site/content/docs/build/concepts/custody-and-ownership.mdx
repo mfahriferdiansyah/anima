@@ -15,7 +15,17 @@ The vault itself is a shared on-chain object that tracks its name, owner, and th
 
 ## What the backend holds
 
-Nothing durable. The Anima backend is stateless. It holds no keys and stores no notes. It transiently sees decrypted note context during inference — for a chat reply, a distilled note, or a Nova suggestion, your client sends the relevant notes (and, if you connect it, calendar events) so the model can answer — and keeps none of it. Your keys live only on your devices, in browser storage or in an agent's environment.
+Nothing durable. The Anima backend holds no keys and stores no notes: there is no database, no note ever lands on disk. It is keyless and holds nothing load-bearing. Your note keys live only on your devices, in browser storage or in an agent's environment.
+
+There are two places where note content leaves your device, and both are honest trust boundaries worth naming.
+
+### The model sees decrypted notes during inference
+
+When you ask Nova (or an agent) something, your client decrypts the relevant notes and sends them to the language model so it can answer. This happens for a chat reply (`/chat`), a distilled note (`/distill`), and a Nova suggestion (`/suggest`). The model runs at our provider (OpenRouter), so decrypted note bodies, and any connected calendar events, cross to that provider for that single inference. Nobody keeps them: they are not stored, logged, or trained on by us. But it is a real egress boundary, so we say it plainly. If a note is sensitive enough that you would not paste it into a chat box, do not ask the model about it.
+
+### The relay carries plaintext during a live share
+
+When you open a live share (a view or edit link), the presence relay also fans out plaintext note and canvas edits between the people in that session, so everyone sees the same document as it changes. This is authorized by the share you opened, and the relay never persists, logs, or parses any of it: rooms exist in memory only while people are connected. The durable copy of that session is still sealed and wallet-owned (only an allowlisted writer can produce it). But during the session the relay does see the content in the clear, so it is not a confidentiality boundary for shared content. Private, unshared editing sends no content through the relay at all.
 
 ## Why this beats "your data on our servers"
 

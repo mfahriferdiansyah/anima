@@ -1,35 +1,40 @@
 ---
-title: Publishing and export
-description: Publish one note as a link, or take your whole vault out as plain markdown.
+title: Sharing and export
+description: Share one note or canvas as a live link, view-only or editable, or take your whole vault out as plain markdown.
 ---
 
-Your notes are sealed to you by default. When you want something to leave the app, Anima gives you two ways out that keep you in control: publish a single note as a link, or export the whole vault as plain markdown.
+Your notes are sealed to you by default. When you want something to leave the app, Anima gives you two ways out that keep you in control: share a single note or canvas as a live link, or export the whole vault as plain markdown.
 
-## Publish a single note
+## Share a live link
 
-Publishing makes a separate, public copy of one note that anyone with the link can read. Your original note in the vault stays sealed and untouched; publishing copies, it does not expose your vault. The published copy is a blob your wallet owns, just like the rest of your work.
+Sharing gives you one live link per note or canvas. It is not a frozen, static copy: the link points at a live surface that opens in a chromeless reader, a clean page with no app sidebar and no login. You choose what the link lets people do, and there is exactly one active link at a time.
 
-You choose how open it is.
+### View link
 
-### Public link
+A view link is read-only. It publishes a readable copy of the note as a blob your wallet owns, and the reader page fetches it straight from public storage, no wallet and no app account needed. Use it when you want people to read, not edit.
 
-A public link is plain readable text. Anyone who has the link can open the note. Use it for things you genuinely want anyone to see.
+A view link can be plain or password-protected:
 
-### Password-protected link
-
-A password-protected link keeps the note readable only to people who have both the link and the password.
-
-When you publish with a password, the note is encrypted in your own browser using a key derived from that password. The password itself is never uploaded; only the encrypted copy is published. To read it, someone needs the link and the password, and the decryption happens in their browser the same way. Anima never sees the password, and it never holds a plaintext copy of a protected note.
+- **Plain.** Anyone who has the link can read it. Use it for things you genuinely want anyone to see.
+- **Password-protected.** The note is encrypted in your own browser using a key derived from the password, and only the encrypted copy is published. The password itself is never uploaded. To read it, someone needs the link and the password, and the decryption happens in their browser the same way. Anima never sees the password, and it never holds a plaintext copy of a protected note.
 
 <Callout type="success">
 Send the link and the password through different channels (for example, the link by email and the password in a message). Anyone who has both can read the note, so treat the pair like a key.
 </Callout>
 
+### Edit link
+
+An edit link lets people edit alongside you, live, without a wallet or an account. It is not a published blob: it opens a live collaboration room, and edits flow between everyone in the room as they happen. Guests are anonymous and ephemeral. They never hold a key and never touch your vault directly.
+
+What survives is still sealed and wallet-owned. While you (or your agent) are present, your client saves a sealed snapshot of the session attributed to a guest label. When no one with write access is present, edits stay live but unsaved, and the reader shows a "not saved yet" banner so no one is misled. There is no lossless guarantee for guest-only work: a saved snapshot is the observed state, not a replay of every keystroke. Concurrency is last-write-wins with a soft lock on the note someone is actively editing, not conflict-free merging.
+
+An edit link can also be password-gated. The password decides which live room you land in, computed in your browser, so only people with the password meet in the same room. A wrong password lands you in an empty room rather than revealing anything.
+
 ## Unpublish
 
-Taking a published note down is a real removal, signed by you. Because the published copy is owned by your wallet, unpublishing is an action your wallet signs, and it deletes that public copy. This is the same custody rule as everywhere else in Anima: writing can be delegated, but removing something is yours to sign.
+Taking a share link down is a real removal, signed by you. Because the published blob behind a view link is owned by your wallet, unpublishing is an action your wallet signs, and it deletes that blob. Taking down an edit link disconnects the people in the room. This is the same custody rule as everywhere else in Anima: writing can be delegated, but removing something is yours to sign.
 
-Unpublishing removes the copy you published. It does not touch the original note in your vault.
+Unpublishing takes down the link you shared. It does not touch the original note in your vault.
 
 ## Export your whole vault
 

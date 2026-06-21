@@ -23,7 +23,7 @@ When it finishes, your notes are all there. So is your canvas layout: the arrang
 
 Resurrection restores what was meant to persist, and only that. Two things are ephemeral by design:
 
-- **Live presence** (cursors, who is on the board, "X is writing") is never stored. It is relayed and forgotten, so there is nothing to resurrect.
+- **Live presence** (cursors, who is on the board, "X is writing") is never durable. It transits the relay and is forgotten, so there is nothing to resurrect. The same is true of the live edits in a shared session: they pass through the relay live, and only the sealed snapshot an allowlisted writer persists comes back.
 - **Chat transcripts** do not persist. Only the notes distilled from a conversation are written to your vault. The raw back-and-forth is gone; the distilled memory is what survives.
 
 This is not a limitation so much as the point. The durable layer (your notes and your layout) is wallet-owned and resurrectable. The transient layer (presence and chat) is deliberately left to evaporate.
