@@ -1,13 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/Button';
 import { Modal } from '@/components/Modal';
-import { createShareLink, newSharePassword, setLinkAccess, setLinkPassword, useShare } from '@/hooks/useShare';
+import { createShareLink, newSharePassword, setLinkAccess, setLinkPassword, unpublish, useShare } from '@/hooks/useShare';
 import type { LinkAccess } from '@/hooks/useShare';
 import './share.css';
-
-function slugOf(url: string): string {
-  return url.split('/s/')[1] ?? url;
-}
 
 /** Kit .copybtn: the ✦ bursts once on copy, then back to work. */
 function CopyButton({ copied, onCopy }: { copied: boolean; onCopy: () => void }) {
@@ -42,14 +38,17 @@ export interface ShareDialogProps {
   onClose: () => void;
   noteId: string;
   title: string;
-  /** 'note' shares a memory, 'canvas' shares a board — only the copy differs. */
+  /** 'note' shares a memory, 'canvas' shares a board; only the copy differs. */
   kind?: 'note' | 'canvas';
 }
 
 /**
  * Share = pick an access level (edit = multiplayer, view = read-only) from two
  * cards, then optionally protect the link with a password. One live link, no
- * separate publish flow. The link exists as soon as the dialog opens.
+ * separate publish flow for edit; a view link publishes a real read-only blob.
+ * The link exists as soon as the dialog opens (defaults to an EDIT link: an
+ * instant relay room, no chain write; switching to VIEW triggers a silent
+ * agent publish). Revoking a view link deletes its wallet-owned blob.
  */
 export function ShareDialog({ open, onClose, noteId, title, kind = 'note' }: ShareDialogProps) {
   const { links } = useShare();
@@ -58,13 +57,16 @@ export function ShareDialog({ open, onClose, noteId, title, kind = 'note' }: Sha
   const link = links.find((entry) => entry.noteId === noteId) ?? null;
   const access = link?.access ?? 'edit';
   const password = link?.password ?? null;
+  const publishing = link?.publishing ?? false;
+  const error = link?.error ?? null;
 
   const [copied, setCopied] = useState<'link' | 'password' | null>(null);
   const copyTimer = useRef<number | null>(null);
 
-  // the link is the share itself — ensure one exists while the dialog is open
+  // the link is the share itself; ensure one exists while the dialog is open
+  // (defaults to edit: an instant room id, no chain write on mere open)
   useEffect(() => {
-    if (open && !link) createShareLink(noteId, 'edit', title);
+    if (open && !link) void createShareLink(noteId, 'edit', title);
   }, [open, link, noteId, title]);
 
   useEffect(
@@ -80,12 +82,22 @@ export function ShareDialog({ open, onClose, noteId, title, kind = 'note' }: Sha
   };
 
   const choose = (next: LinkAccess) => {
-    if (link) setLinkAccess(noteId, next);
-    else createShareLink(noteId, next, title);
+    if (link) void setLinkAccess(noteId, next);
+    else void createShareLink(noteId, next, title);
   };
 
   const togglePassword = () => {
-    setLinkPassword(noteId, password ? null : newSharePassword());
+    void setLinkPassword(noteId, password ? null : newSharePassword());
+  };
+
+  const revoke = () => {
+    const ok = window.confirm(
+      `Revoke this link? Anyone currently reading this ${noun} will lose access, and the published copy is permanently deleted.`,
+    );
+    if (ok) {
+      void unpublish(noteId);
+      close();
+    }
   };
 
   const copyText = (key: 'link' | 'password', text: string) => {
@@ -95,9 +107,13 @@ export function ShareDialog({ open, onClose, noteId, title, kind = 'note' }: Sha
     copyTimer.current = window.setTimeout(() => setCopied(null), 1800);
   };
 
+  // A view link publishes a read-only snapshot of a note's body; a canvas's
+  // durable snapshot is 007 territory, so canvases share as live edit links only.
   const CARDS: { value: LinkAccess; label: string; desc: string }[] = [
     { value: 'edit', label: 'Can edit', desc: `Anyone with the link joins and edits this ${noun}, live.` },
-    { value: 'view', label: 'Can view', desc: `Anyone with the link can read this ${noun}. No changes.` },
+    ...(kind === 'canvas'
+      ? []
+      : [{ value: 'view' as LinkAccess, label: 'Can view', desc: `Anyone with the link can read this ${noun}. No changes.` }]),
   ];
 
   return (
@@ -123,14 +139,24 @@ export function ShareDialog({ open, onClose, noteId, title, kind = 'note' }: Sha
           ))}
         </div>
 
-        {link ? (
+        {access === 'edit' ? (
+          <div className="sharenote">
+            Edits are live but not saved. The owner must be present to persist them.
+          </div>
+        ) : null}
+
+        {link && publishing ? (
+          <div className="sharebar sharebar-busy">
+            <span className="url">Publishing this {noun}…</span>
+          </div>
+        ) : link && link.url ? (
           <div className="sharebar">
-            <span className="url">
-              <b>anima.app</b>/s/{slugOf(link.url)}
-            </span>
+            <span className="url">{link.url}</span>
             <CopyButton copied={copied === 'link'} onCopy={() => copyText('link', link.url)} />
           </div>
         ) : null}
+
+        {error ? <div className="shareerror" role="alert">{error}</div> : null}
 
         <div className="protect">
           <label className="protect-row">
@@ -142,7 +168,7 @@ export function ShareDialog({ open, onClose, noteId, title, kind = 'note' }: Sha
               Protect with a password
             </span>
             <span className="switch">
-              <input type="checkbox" checked={!!password} onChange={togglePassword} />
+              <input type="checkbox" checked={!!password} onChange={togglePassword} disabled={publishing} />
               <span className="track" />
             </span>
           </label>
@@ -159,6 +185,11 @@ export function ShareDialog({ open, onClose, noteId, title, kind = 'note' }: Sha
         </div>
 
         <div className="wallet-actions">
+          {access === 'view' && link?.blobObjectId ? (
+            <Button variant="danger" onClick={revoke}>
+              Revoke link
+            </Button>
+          ) : null}
           <Button variant="primary" onClick={close}>
             Done
           </Button>

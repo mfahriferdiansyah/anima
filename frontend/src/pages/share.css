@@ -33,3 +33,20 @@
 .protect-l svg { width: 16px; height: 16px; color: var(--gray-600); flex: none; }
 .protect-body { margin-top: 12px; }
 .sharecaption { font-size: 11.5px; color: var(--gray-600); margin-top: 6px; padding-left: 4px; }
+
+/* edit-link participant note: live but not persisted unless the owner is present */
+.sharenote {
+  margin-top: 12px; padding: 9px 11px; border-radius: 10px;
+  background: var(--gray-100); border: 1px solid var(--gray-200);
+  font-size: 11.5px; line-height: 1.4; color: var(--gray-600);
+}
+
+/* a view publish in flight (the ~10s silent agent write) */
+.sharebar-busy .url { color: var(--gray-600); }
+
+/* a publish/unpublish failure */
+.shareerror {
+  margin-top: 10px; padding: 9px 11px; border-radius: 10px;
+  background: var(--red-100, #fdecec); border: 1px solid var(--red-300, #f3b9b9);
+  font-size: 12px; line-height: 1.4; color: var(--red-700, #9b1c1c);
+}

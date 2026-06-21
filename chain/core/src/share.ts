@@ -11,7 +11,7 @@
 import { Transaction } from '@mysten/sui/transactions';
 import type { Note } from './types.js';
 import { serializeNote, parseNote } from './notes.js';
-import type { QuiltDeps } from './quilts.js';
+import { buildDeleteQuiltsTx, type QuiltDeps } from './quilts.js';
 import { chainConfig } from './config.js';
 
 const te = new TextEncoder();
@@ -115,6 +115,19 @@ export async function publishNote(
   await deps.suiClient.waitForTransaction({ digest: tRes.digest });
 
   return { blobId: result.blobId, blobObjectId, noteId: note.noteId, mode, url: shareUrl(result.blobId, mode) };
+}
+
+/**
+ * Unpublish a view link: build the wallet-signed delete of its `anima-pub` blob.
+ * Core builds, the caller signs (the wallet owns the published artifact, so the
+ * destructive op is wallet-gated (the custody asymmetry). Mirrors the forget /
+ * cover delete seam: returns the Transaction for the frontend's `runDestructiveTx`.
+ */
+export function unpublishNote(
+  deps: Pick<QuiltDeps, 'suiClient' | 'walletAddress'>,
+  blobObjectId: string,
+): Promise<Transaction> {
+  return buildDeleteQuiltsTx(deps, [blobObjectId]);
 }
 
 /** Chain-as-registry: list published copies (optionally for one note). */

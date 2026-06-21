@@ -1,10 +1,16 @@
-import { useSyncExternalStore } from 'react';
-import { shareStore, type ShareState } from '../mocks/shareStore';
+import type { ShareState } from '../web3/share';
+import { useShareState } from '../web3/share';
 
-/** Publishing progress + the published-copies list. */
+/** Publishing progress + the live share links (real layer, replaces the mock). */
 export function useShare(): ShareState {
-  return useSyncExternalStore(shareStore.subscribe, shareStore.getSnapshot);
+  return useShareState();
 }
 
-export { createShareLink, setLinkAccess, setLinkPassword, newSharePassword } from '../mocks/shareStore';
-export type { ShareState, ShareLink, LinkAccess } from '../mocks/shareStore';
+export {
+  createShareLink,
+  setLinkAccess,
+  setLinkPassword,
+  unpublish,
+  newSharePassword,
+} from '../web3/share';
+export type { ShareState, ShareLink, LinkAccess } from '../web3/share';
