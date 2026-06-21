@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createCanvas, useCanvases, useFolders } from '@/hooks/useCanvases';
+import { createCanvas, deleteCanvas, useCanvases, useFolders } from '@/hooks/useCanvases';
 import { buildLibrary } from '@/app/library';
 import { ManageLibrary } from '@/app/ManageLibrary';
 import './sectionhome.css';
@@ -27,12 +27,23 @@ export function CanvasHome() {
   const folderOrder = useFolders();
   const [query, setQuery] = useState('');
   const [manageOpen, setManageOpen] = useState(false);
+  // The canvas id awaiting delete confirmation (the seed board is never deletable).
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const q = query.trim().toLowerCase();
   const folders = buildLibrary([], canvases, folderOrder)
     .map((folder) => ({ ...folder, items: q ? folder.items.filter((it) => it.title.toLowerCase().includes(q)) : folder.items }))
     .filter((folder) => folder.items.length > 0);
 
+  // Only the seed (shared) board exists — nothing created yet. The board itself
+  // still renders below; this is the gentle nudge to make a first canvas.
+  const noCreatedCanvases = canvases.every((c) => c.seed);
+
   const newCanvas = () => navigate(`/app/canvas/${createCanvas()}`);
+
+  const removeCanvas = (canvasId: string) => {
+    deleteCanvas(canvasId);
+    setConfirmDelete(null);
+  };
 
   return (
     <div className="pged">
@@ -66,26 +77,55 @@ export function CanvasHome() {
               <div className="pglib-grid">
                 {folder.items.map((item) => {
                   const canvas = item.canvas!;
+                  const confirming = confirmDelete === canvas.canvasId;
                   return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className="pglib-card canvas"
-                      onClick={() => navigate(`/app/canvas/${canvas.canvasId}`)}
-                    >
-                      {canvas.image ? <span className="pglib-cover"><img src={canvas.image} alt="" /></span> : null}
-                      <span className="pglib-body">
-                        {!canvas.image ? <span className="pglib-ic">{GRID_GLYPH}</span> : null}
-                        <span className="pglib-t">{canvas.title || 'Untitled canvas'}</span>
-                        <span className="pglib-x">{canvas.desc || 'A blank canvas to draw on.'}</span>
-                      </span>
-                    </button>
+                    <div key={item.id} className="pglib-cardwrap">
+                      <button
+                        type="button"
+                        className="pglib-card canvas"
+                        onClick={() => navigate(`/app/canvas/${canvas.canvasId}`)}
+                      >
+                        {canvas.image ? <span className="pglib-cover"><img src={canvas.image} alt="" /></span> : null}
+                        <span className="pglib-body">
+                          {!canvas.image ? <span className="pglib-ic">{GRID_GLYPH}</span> : null}
+                          <span className="pglib-t">{canvas.title || 'Untitled canvas'}</span>
+                          <span className="pglib-x">{canvas.desc || 'A blank canvas to draw on.'}</span>
+                        </span>
+                      </button>
+                      {!canvas.seed ? (
+                        <button
+                          type="button"
+                          className="pglib-carddel"
+                          aria-label={`Delete ${canvas.title || 'canvas'}`}
+                          onClick={() => setConfirmDelete(canvas.canvasId)}
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                        </button>
+                      ) : null}
+                      {confirming ? (
+                        <div className="pglib-cardconfirm" role="dialog" aria-label="Confirm delete canvas">
+                          <span className="pglib-cardconfirm-t">Delete this board?</span>
+                          <span className="pglib-cardconfirm-x">This removes the board — your notes stay in your vault.</span>
+                          <div className="pglib-cardconfirm-row">
+                            <button type="button" className="pgbtn" onClick={() => setConfirmDelete(null)}>Cancel</button>
+                            <button type="button" className="pgbtn danger" onClick={() => removeCanvas(canvas.canvasId)}>Delete board</button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                   );
                 })}
               </div>
             </div>
           ))}
-          {folders.length === 0 ? <div className="pghome-empty">No canvases match “{query}”.</div> : null}
+          {folders.length === 0 && q ? <div className="pghome-empty">No canvases match “{query}”.</div> : null}
+          {noCreatedCanvases && !q ? (
+            <div className="pghome-empty">
+              No canvases yet — the shared board above holds your whole vault. Create one to lay out a focused board.
+            </div>
+          ) : null}
         </div>
       </div>
       <ManageLibrary open={manageOpen} onClose={() => setManageOpen(false)} />

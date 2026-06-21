@@ -35,3 +35,12 @@
   background: rgba(255, 255, 255, .82); padding: 1px 3px; margin: -1px -3px; resize: none; overflow: hidden;
   min-width: 60px; font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.4; color: var(--ink-900);
 }
+
+/* empty-board state: a non-shared canvas with no placed notes or drawings yet.
+   Centered, non-interactive (pointer-events off so drawing still starts here). */
+.pgcv-emptyboard {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; text-align: center; pointer-events: none; user-select: none;
+}
+.pgcv-emptyboard-t { font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600; color: rgba(22, 24, 29, .5); }
+.pgcv-emptyboard-x { font-family: 'Inter', sans-serif; font-size: 12.5px; color: rgba(22, 24, 29, .38); }

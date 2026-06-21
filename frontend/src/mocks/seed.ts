@@ -1,10 +1,10 @@
 /**
  * Dummy seed data (generated) so the sidebar + section homes scroll, and to
- * exercise note banners / canvas covers. Trivially removable before a real
- * demo: it appends to the demo vault and the canvas store.
+ * exercise note banners. Trivially removable before a real demo: it appends to
+ * the demo vault. (Canvas seeds were dropped with plan 007 U2 — canvases now
+ * persist for real, so a canvas exists only if it was created.)
  */
 import type { Note } from './fixture';
-import type { CanvasDoc } from './canvasStore';
 
 export const seedNotes: Note[] = [
   {
@@ -341,73 +341,5 @@ export const seedNotes: Note[] = [
     "links": [],
     "title": "Positioning lines, pulled from this week",
     "body": "Collected from how you keep describing it in chat, tightened into candidates.\n\n- Your companion remembers for you, and the memory is yours, not ours\n- Notes you own, on storage you can walk away with\n- Agent-native: your own agents can read and write the same vault\n\nThe non-custody line tests strongest against the comps. The agent-native one is the harder sell but the real differentiator."
-  }
-];
-
-export const seedCanvases: CanvasDoc[] = [
-  {
-    "canvasId": "cv-research-1",
-    "title": "Storage stack canvas",
-    "desc": "Walrus, Seal and Sui objects laid out as one save path.",
-    "folder": "research",
-    "image": "/covers/ethos-quilt.svg"
-  },
-  {
-    "canvasId": "cv-research-2",
-    "title": "Agent memory map",
-    "desc": "Transcript, distilled layer and retrieval routes sketched out.",
-    "folder": "research"
-  },
-  {
-    "canvasId": "cv-trips-1",
-    "folder": "trips",
-    "title": "Lisbon 5-day itinerary canvas",
-    "desc": "Day-by-day plan linking neighborhoods, meals, and transit into one board.",
-    "image": "/covers/ethos-field.svg"
-  },
-  {
-    "canvasId": "cv-trips-2",
-    "folder": "trips",
-    "title": "Neighborhoods + miradouros map",
-    "desc": "Spatial board pinning Alfama, Belem, and Graca against their best viewpoints."
-  },
-  {
-    "canvasId": "cv-work-1",
-    "title": "Pitch storyboard canvas",
-    "desc": "The narrative spine laid out beat by beat before the deck exists.",
-    "folder": "work",
-    "image": "/covers/ethos-orbit.svg"
-  },
-  {
-    "canvasId": "cv-work-2",
-    "title": "Roadmap board",
-    "desc": "Three tracks for the next quarter with the launch gate pinned on top.",
-    "folder": "work"
-  },
-  {
-    "canvasId": "cv-reading-1",
-    "title": "Reading map canvas",
-    "desc": "Essays and books grouped by theme, with the threads between them.",
-    "folder": "reading",
-    "image": "/covers/ethos-graph.svg"
-  },
-  {
-    "canvasId": "cv-reading-2",
-    "title": "2026 reading queue",
-    "desc": "What's next, sequenced by what the demo and trip need first.",
-    "folder": "reading"
-  },
-  {
-    "canvasId": "cv-product-1",
-    "title": "Product strategy canvas",
-    "desc": "Wedge, comps and positioning bets on one board.",
-    "folder": "product",
-    "image": "/covers/ethos-pulse.svg"
-  },
-  {
-    "canvasId": "cv-product-2",
-    "title": "Onboarding flow map",
-    "desc": "The first-run path from wallet connect to the first cite-back.",
-    "folder": "product"
   }
 ];

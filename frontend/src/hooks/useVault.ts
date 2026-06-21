@@ -76,6 +76,18 @@ export function configureForgetExec(execTx: ExecTx): void {
 }
 
 /**
+ * Run a best-effort destructive tx through the same wallet seam as forget — used
+ * for the U1 shared-board `migrationTx` (deleting the legacy `anima:canvas-layout`
+ * blob). Unlike forget, this NEVER throws when the seam is unwired: U1 already
+ * removed the legacy note from the in-memory index synchronously, so the session
+ * is consistent; the on-chain blob delete simply self-heals on a later write once
+ * the seam (ManageLibrary/Settings) is wired.
+ */
+export async function runDestructiveTx(tx: unknown): Promise<void> {
+  if (forgetExec) await forgetExec(tx);
+}
+
+/**
  * Block new note writes for the confirm→delete window of a bulk wipe, so a save
  * can't slip a fresh quilt onto Walrus between the point-in-time enumeration and
  * the delete. `persist()` early-returns while this is set.

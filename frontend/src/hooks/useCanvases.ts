@@ -1,15 +1,90 @@
 import { useSyncExternalStore } from 'react';
-import { canvasStore } from '../mocks/canvasStore';
-import type { CanvasDoc } from '../mocks/canvasStore';
 import { createStore } from '../mocks/store';
 import { loadAppState, saveAppState } from '../web3/appState';
+import {
+  loadCanvases,
+  saveCanvases,
+  newCanvasId,
+  addCanvas,
+  patchCanvas,
+  removeCanvas,
+  DEFAULT_REGISTRY,
+  SHARED_CANVAS_ID,
+  type CanvasDoc,
+} from '../web3/canvasRegistry';
 import { getQuiltDeps } from '../web3/session';
 import { vaultData } from '../web3/vaultData';
 import type { VaultIndex } from '../../../chain/core/src/index.js';
 
-/** The list of canvas documents. (Multi-canvas persistence is plan 007 — still mocked here.) */
+// ── Canvases (Tier-2 / plan 007 U2) ─────────────────────────────────────────
+// The durable canvas registry, persisted as the `anima:canvas-registry` reserved
+// note. MIRRORS the folders idiom below: an optimistic local store backs the UI
+// (instant create/rename/cover/delete) and reseeds from the durable note whenever
+// the session republishes the index (the rebuild). The shared/seed board always
+// exists (the live constellation); real canvases append via createCanvas.
+const canvasesLocal = createStore<CanvasDoc[]>(DEFAULT_REGISTRY);
+let lastCanvasIndexRef: VaultIndex | null = null;
+
+function reseedCanvases(): void {
+  const idx = vaultData.getSnapshot().index;
+  if (idx === lastCanvasIndexRef) return; // only the rebuild publish swaps the index ref
+  lastCanvasIndexRef = idx;
+  canvasesLocal.update(() => loadCanvases(idx));
+}
+vaultData.subscribe(reseedCanvases);
+reseedCanvases(); // seed if an index is already published (hot reload / tests)
+
+function persistCanvases(next: CanvasDoc[]): void {
+  canvasesLocal.update(() => next); // optimistic — the durable write lands ~one quilt later
+  const deps = getQuiltDeps();
+  const idx = vaultData.getSnapshot().index;
+  if (deps && idx) void saveCanvases(deps, idx, next).catch(() => {});
+}
+
+/** The list of canvas documents (the shared board plus any created canvases). */
 export function useCanvases(): CanvasDoc[] {
-  return useSyncExternalStore(canvasStore.subscribe, canvasStore.getSnapshot);
+  return useSyncExternalStore(canvasesLocal.subscribe, canvasesLocal.getSnapshot);
+}
+
+/** Create a canvas (optimistic local + durable registry write); returns its id. */
+export function createCanvas(folder = 'untitled', title = 'Untitled canvas'): string {
+  const canvasId = newCanvasId();
+  persistCanvases(addCanvas(canvasesLocal.getSnapshot(), { canvasId, title, desc: '', folder }));
+  return canvasId;
+}
+
+/** Edit a canvas title / description / cover (manage modal). */
+export function updateCanvas(
+  canvasId: string,
+  patch: { title?: string; desc?: string; image?: string; folder?: string },
+): void {
+  persistCanvases(patchCanvas(canvasesLocal.getSnapshot(), canvasId, patch));
+}
+
+/** Move a canvas into a folder (manage modal). */
+export function setCanvasFolder(canvasId: string, folder: string): void {
+  updateCanvas(canvasId, { folder });
+}
+
+/**
+ * Delete a canvas (manage modal). Removes the registry entry only — the shared/
+ * seed board is not removable. The per-canvas content note is left as an orphaned
+ * reserved blob (reserved, filtered, harmless); we do not force a wallet popup on
+ * delete, and the placed-note blobs stay in the library.
+ */
+export function deleteCanvas(canvasId: string): void {
+  persistCanvases(removeCanvas(canvasesLocal.getSnapshot(), canvasId));
+}
+
+/** Test-only reset of the local canvas store. */
+export function resetCanvasesForTest(): void {
+  lastCanvasIndexRef = null;
+  canvasesLocal.update(() => DEFAULT_REGISTRY);
+}
+
+/** Test-only read of the local canvas store (the hook wraps this via useSyncExternalStore). */
+export function getCanvasesForTest(): CanvasDoc[] {
+  return canvasesLocal.getSnapshot();
 }
 
 // ── Folders (Tier-2 U1) ────────────────────────────────────────────────────
@@ -82,5 +157,5 @@ export function getFoldersForTest(): string[] {
   return foldersLocal.getSnapshot();
 }
 
-export { createCanvas, setCanvasFolder, updateCanvas, deleteCanvas, SHARED_CANVAS_ID } from '../mocks/canvasStore';
-export type { CanvasDoc } from '../mocks/canvasStore';
+export { SHARED_CANVAS_ID };
+export type { CanvasDoc };

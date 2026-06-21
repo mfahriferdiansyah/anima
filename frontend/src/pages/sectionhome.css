@@ -39,3 +39,21 @@
 .pghome-search input:focus { outline: none; border-color: var(--blue-300); }
 .pghome-search svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; color: rgba(22, 24, 29, .4); pointer-events: none; }
 .pghome-empty { padding: 30px 4px; font-size: 13px; color: rgba(22, 24, 29, .45); }
+
+/* canvas card + its delete affordance (the seed board has none) + confirm popover */
+.pglib-cardwrap { position: relative; }
+.pglib-carddel {
+  position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+  border: none; border-radius: 7px; background: rgba(255, 255, 255, .86); color: rgba(22, 24, 29, .5); cursor: pointer;
+  opacity: 0; transition: opacity 130ms ease, background 130ms ease, color 130ms ease; box-shadow: inset 0 0 0 1px rgba(22, 24, 29, .10);
+}
+.pglib-carddel svg { width: 14px; height: 14px; }
+.pglib-cardwrap:hover .pglib-carddel { opacity: 1; }
+.pglib-carddel:hover { background: var(--red-100); color: var(--red-500); }
+.pglib-cardconfirm {
+  position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; gap: 6px; justify-content: center;
+  padding: 14px 15px; background: rgba(255, 255, 255, .97); border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(22, 24, 29, .16);
+}
+.pglib-cardconfirm-t { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13.5px; color: var(--ink-900); }
+.pglib-cardconfirm-x { font-size: 12px; line-height: 1.45; color: rgba(22, 24, 29, .6); }
+.pglib-cardconfirm-row { display: flex; gap: 8px; margin-top: 4px; }

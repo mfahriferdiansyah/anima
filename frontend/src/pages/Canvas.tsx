@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { createNote, useVault } from '@/hooks/useVault';
+import { createNote, runDestructiveTx, useVault } from '@/hooks/useVault';
 import type { Note } from '@/hooks/useVault';
 import { SHARED_CANVAS_ID, updateCanvas, useCanvases } from '@/hooks/useCanvases';
 import { CoverPicker } from '@/components/CoverPicker';
@@ -11,6 +11,14 @@ import { moveCursor, moveNote, startPresence, stopPresence, usePresence } from '
 import type { Peer } from '@/hooks/usePresence';
 import { scheduleAgentNote } from '@/hooks/useAgentTimeline';
 import { useVaultSession } from '@/hooks/useVaultSession';
+import {
+  loadCanvasContent,
+  saveCanvasContent,
+  canvasContentTag,
+  type Shape as DurableShape,
+} from '../../../chain/core/src/index.js';
+import { getQuiltDeps } from '@/web3/session';
+import { vaultData } from '@/web3/vaultData';
 import './canvas.css';
 
 const CARD_WIDTH = 190;
@@ -68,6 +76,38 @@ function translateShape(s: Shape, dx: number, dy: number): Shape {
     case 'image':
       return { ...s, x: s.x + dx, y: s.y + dy };
   }
+}
+
+/**
+ * Map the durable (serializable) drawings from the content note to the local
+ * working `Shape` union used for rendering. Image shapes are DROPPED for now:
+ * persisting their base64 `src` would blow the quilt-size bound, so a clean
+ * blob-ref round-trip (load = resolve `ref` → object URL) is deferred.
+ * TODO(007): persist image-shape blobs (upload src via uploadCover, resolve ref
+ * back to an object URL on load).
+ */
+function durableToLocal(drawings: DurableShape[]): Shape[] {
+  const out: Shape[] = [];
+  for (const d of drawings) {
+    if (d.kind === 'image') continue; // see TODO above
+    out.push(d);
+  }
+  return out;
+}
+
+/**
+ * Map the local working shapes to their durable (serializable) form for the
+ * content note. Image shapes are DROPPED (their base64 `src` is not persistable
+ * inline). Non-image drawings round-trip exactly. TODO(007): persist image-shape
+ * blobs (upload each image `src` via uploadCover, store the `blob:` ref).
+ */
+function localToDurable(shapes: Shape[]): DurableShape[] {
+  const out: DurableShape[] = [];
+  for (const s of shapes) {
+    if (s.kind === 'image') continue; // see TODO above
+    out.push(s);
+  }
+  return out;
 }
 
 const DRAW_TOOLS = new Set(['draw', 'arrow', 'shape', 'text']);
@@ -129,6 +169,47 @@ interface PanState {
   originY: number;
 }
 
+const DRAWINGS_SAVE_DEBOUNCE_MS = 800;
+
+/**
+ * Debounced, per-canvas durable save of the board's drawings (plan 007 U2).
+ * Mirrors the layout autosave in presenceStore: a SILENT write-event (no toast)
+ * keyed on the canvas's content tag, so the bulk-forget quiesce (U7) covers
+ * per-canvas drawings writes too. `saveCanvasContent` does a read-modify-write so
+ * a drawings-only save never clobbers a concurrent layout change (KTD2). On the
+ * first shared write it may return a `migrationTx` (deleting the legacy layout
+ * blob) — run best-effort through the destructive wallet seam (decision 5).
+ *
+ * Module-level + per-canvas debounce timer so switching boards cancels a stale
+ * pending save. Pure-ish (reads the singletons like the other web3 savers).
+ */
+let drawingsSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleDrawingsSave(canvasId: string, drawings: DurableShape[]): void {
+  if (drawingsSaveTimer) clearTimeout(drawingsSaveTimer);
+  drawingsSaveTimer = setTimeout(() => {
+    drawingsSaveTimer = null;
+    const deps = getQuiltDeps();
+    const index = vaultData.getSnapshot().index;
+    if (!deps || !index) return;
+    const eventId = vaultData.beginWriteEvent({
+      noteId: canvasContentTag(canvasId),
+      noteTitle: 'Canvas drawings',
+      state: { phase: 'certifying' },
+      silent: true,
+    });
+    void saveCanvasContent(deps, index, canvasId, { drawings })
+      .then((res) => {
+        vaultData.updateWriteEvent(eventId, { phase: 'certified', blobObjectId: '', provenanceUrl: '' });
+        // best-effort: delete the legacy shared layout blob if U1 handed one back
+        if (res.migrationTx) void runDestructiveTx(res.migrationTx).catch(() => {});
+      })
+      .catch(() => {
+        vaultData.updateWriteEvent(eventId, { phase: 'failed' });
+      });
+  }, DRAWINGS_SAVE_DEBOUNCE_MS);
+}
+
 /**
  * The shared sky (spec #page-canvas): memory cards on constellation paper,
  * faint link edges, live human + agent cursors, and a working Excalidraw-style
@@ -139,7 +220,8 @@ interface PanState {
  * The board is an infinite plane: the wheel/trackpad and empty-canvas drags pan
  * a translated world layer, and the dotted grid scrolls with it. Cards, edges,
  * drawings and cursors live in that layer; the avatars and toolbar stay pinned.
- * Drawings are session-local (mock) — the demo doesn't persist sketch strokes.
+ * Drawings are DURABLE (plan 007 U2): seeded per board from the content note and
+ * debounce-persisted as the user draws, so a board resurrects with its shapes.
  */
 export function Canvas() {
   const session = useVaultSession();
@@ -183,6 +265,17 @@ export function Canvas() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const idSeq = useRef(0);
   const nextId = () => `sh${++idSeq.current}`;
+  // The exact `shapes` array the current board was seeded with, plus an "armed"
+  // flag. Together they guard the autosave so the seed itself never fires a write:
+  // the seed disarms, the persist effect re-arms only once it sees the seed
+  // reflected in `shapes` (reference-equal), and any render BEFORE that (the stale
+  // pre-seed [] on mount, or a stale board's shapes mid-switch) is skipped without
+  // scheduling — and without clearing a sibling board's pending timer. Only a real
+  // user edit (a fresh array, post-arm) writes. Without this, opening a board would
+  // editedNote-bump its content note, and opening `shared` would trigger the
+  // destructive U1 migration before any user action.
+  const seededShapesRef = useRef<Shape[] | null>(null);
+  const seedArmedRef = useRef(false);
 
   // Presence + the live constellation belong to the shared board only, and only
   // once the vault is ready (the relay room is keyed on the vault id, and the
@@ -194,14 +287,43 @@ export function Canvas() {
     return () => stopPresence();
   }, [isShared, readyVaultId]);
 
-  // Each board carries its own (session-local) drawings; switching clears them.
+  // Seed this board's drawings from its durable content note (resurrects shapes),
+  // and reset the transient draw state. Image shapes are dropped on the map until
+  // their blob persistence lands (TODO(007) in durableToLocal). The seeded array
+  // is captured by reference + the autosave is DISARMED so the seed never writes.
+  // Keyed on the published index too: a hard reload straight into a board mounts
+  // before the rebuild publishes (index null → empty seed), so re-seed when the
+  // rebuilt index lands (the ref swaps only on publish, never on routine upserts).
+  const liveIndex = vaultData.getSnapshot().index;
   useEffect(() => {
-    setShapes([]);
+    if (!canvasId) return;
+    const content = liveIndex ? loadCanvasContent(liveIndex, canvasId) : { layout: {}, drawings: [] };
+    const seeded = durableToLocal(content.drawings);
+    seededShapesRef.current = seeded;
+    seedArmedRef.current = false; // disarm until this seed is reflected in `shapes`
+    setShapes(seeded);
     setDraft(null);
     setSelectedId(null);
     setEditingId(null);
     draftRef.current = null;
-  }, [canvasId]);
+  }, [canvasId, liveIndex]);
+
+  // Debounce-persist drawings whenever they change. The seed itself is skipped:
+  // when `shapes` is reference-equal to the seeded array the seed has landed, so
+  // we ARM and return (no write). Any render before that (the pre-seed [] on mount,
+  // or a stale board's shapes mid-switch) is disarmed → skipped, so it neither
+  // writes nor clears a sibling board's pending timer. Non-image shapes round-trip
+  // durably (image shapes dropped — see localToDurable TODO); the save is silent +
+  // read-modify-write (KTD2). Only a real user edit (post-arm) triggers a write.
+  useEffect(() => {
+    if (!canvasId) return;
+    if (shapes === seededShapesRef.current) {
+      seedArmedRef.current = true; // seed landed → arm subsequent (real) edits
+      return;
+    }
+    if (!seedArmedRef.current) return; // pre-seed / stale-board render → skip
+    scheduleDrawingsSave(canvasId, localToDurable(shapes));
+  }, [shapes, canvasId]);
 
   // Wheel/trackpad pans the plane. A native non-passive listener so the
   // horizontal axis can't trigger browser back/forward overscroll.
@@ -273,6 +395,25 @@ export function Canvas() {
     }
     return pairs;
   }, [notes, titles]);
+
+  // Placed notes for a NON-shared board: the notes whose ids appear in this
+  // canvas's durable layout, rendered read-only at their stored positions. (The
+  // layout WRITE path — canvas-aware place_note — is U3; in U2 this is empty in
+  // the running app until an agent places a note, which is correct.) The shared
+  // board ignores this and keeps its usePresence/moveNote constellation.
+  const placedNotes = useMemo(() => {
+    if (isShared || !canvasId) return [] as Array<{ note: Note; x: number; y: number }>;
+    const index = vaultData.getSnapshot().index;
+    if (!index) return [];
+    const { layout: placed } = loadCanvasContent(index, canvasId);
+    const byId = new Map(notes.map((n) => [n.noteId, n]));
+    const out: Array<{ note: Note; x: number; y: number }> = [];
+    for (const [noteId, pos] of Object.entries(placed)) {
+      const note = byId.get(noteId);
+      if (note) out.push({ note, x: pos.x, y: pos.y });
+    }
+    return out;
+  }, [isShared, canvasId, notes]);
 
   if (session.phase !== 'ready') return null;
   // The Canvas nav (no id) lands on the gallery; a board opens at /app/canvas/:id.
@@ -709,7 +850,49 @@ export function Canvas() {
               </div>
             );
           })}
+
+          {/* Non-shared board: render its placed notes read-only at their stored
+              positions (the layout WRITE path is U3, so this is empty until an
+              agent places a note). Click opens the note. */}
+          {!isShared && placedNotes.map(({ note, x, y }) => {
+            const byAgent = note.author.startsWith('agent');
+            return (
+              <div
+                key={note.noteId}
+                className={['pgcv-note', byAgent ? 'byagent2' : ''].filter(Boolean).join(' ')}
+                style={{ left: x, top: y, cursor: 'pointer' }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open ${note.title || 'Untitled note'}`}
+                onClick={() => navigate(`/app/notes/${note.noteId}`)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    navigate(`/app/notes/${note.noteId}`);
+                  }
+                }}
+              >
+                <div className="nt3">{note.title || 'Untitled note'}</div>
+                <div className="nb3">{excerptOf(note, titles)}</div>
+                {byAgent ? (
+                  <div className="na3">
+                    <i>✧ {name.toLowerCase()} · {shortAge(note.updatedAt)}</i>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
+
+        {/* Empty-board state: a non-shared board with no placed notes and no
+            drawings yet. The placed-note write path arrives with canvas-aware
+            place_note (U3); for now you draw on it. */}
+        {!isShared && placedNotes.length === 0 && shapes.length === 0 ? (
+          <div className="pgcv-emptyboard" aria-hidden="true">
+            <span className="pgcv-emptyboard-t">A blank canvas</span>
+            <span className="pgcv-emptyboard-x">Draw on it, or ask an agent to place notes here.</span>
+          </div>
+        ) : null}
 
         {isShared ? (
           <div className="pgcv-avs" aria-label={`Mira, ${name} and you are on this canvas`}>
