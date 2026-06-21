@@ -23,6 +23,7 @@ import { renameCompanion, useVaultSession } from '@/hooks/useVaultSession';
 import { useWalletExecTx } from '@/web3/walletExecTx';
 import { vaultData } from '@/web3/vaultData';
 import { exportVaultZip } from '../../../chain/core/src/index.js';
+import { useCalendar, connectCalendar, disconnectCalendar } from '@/web3/calendar';
 import './settings.css';
 
 const WAL_LOW_THRESHOLD = 1;
@@ -263,6 +264,54 @@ function milestoneIcon(key: MilestoneKey, achieved: boolean): ReactNode {
   );
 }
 
+function CalendarSection() {
+  const calendar = useCalendar();
+  const [connecting, setConnecting] = useState(false);
+
+  const handleConnect = async () => {
+    setConnecting(true);
+    try {
+      await connectCalendar();
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const statusLabel = (() => {
+    if (calendar.status === 'connected') return 'Connected — read-only access to your primary calendar';
+    if (calendar.status === 'error') return 'Token expired — reconnect to restore calendar context';
+    if (calendar.status === 'unconfigured') return 'Not configured — set VITE_GOOGLE_CLIENT_ID to enable';
+    return 'Not connected';
+  })();
+
+  return (
+    <>
+      <div className="pgh-label">GOOGLE CALENDAR</div>
+      <div className="pgst-row">
+        <span className="pgst-k">
+          Google Calendar (read-only)
+          <br />
+          <span className="pgst-help">{statusLabel}</span>
+        </span>
+        {calendar.status === 'connected' ? (
+          <button type="button" className="pgbtn" onClick={() => disconnectCalendar()}>
+            Disconnect
+          </button>
+        ) : calendar.status === 'unconfigured' ? null : (
+          <button
+            type="button"
+            className="pgbtn primary"
+            onClick={() => void handleConnect()}
+            disabled={connecting}
+          >
+            {connecting ? 'Connecting…' : calendar.status === 'error' ? 'Reconnect' : 'Connect'}
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
 export function Settings() {
   const session = useVaultSession();
   const settings = useSettings();
@@ -391,6 +440,8 @@ export function Settings() {
       <button type="button" className="pgbtn pgst-connect" onClick={() => setConnectOpen(true)}>
         Connect external agent
       </button>
+
+      <CalendarSection />
 
       <div className="pgh-label">BALANCES</div>
       <div className="pgst-row">

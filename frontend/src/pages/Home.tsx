@@ -5,58 +5,19 @@ import { createNote } from '@/hooks/useVault';
 import { useVaultSession } from '@/hooks/useVaultSession';
 import { useAgentTimeline, requestDraft, clearSuggestion } from '@/hooks/useAgentTimeline';
 import { acceptSuggestion } from '@/web3/suggest';
+import { useCalendar, connectCalendar, disconnectCalendar, type CalendarEvent } from '@/web3/calendar';
 import './home.css';
 
-/* ---------- calendar data (demo week, anchored to June 2026) ---------- */
+/* ---------- calendar types ---------- */
 
-type EventKind = 'seal' | 'agent' | 'gcal';
+type EventKind = 'gcal';
 interface CalEvent {
   t: string;
   s: number;
   e: number;
   k: EventKind;
   src: string;
-  /** Source memory; present only on seals + Nova's notes, so they open their note. */
-  note?: string;
 }
-
-const TODAY = new Date(2026, 5, 11);
-
-const EVENTS: Record<string, CalEvent[]> = {
-  '2026-06-08': [
-    { t: 'Seal access control', s: 10, e: 10.5, k: 'seal', src: 'sealed to the vault', note: 'n-seal' },
-    { t: 'Pitch narrative', s: 15, e: 15.5, k: 'seal', src: 'sealed to the vault', note: 'n-pitch' },
-    { t: 'Team standup', s: 9, e: 9.5, k: 'gcal', src: 'Google Calendar' },
-  ],
-  '2026-06-09': [
-    { t: 'Walrus storage notes', s: 9.5, e: 10.25, k: 'seal', src: 'sealed to the vault', note: 'n-walrus' },
-    { t: 'Quilt batching model', s: 14, e: 14.5, k: 'agent', src: 'Nova condensed 3 notes', note: 'n-quilts' },
-    { t: 'Demo script outline', s: 16.5, e: 17.5, k: 'seal', src: 'sealed to the vault', note: 'n-demo' },
-  ],
-  '2026-06-10': [
-    { t: 'Standup notes', s: 9, e: 9.5, k: 'agent', src: 'Nova drafted from the week', note: 'n-standup' },
-    { t: 'Team standup', s: 9, e: 9.5, k: 'gcal', src: 'Google Calendar' },
-    { t: 'Shared sky · live session', s: 15, e: 16, k: 'gcal', src: '2 humans · 1 agent' },
-  ],
-  '2026-06-11': [
-    { t: 'Cafe shortlist', s: 8.5, e: 9, k: 'agent', src: 'Nova sealed while away', note: 'n-lisbon' },
-    { t: 'Dentist', s: 13, e: 14, k: 'gcal', src: 'Google Calendar' },
-  ],
-  '2026-06-12': [
-    { t: 'Team standup', s: 9, e: 9.5, k: 'gcal', src: 'Google Calendar' },
-    { t: 'Lisbon planning call', s: 15, e: 16, k: 'gcal', src: 'Google Calendar' },
-  ],
-  '2026-06-15': [{ t: 'Team standup', s: 9, e: 9.5, k: 'gcal', src: 'Google Calendar' }],
-  '2026-06-17': [{ t: 'Slides review w/ Mira', s: 14, e: 15, k: 'gcal', src: 'Google Calendar' }],
-  '2026-06-19': [{ t: 'Team standup', s: 9, e: 9.5, k: 'gcal', src: 'Google Calendar' }],
-};
-
-const ALLDAY: Record<string, { t: string; n: string; note: string }> = {
-  '2026-06-18': { t: 'Top up WAL', n: 'Standup notes, week 24', note: 'n-standup' },
-  '2026-06-21': { t: 'Demo day', n: 'Demo script outline', note: 'n-demo' },
-  '2026-06-24': { t: 'Fly to Lisbon', n: 'Flight options', note: 'n-flights' },
-  '2026-06-28': { t: 'Return flight', n: 'Flight options', note: 'n-flights' },
-};
 
 const DAY_NAMES = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const DOW = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -97,11 +58,52 @@ function CalIcon({ children }: { children: ReactNode }) {
   );
 }
 
+/** Convert a CalendarEvent to a timed CalEvent (s/e = fractional hours, local time). */
+function gcalToCalEvent(ev: CalendarEvent): CalEvent {
+  const parseHour = (iso: string): number => {
+    const d = new Date(iso);
+    return d.getHours() + d.getMinutes() / 60;
+  };
+  return {
+    t: ev.title,
+    s: parseHour(ev.start),
+    e: parseHour(ev.end),
+    k: 'gcal',
+    src: 'Google Calendar',
+  };
+}
+
+/** Build event maps keyed by dateKey from live CalendarEvent[]. */
+function buildEventMaps(events: CalendarEvent[]): {
+  timed: Record<string, CalEvent[]>;
+  allDay: Record<string, { t: string }[]>;
+} {
+  const timed: Record<string, CalEvent[]> = {};
+  const allDay: Record<string, { t: string }[]> = {};
+  for (const ev of events) {
+    const k = dateKey(new Date(ev.allDay ? `${ev.start}T00:00:00` : ev.start));
+    if (ev.allDay) {
+      (allDay[k] ??= []).push({ t: ev.title });
+    } else {
+      (timed[k] ??= []).push(gcalToCalEvent(ev));
+    }
+  }
+  return { timed, allDay };
+}
+
+/** Relative sync time label ("synced 2m ago", "synced just now", etc.). */
+function relativeSyncLabel(lastSyncedAt: string): string {
+  const diff = Math.floor((Date.now() - new Date(lastSyncedAt).getTime()) / 1000);
+  if (diff < 60) return 'synced just now';
+  if (diff < 3600) return `synced ${Math.floor(diff / 60)}m ago`;
+  return `synced ${Math.floor(diff / 3600)}h ago`;
+}
+
 function WeekCalendar() {
-  const navigate = useNavigate();
+  const calendar = useCalendar();
   const [view, setView] = useState<ViewMode>('month');
-  const [cursor, setCursor] = useState(() => new Date(2026, 5, 11));
-  const [layers, setLayers] = useState({ seal: true, agent: true, gcal: true });
+  const [cursor, setCursor] = useState(() => new Date());
+  const [connecting, setConnecting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // A fresh view or a new week starts at the top of the list.
@@ -109,25 +111,20 @@ function WeekCalendar() {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [view, cursor]);
 
-  const todayKey = dateKey(TODAY);
+  const today = new Date();
+  const todayKey = dateKey(today);
   const weekStart = startOfWeek(cursor);
   const weekEnd = addDays(weekStart, 6);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
-  const monthLabel = `${cursor.toLocaleString('en', { month: 'long' })} 2026`;
+  const monthLabel = `${cursor.toLocaleString('en', { month: 'long' })} ${cursor.getFullYear()}`;
   const weekLabel =
     weekStart.getMonth() === weekEnd.getMonth()
       ? `${weekStart.toLocaleString('en', { month: 'long' })} ${weekStart.getDate()} – ${weekEnd.getDate()}`
       : `${weekStart.toLocaleString('en', { month: 'short' })} ${weekStart.getDate()} – ${weekEnd.toLocaleString('en', { month: 'short' })} ${weekEnd.getDate()}`;
   const headLabel = view === 'week' ? weekLabel : monthLabel;
 
-  const layerOn = (ev: CalEvent) => layers[ev.k];
-  const toggleLayer = (k: EventKind) => setLayers((prev) => ({ ...prev, [k]: !prev[k] }));
-  const openNote = (note?: string) => {
-    if (note) navigate(`/app/notes/${note}`);
-  };
-
-  const goToday = () => setCursor(new Date(2026, 5, 11));
+  const goToday = () => setCursor(new Date());
   const goPrev = () => setCursor(view === 'week' ? addDays(cursor, -7) : addMonths(cursor, -1));
   const goNext = () => setCursor(view === 'week' ? addDays(cursor, 7) : addMonths(cursor, 1));
 
@@ -143,6 +140,66 @@ function WeekCalendar() {
       {label}
     </button>
   );
+
+  const { timed: timedEvents, allDay: allDayEvents } = buildEventMaps(calendar.events);
+
+  const handleConnect = async () => {
+    setConnecting(true);
+    try {
+      await connectCalendar();
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  // Calendar sync status indicator (three states: connected / error / unconfigured / disconnected)
+  const syncIndicator = (() => {
+    if (calendar.status === 'connected' && calendar.lastSyncedAt) {
+      return (
+        <span className="pgcal-g">
+          <CalIcon>
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </CalIcon>{' '}
+          {relativeSyncLabel(calendar.lastSyncedAt)}
+          <button
+            type="button"
+            className="pgbtn"
+            style={{ marginLeft: 6, fontSize: 11 }}
+            onClick={() => disconnectCalendar()}
+          >
+            Disconnect
+          </button>
+        </span>
+      );
+    }
+    if (calendar.status === 'error') {
+      return (
+        <span className="pgcal-g">
+          <button type="button" className="pgbtn" onClick={() => void handleConnect()} disabled={connecting}>
+            {connecting ? 'Reconnecting…' : 'Reconnect Google Calendar'}
+          </button>
+        </span>
+      );
+    }
+    if (calendar.status === 'unconfigured') {
+      return (
+        <span className="pgcal-g" style={{ color: 'var(--gray-400)' }}>
+          Calendar sync not configured
+        </span>
+      );
+    }
+    // disconnected
+    return (
+      <span className="pgcal-g">
+        <button type="button" className="pgbtn" onClick={() => void handleConnect()} disabled={connecting}>
+          {connecting ? 'Connecting…' : 'Connect Google Calendar'}
+        </button>
+      </span>
+    );
+  })();
 
   return (
     <div className="pgcal">
@@ -169,24 +226,10 @@ function WeekCalendar() {
       <div className="pgcal-h">
         <b>{headLabel}</b>
         <span className="sp" />
-        <button type="button" className={layers.seal ? 'srcchip on' : 'srcchip'} onClick={() => toggleLayer('seal')}>
-          <span className="ld tl" />Seals
-        </button>
-        <button type="button" className={layers.agent ? 'srcchip on' : 'srcchip'} onClick={() => toggleLayer('agent')}>
-          <span className="ld or" />Nova
-        </button>
-        <button type="button" className={layers.gcal ? 'srcchip on' : 'srcchip'} onClick={() => toggleLayer('gcal')}>
+        <button type="button" className={calendar.status === 'connected' ? 'srcchip on' : 'srcchip'} onClick={() => void handleConnect()}>
           <span className="ld bl" />Google
         </button>
-        <span className="pgcal-g">
-          <CalIcon>
-            <rect x="3" y="4" width="18" height="18" rx="2" />
-            <line x1="16" y1="2" x2="16" y2="6" />
-            <line x1="8" y1="2" x2="8" y2="6" />
-            <line x1="3" y1="10" x2="21" y2="10" />
-          </CalIcon>{' '}
-          synced 2m ago
-        </span>
+        {syncIndicator}
       </div>
 
       {view === 'month' ? (
@@ -201,11 +244,11 @@ function WeekCalendar() {
               const k = dateKey(d);
               const inMonth = d.getMonth() === cursor.getMonth();
               const isToday = k === todayKey;
-              const ad = ALLDAY[k];
-              const timed = (EVENTS[k] ?? []).filter(layerOn);
-              const items: Array<{ t: string; k: EventKind; note?: string }> = [
-                ...(ad ? [{ t: ad.t, k: 'agent' as EventKind, note: ad.note }] : []),
-                ...timed.map((ev) => ({ t: ev.t, k: ev.k, note: ev.note })),
+              const ads = allDayEvents[k] ?? [];
+              const timed = (timedEvents[k] ?? []).sort((a, b) => a.s - b.s);
+              const items: Array<{ t: string; k: EventKind }> = [
+                ...ads.map((ad) => ({ t: ad.t, k: 'gcal' as EventKind })),
+                ...timed.map((ev) => ({ t: ev.t, k: ev.k })),
               ];
               const shown = items.slice(0, 2);
               const extra = items.length - shown.length;
@@ -221,15 +264,7 @@ function WeekCalendar() {
                 >
                   <span className="pgcm-d">{d.getDate()}</span>
                   {shown.map((it, j) => (
-                    <span
-                      key={j}
-                      className={`pgcm-ev ${it.k}${it.note ? ' link' : ''}`}
-                      onClick={(e) => {
-                        if (!it.note) return;
-                        e.stopPropagation();
-                        openNote(it.note);
-                      }}
-                    >
+                    <span key={j} className={`pgcm-ev ${it.k}`}>
                       <i className="cdot" aria-hidden="true" />
                       {it.t}
                     </span>
@@ -246,9 +281,9 @@ function WeekCalendar() {
             {weekDays.map((d) => {
               const k = dateKey(d);
               const isToday = k === todayKey;
-              const ad = ALLDAY[k];
-              const evs = (EVENTS[k] ?? []).filter(layerOn).sort((a, b) => a.s - b.s || a.e - b.e);
-              const empty = !ad && evs.length === 0;
+              const ads = allDayEvents[k] ?? [];
+              const evs = (timedEvents[k] ?? []).sort((a, b) => a.s - b.s || a.e - b.e);
+              const empty = ads.length === 0 && evs.length === 0;
               return (
                 <div key={k} className="pgag-day">
                   <div className={isToday ? 'pgagd tdy' : 'pgagd'}>
@@ -259,24 +294,21 @@ function WeekCalendar() {
                     {isToday ? <span className="tpill">TODAY</span> : null}
                     <span className="hr" />
                   </div>
-                  {ad ? (
-                    <button type="button" className="pgagrow agent link" title={`plan found in ${ad.n}`} onClick={() => openNote(ad.note)}>
+                  {ads.map((ad, j) => (
+                    <div key={j} className="pgagrow gcal">
                       <i className="cdot" aria-hidden="true" />
                       <span className="bd">
                         <b>{ad.t}</b>
-                        <small>plan from {ad.n}</small>
+                        <small>Google Calendar</small>
                       </span>
                       <span className="tm">all day</span>
-                      <span className="arr" aria-hidden="true">↗</span>
-                    </button>
-                  ) : null}
+                    </div>
+                  ))}
                   {evs.map((ev, i) => (
-                    <button
-                      type="button"
+                    <div
                       key={i}
-                      className={`pgagrow ${ev.k}${ev.note ? ' link' : ''}`}
-                      title={`${ev.t} · ${fmtHour(ev.s)} – ${fmtHour(ev.e)}${ev.note ? ' · open source' : ''}`}
-                      onClick={() => openNote(ev.note)}
+                      className={`pgagrow ${ev.k}`}
+                      title={`${ev.t} · ${fmtHour(ev.s)} – ${fmtHour(ev.e)}`}
                     >
                       <i className="cdot" aria-hidden="true" />
                       <span className="bd">
@@ -284,10 +316,16 @@ function WeekCalendar() {
                         <small>{ev.src}</small>
                       </span>
                       <span className="tm">{fmtHour(ev.s)}</span>
-                      <span className="arr" aria-hidden="true">{ev.note ? '↗' : ''}</span>
-                    </button>
+                      <span className="arr" aria-hidden="true" />
+                    </div>
                   ))}
-                  {empty ? <div className="pgag-empty">Nothing scheduled.</div> : null}
+                  {empty ? (
+                    <div className="pgag-empty">
+                      {calendar.status === 'disconnected' || calendar.status === 'unconfigured'
+                        ? 'Connect Google Calendar to see events.'
+                        : 'Nothing scheduled.'}
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
@@ -298,10 +336,9 @@ function WeekCalendar() {
   );
 }
 
-/* ---------- suggestions + plans rail ---------- */
+/* ---------- suggestions rail ---------- */
 
 function SuggestRail() {
-  const navigate = useNavigate();
   const { events, draftRequested, suggestion } = useAgentTimeline();
   const [accepting, setAccepting] = useState(false);
 
@@ -381,22 +418,6 @@ function SuggestRail() {
           </>
         )}
       </div>
-      <div className="pgh6-plans">
-        <div className="railt">
-          <b>Plans she found</b>
-          <span>Dates pulled from your own notes. Each one opens its source.</span>
-        </div>
-        {Object.entries(ALLDAY).map(([k, p]) => {
-          const d = new Date(`${k}T00:00:00`);
-          return (
-            <button type="button" key={k} className="plrow" onClick={() => navigate(`/app/notes/${p.note}`)}>
-              <span className="pld">JUN {d.getDate()}</span>
-              <span className="plt">{p.t}</span>
-              <span className="pls">{p.n}</span>
-            </button>
-          );
-        })}
-      </div>
     </aside>
   );
 }
@@ -412,9 +433,8 @@ function greeting(): string {
 
 /**
  * Home: the week, remembered and suggested (spec #page-home). Greeting, three
- * general quick starts, then the calendar — day / week / month, with seals,
- * Nova's work and Google events layered together and a suggestions rail.
- * Memory blocks (and the plans rail) open their source note on click.
+ * general quick starts, then the calendar — week / month view, driven by live
+ * Google Calendar events via useCalendar() — and a Nova suggestions rail.
  */
 export function Home() {
   const session = useVaultSession();
@@ -423,7 +443,8 @@ export function Home() {
 
   const name = session.agent.name;
   const count = session.index.count;
-  const dateLabel = `${DOW[TODAY.getDay()]} ${MON[TODAY.getMonth()]} ${TODAY.getDate()} · ${count} MEMORIES`;
+  const today = new Date();
+  const dateLabel = `${DOW[today.getDay()]} ${MON[today.getMonth()]} ${today.getDate()} · ${count} MEMORIES`;
 
   const newNote = () => {
     const id = createNote();

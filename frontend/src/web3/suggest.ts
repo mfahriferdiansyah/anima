@@ -155,6 +155,7 @@ export async function requestSuggestions(input: {
 export function requestDraft(opts: {
   persona: string;
   context: { noteId: string; title: string; body: string; tags: string[] }[];
+  calendar?: unknown[];
 }): void {
   store.update((prev) => ({ ...prev, draftRequested: true }));
 

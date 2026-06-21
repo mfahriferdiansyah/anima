@@ -12,6 +12,7 @@ import {
   type TimelineState,
 } from '../web3/suggest';
 import { vaultData } from '../web3/vaultData';
+import { getCalendarContext } from '../web3/calendar';
 
 /** Real Nova suggestion activity: Home activity line, Notes suggestions, canvas materialize. */
 export function useAgentTimeline(): TimelineState {
@@ -31,7 +32,7 @@ export function useAgentTimeline(): TimelineState {
   return useSyncExternalStore(agentTimeline.subscribe, agentTimeline.getSnapshot);
 }
 
-/** Home quick-start: ask Nova for a draft, using live vault notes as context. */
+/** Home quick-start: ask Nova for a draft, using live vault notes + calendar as context. */
 export function requestDraft(): void {
   const session = sessionStore.getSnapshot();
   const persona = `You are ${session.phase === 'ready' ? session.agent.name : 'Nova'}, a warm, attentive companion.`;
@@ -42,7 +43,7 @@ export function requestDraft(): void {
     body: n.body,
     tags: n.tags,
   }));
-  _requestDraft({ persona, context });
+  _requestDraft({ persona, context, calendar: getCalendarContext() });
 }
 
 /** Notes page calls this on mount; a pending draft request is handled async in requestDraft. */
