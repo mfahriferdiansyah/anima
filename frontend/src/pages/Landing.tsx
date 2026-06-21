@@ -937,7 +937,7 @@ export function Landing() {
           </div>
           <p className="lp-kick">agent-native workspace</p>
           <h1>
-            Notes on a <span className="hl">shared canvas.</span>
+            Shared memory for you, your team, and <span className="hl">your agents.</span>
           </h1>
           <p className="lp-desc">
             A shared workspace for your team and your <b>own ai agents</b>, on the same notes and
@@ -951,6 +951,9 @@ export function Landing() {
           </div>
           <div className="lp-fine">
             memory sealed to walrus on sui <span className="dot">·</span> live on testnet today
+          </div>
+          <div className="lp-herotag">
+            <GCalTag />
           </div>
         </div>
         <div className="lp-mq" aria-hidden="true" ref={mqRef}>
