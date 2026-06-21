@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BRAND_NAME } from '@/brand';
-import { startSession, useVaultSession } from '@/hooks/useVaultSession';
+import { seedReady, useVaultSession } from '@/hooks/useVaultSession';
 import type { ReadySession } from '@/app/AppShell';
 import { ScreenPreview } from './ScreenPreview';
+import { LANDING_NOTES } from './landingSeed';
 import './landing.css';
 
 /**
@@ -689,10 +690,13 @@ function StackSection({ staticMode }: { staticMode: boolean }) {
   const caps = useRef<(HTMLDivElement | null)[]>([]);
   const dots = useRef<(HTMLSpanElement | null)[]>([]);
 
-  // drive the mock session to ready once so the real-page previews populate
+  // Populate the previews from the landing's OWN frozen seed, ready instantly
+  // (no boot ceremony, no "waking the workspace"). useLayoutEffect runs before
+  // paint so the first frame already shows the screens. The landing never
+  // touches the app seed, so it survives the seed changing or moving server-side.
   const session = useVaultSession();
-  useEffect(() => {
-    startSession('returning');
+  useLayoutEffect(() => {
+    seedReady(LANDING_NOTES);
   }, []);
   const ready: ReadySession | null = session.phase === 'ready' ? session : null;
 

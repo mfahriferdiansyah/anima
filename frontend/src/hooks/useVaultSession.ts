@@ -8,6 +8,7 @@ export function useVaultSession(): SessionState {
 
 export {
   startSession,
+  seedReady,
   completeOnboarding,
   rejectSignature,
   closeBeforeSign,

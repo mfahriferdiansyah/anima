@@ -97,6 +97,17 @@ export function startSession(scenario: Scenario = resolveScenario()): void {
   });
 }
 
+/**
+ * Jump straight to a ready vault with the given notes, skipping the
+ * checking/rebuilding ceremony. The landing uses this with its own frozen seed
+ * so previews populate instantly (no "waking the workspace") and never depend on
+ * the app's seed or onboarding flow.
+ */
+export function seedReady(notes: Note[]): void {
+  generation += 1; // cancel any in-flight startSession ceremony
+  goReady(notes, COMPANION_NAME);
+}
+
 function beginRebuild(gen: number, startAt: number): void {
   store.update(() => ({ phase: 'rebuilding', done: startAt, total: TOTAL_QUILTS, error: null }));
   tickRebuild(gen);
