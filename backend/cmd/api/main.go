@@ -96,6 +96,7 @@ func main() {
 		r.Use(middleware.RateLimit(cfg.rateLimitPerMin))
 		r.Post("/chat", chatHandler.HandleChat)
 		r.Post("/distill", chatHandler.HandleDistill)
+		r.Post("/suggest", chatHandler.HandleSuggest)
 	})
 
 	srv := &http.Server{

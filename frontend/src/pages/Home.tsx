@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createNote } from '@/hooks/useVault';
 import { useVaultSession } from '@/hooks/useVaultSession';
+import { useAgentTimeline, requestDraft, clearSuggestion } from '@/hooks/useAgentTimeline';
+import { acceptSuggestion } from '@/web3/suggest';
 import './home.css';
 
 /* ---------- calendar data (demo week, anchored to June 2026) ---------- */
@@ -298,47 +300,86 @@ function WeekCalendar() {
 
 /* ---------- suggestions + plans rail ---------- */
 
-interface Suggestion {
-  id: string;
-  title: string;
-  meta: string;
-  draft: boolean;
-}
-
-const SUGGESTIONS: Suggestion[] = [
-  { id: 'slides', title: 'Draft the demo day slides', meta: 'Demo day · Jun 21 · 9 days out', draft: true },
-  { id: 'call', title: 'Prep questions for the Lisbon call', meta: 'tomorrow 15:00 · from Google Calendar', draft: true },
-  { id: 'wal', title: 'Top up WAL before the trip', meta: 'balance covers about 3 weeks', draft: false },
-];
-
 function SuggestRail() {
   const navigate = useNavigate();
-  const [done, setDone] = useState<Record<string, boolean>>({});
-  const mark = (id: string) => setDone((prev) => ({ ...prev, [id]: true }));
+  const { events, draftRequested, suggestion } = useAgentTimeline();
+  const [accepting, setAccepting] = useState(false);
+
+  const handleAccept = () => {
+    if (!suggestion) return;
+    setAccepting(true);
+    acceptSuggestion(suggestion);
+    setAccepting(false);
+  };
+
+  const handleDismiss = () => {
+    clearSuggestion();
+  };
 
   return (
     <aside className="pgh6-rail">
       <div className="pgh6-sugg">
         <div className="railt">
           <b>Nova suggests</b>
-          <span>Preparation she thinks you will thank yourself for. Tick it done, or let her draft it.</span>
+          <span>What she thinks you should do next, drawn from your vault.</span>
         </div>
-        {SUGGESTIONS.map((s) => (
-          <div key={s.id} className={done[s.id] ? 'sg done' : 'sg'}>
-            <label className="sgc">
-              <input type="checkbox" checked={!!done[s.id]} onChange={() => setDone((p) => ({ ...p, [s.id]: !p[s.id] }))} />
-            </label>
+
+        {suggestion ? (
+          <div className="sg">
             <div className="sgb">
-              <b>{s.title}</b>
-              <span>{s.meta}</span>
-              {s.draft ? (
-                <button type="button" className="pgbtn sgd" onClick={() => mark(s.id)}>
-                  ✧ Let Nova draft
+              <b>{suggestion.title}</b>
+              <span>{suggestion.summary}</span>
+              <div className="sact" style={{ marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="pgbtn primary sgd"
+                  onClick={handleAccept}
+                  disabled={accepting}
+                >
+                  {accepting ? 'Adding…' : 'Add to vault'}
                 </button>
-              ) : null}
+                <button type="button" className="pgbtn sgd" onClick={handleDismiss}>
+                  Dismiss
+                </button>
+              </div>
             </div>
           </div>
-        ))}
+        ) : draftRequested ? (
+          <div className="sg">
+            <div className="sgb">
+              <span style={{ color: 'var(--gray-500)' }}>
+                <span aria-hidden="true">✧</span> Nova is thinking…
+              </span>
+            </div>
+          </div>
+        ) : events.length === 0 ? (
+          <div className="sg">
+            <div className="sgb">
+              <span style={{ color: 'var(--gray-500)' }}>
+                Nova has no suggestions yet — she reads your notes when you chat.
+              </span>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="sg">
+              <div className="sgb">
+                <button type="button" className="pgbtn sgd" onClick={() => requestDraft()}>
+                  ✧ Let Nova draft
+                </button>
+                <span style={{ color: 'var(--gray-500)', marginTop: 4, display: 'block' }}>Ask Nova to propose a next step from your vault.</span>
+              </div>
+            </div>
+            {events.slice(0, 4).map((ev) => (
+              <div key={ev.id} className="sg">
+                <div className="sgb">
+                  <b style={{ fontWeight: 500 }}>{ev.summary}</b>
+                  <span style={{ color: 'var(--gray-500)' }}>{ev.at.slice(0, 10)}</span>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
       </div>
       <div className="pgh6-plans">
         <div className="railt">
