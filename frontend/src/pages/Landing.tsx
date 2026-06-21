@@ -1,11 +1,15 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BRAND_NAME } from '@/brand';
 import { seedReady, useVaultSession } from '@/hooks/useVaultSession';
 import type { ReadySession } from '@/app/AppShell';
-import { ScreenPreview } from './ScreenPreview';
-import { LANDING_NOTES } from './landingSeed';
 import './landing.css';
+
+// The real-app previews (AppShell + every app page) are the heaviest thing on
+// the landing and only appear in the desktop deck. Load them as a separate
+// chunk, mounted only when the deck nears view — the initial load never pays for
+// them. (`landingSeed` is dynamically imported on the same trigger.)
+const ScreenPreview = lazy(() => import('./ScreenPreview').then((m) => ({ default: m.ScreenPreview })));
 
 /**
  * The landing.
@@ -528,7 +532,13 @@ function BeatVisual({ b, ready }: { b: Beat; ready: ReadySession | null }) {
   if (b.kind === 'page') {
     return (
       <div className="lp-page">
-        {ready ? <ScreenPreview route={b.route} session={ready} /> : <div className="lp-page-boot">waking the workspace</div>}
+        {ready ? (
+          <Suspense fallback={<div className="lp-page-boot" />}>
+            <ScreenPreview route={b.route} session={ready} />
+          </Suspense>
+        ) : (
+          <div className="lp-page-boot" />
+        )}
         {b.overlay}
       </div>
     );
@@ -690,14 +700,35 @@ function StackSection({ staticMode }: { staticMode: boolean }) {
   const caps = useRef<(HTMLDivElement | null)[]>([]);
   const dots = useRef<(HTMLSpanElement | null)[]>([]);
 
-  // Populate the previews from the landing's OWN frozen seed, ready instantly
-  // (no boot ceremony, no "waking the workspace"). useLayoutEffect runs before
-  // paint so the first frame already shows the screens. The landing never
-  // touches the app seed, so it survives the seed changing or moving server-side.
+  // Seed the previews from the landing's OWN frozen seed only as the deck nears
+  // view — so the initial load never mounts the real app (kept off the critical
+  // path) and the app chunk + seed download lazily. Mobile uses light components
+  // and needs no session at all. The landing never touches the app seed, so it
+  // survives the seed changing or moving server-side.
   const session = useVaultSession();
-  useLayoutEffect(() => {
-    seedReady(LANDING_NOTES);
-  }, []);
+  useEffect(() => {
+    if (staticMode) return;
+    const el = sectionRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        // The deck edge-touches the fold (hero is 100vh): at scrollY=0 it reports
+        // isIntersecting:true with ratio 0, so require REAL overlap or it would
+        // mount the app at load. The threshold below is what makes a callback
+        // actually fire once that overlap begins on scroll.
+        if (entry.intersectionRatio <= 0) return;
+        io.disconnect();
+        void import('./landingSeed').then(({ LANDING_NOTES }) => seedReady(LANDING_NOTES));
+      },
+      // rootMargin 0 (a positive bottom margin intersects at the fold = mounts at
+      // load); threshold 0.01 gives a fire point as soon as real overlap starts,
+      // so a normal top-down scroll triggers the mount (without it, the only
+      // callbacks are at ratio 0, which the guard rejects → never mounts).
+      { rootMargin: '0px', threshold: 0.01 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [staticMode]);
   const ready: ReadySession | null = session.phase === 'ready' ? session : null;
 
   useEffect(() => {
