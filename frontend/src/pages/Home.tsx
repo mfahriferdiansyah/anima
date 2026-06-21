@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createNote } from '@/hooks/useVault';
+import { createNote, useVault } from '@/hooks/useVault';
 import { useVaultSession } from '@/hooks/useVaultSession';
 import { useAgentTimeline, requestDraft, clearSuggestion } from '@/hooks/useAgentTimeline';
 import { acceptSuggestion } from '@/web3/suggest';
@@ -339,8 +339,14 @@ function WeekCalendar() {
 /* ---------- suggestions rail ---------- */
 
 function SuggestRail() {
+  const navigate = useNavigate();
   const { events, draftRequested, suggestion } = useAgentTimeline();
+  const { notes } = useVault();
   const [accepting, setAccepting] = useState(false);
+
+  // "Recent notes" rail: the live vault notes (already recency-sorted), newest
+  // first, each row opens its source note. Real data, never fabricated.
+  const recent = notes.slice(0, 6);
 
   const handleAccept = () => {
     if (!suggestion) return;
@@ -416,6 +422,29 @@ function SuggestRail() {
               </div>
             ))}
           </>
+        )}
+      </div>
+
+      <div className="pgh6-plans">
+        <div className="railt">
+          <b>Recent notes</b>
+          <span>Your latest memories, newest first. Each one opens its source.</span>
+        </div>
+        {recent.length === 0 ? (
+          <span className="pgag-empty" style={{ padding: 0 }}>
+            Nothing found yet. Your notes will show here.
+          </span>
+        ) : (
+          recent.map((n) => {
+            const d = new Date(n.updatedAt);
+            return (
+              <button type="button" key={n.noteId} className="plrow" onClick={() => navigate(`/app/notes/${n.noteId}`)}>
+                <span className="pld">{MON[d.getMonth()]} {d.getDate()}</span>
+                <span className="plt">{n.title || 'Untitled'}</span>
+                <span className="pls">{n.tags[0] ?? 'note'}</span>
+              </button>
+            );
+          })
         )}
       </div>
     </aside>

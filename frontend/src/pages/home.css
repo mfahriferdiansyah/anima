@@ -77,7 +77,11 @@
 
 /* Home scrolls naturally (it is not locked to one viewport); keep the column
    padding tight at the top with a little breathing room at the bottom. */
-.pghpaper .pghcol6 { padding: 14px 40px 14px; flex: 1; display: flex; flex-direction: column; }
+/* The kit caps .pghcol6 at 1460px and centres it (margin:0 auto); on Home the
+   column is a flex item of .pged-scroll, where the auto side margins absorb the
+   free space and shrink it to content. Drop the cap and the auto margins so the
+   column stretches to the viewport and the calendar fills the screen. */
+.pghpaper .pghcol6 { max-width: none; margin: 0; padding: 14px 40px 14px; flex: 1; display: flex; flex-direction: column; }
 .pghpaper .pgh6-quick { margin: 10px 0 12px; }
 
 /* quick-start cards mix the two brand colours so Home is not all-orange: blue
