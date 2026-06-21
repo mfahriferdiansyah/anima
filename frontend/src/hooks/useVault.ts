@@ -210,6 +210,45 @@ async function persist(id: string, patch: NotePatch): Promise<void> {
   }
 }
 
+/**
+ * Persist a guest's live-collab body as a sealed, wallet-owned snapshot (plan 008
+ * AE4), attributed to the guest label. The durable artifact of an anonymous edit
+ * session is produced ONLY by this allowlisted-writer path (the owner client),
+ * never the keyless backend, and the guest never touches Seal. Body-only, silent
+ * write-event (no toast). The relay drops frames and never replays, so the body
+ * passed here is the owner's observed state, not a lossless capture (KTD3).
+ */
+export async function persistGuestSnapshot(noteId: string, body: string, guestAuthor: string): Promise<void> {
+  if (wipeInProgress) return;
+  const deps = getQuiltDeps();
+  const current = vaultData.getSnapshot().index?.get(noteId)?.note;
+  if (!deps || !current || current.body === body) return; // no live vault, unknown note, or no change
+  const pf = await preflight(deps.suiClient, deps.agentSigner.toSuiAddress());
+  if (!pf.ok) {
+    triggerLowBalance();
+    return;
+  }
+  const next = editedNote(current, { body }, guestAuthor || 'guest');
+  const eventId = vaultData.beginWriteEvent({
+    noteId,
+    noteTitle: next.title || 'Shared note',
+    state: { phase: 'certifying' },
+    silent: true,
+  });
+  try {
+    const res = await writeTurn(deps, [next]);
+    const per = res.perNote.find((p) => p.noteId === noteId) ?? res.perNote[0];
+    vaultData.upsert(next, { quiltPatchId: per.quiltPatchId, quiltBlobId: res.quiltBlobId, blobObjectId: res.blobObjectId });
+    vaultData.updateWriteEvent(eventId, {
+      phase: 'certified',
+      blobObjectId: res.blobObjectId,
+      provenanceUrl: `https://suiscan.xyz/testnet/object/${res.blobObjectId}`,
+    });
+  } catch {
+    vaultData.updateWriteEvent(eventId, { phase: 'failed' });
+  }
+}
+
 /** Re-run the current note's seal+write after a failure. */
 export function retryWrite(noteId: string): void {
   const current = vaultData.getSnapshot().index?.get(noteId)?.note;

@@ -9,6 +9,7 @@ import type { Note } from '@/hooks/useVault';
 import { clearSuggestion, useAgentTimeline } from '@/hooks/useAgentTimeline';
 import { CoverPicker } from '@/components/CoverPicker';
 import { ShareDialog } from './ShareDialog';
+import { useShareCollab } from '../web3/shareCollab';
 import { resolveCover, parseCoverRef } from '../web3/covers';
 
 /* ---------- markdown-lite: fixture bodies -> kit-classed blocks ---------- */
@@ -309,6 +310,11 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [coverOpen, setCoverOpen] = useState(false);
 
+  // While an edit share is active for this note, the owner joins the live room as
+  // the allowlisted writer: guest edits become sealed, wallet-owned snapshots
+  // (008 AE4). A no-op when nothing is shared.
+  const { guestCount } = useShareCollab(note.noteId);
+
   // Resolve note.cover (a ref: preset path, seal:, or blob:) to a renderable URL.
   // Falls back to note.image for fixture demo notes that predate the cover field.
   const resolvedCoverUrl = useResolvedCover(note.cover, note.noteId);
@@ -566,6 +572,11 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
           {folderLabel} / <b>{note.title || 'Untitled note'}</b>
         </span>
         <span className="sp" />
+        {guestCount > 0 ? (
+          <span className="pgcv-save" role="status" aria-label={`${guestCount} editing live`}>
+            {guestCount} editing live
+          </span>
+        ) : null}
         <button type="button" className="pgbtn" onClick={() => setSharing(true)}>
           Share
         </button>
