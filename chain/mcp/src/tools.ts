@@ -98,12 +98,12 @@ export async function editNoteTool(
 
 export async function placeNoteTool(
   client: VaultClient,
-  args: { noteId: string; x: number; y: number },
+  args: { noteId: string; x: number; y: number; canvasId?: string },
   presence?: Presence,
 ): Promise<ToolResult> {
   try {
     presence?.writing(true);
-    const layout = await client.place(args.noteId, args.x, args.y);
+    const layout = await client.place(args.noteId, args.x, args.y, args.canvasId);
     presence?.noteCreated(args.noteId); // canvas peers refresh and see the move
     return text(
       `Placed ${args.noteId} at (${args.x}, ${args.y}). Canvas layout now covers ${Object.keys(layout).length} note(s).`,

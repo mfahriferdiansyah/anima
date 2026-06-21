@@ -68,6 +68,53 @@ func TestNoCrossRoomLeak(t *testing.T) {
 	}
 }
 
+func TestDifferentCanvasesAreDifferentRooms(t *testing.T) {
+	srv := httptest.NewServer(NewHub())
+	defer srv.Close()
+	base := "ws" + strings.TrimPrefix(srv.URL, "http") + "/presence?vault=0xabc&canvas="
+
+	a := dial(t, base+"A")
+	defer a.Close(websocket.StatusNormalClosure, "")
+	b := dial(t, base+"B")
+	defer b.Close(websocket.StatusNormalClosure, "")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel()
+
+	if err := a.Write(ctx, websocket.MessageText, []byte(`{"t":"hello","id":"a"}`)); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if _, _, err := b.Read(ctx); err == nil {
+		t.Fatal("peer on a different canvas of the same vault received the message")
+	}
+}
+
+func TestNoCanvasSharesSharedRoom(t *testing.T) {
+	srv := httptest.NewServer(NewHub())
+	defer srv.Close()
+	base := "ws" + strings.TrimPrefix(srv.URL, "http") + "/presence?vault=0xabc"
+
+	a := dial(t, base)                  // legacy URL, no canvas → shared room
+	defer a.Close(websocket.StatusNormalClosure, "")
+	b := dial(t, base+"&canvas=shared") // explicit shared room
+	defer b.Close(websocket.StatusNormalClosure, "")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	msg := `{"t":"cursor","id":"a","x":10,"y":20}`
+	if err := a.Write(ctx, websocket.MessageText, []byte(msg)); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	_, got, err := b.Read(ctx)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(got) != msg {
+		t.Fatalf("relay mismatch (no-canvas should default to shared): %s", got)
+	}
+}
+
 func TestSenderDoesNotEcho(t *testing.T) {
 	srv := httptest.NewServer(NewHub())
 	defer srv.Close()

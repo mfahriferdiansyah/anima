@@ -90,6 +90,7 @@ server.registerTool(
       noteId: z.string().describe('The note id (ULID) from recall or list_notes'),
       x: z.number().describe('Canvas x coordinate'),
       y: z.number().describe('Canvas y coordinate'),
+      canvasId: z.string().optional().describe('The board to place on; defaults to the shared canvas'),
     },
   },
   (args) => placeNoteTool(client, args, presence),

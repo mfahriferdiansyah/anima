@@ -11,7 +11,7 @@ import {
   createSuiClient, nodeFetchWithLongConnect,
   SealVault, writeTurn, readAll, listVaultQuilts, readVault,
   VaultIndex, newNote, editedNote, preflight,
-  loadLayout, saveLayout, type CanvasLayout,
+  loadCanvasContent, saveCanvasContent, type CanvasLayout,
   type QuiltDeps, type IndexedNote, type Note, type WriteResult,
 } from '../../core/src/index.js';
 import type { McpConfig } from './config.js';
@@ -128,8 +128,13 @@ export class VaultClient {
     return { note, result };
   }
 
-  /** place_note: position a note on the multiplayer canvas (updates the layout note). */
-  async place(noteId: string, x: number, y: number): Promise<CanvasLayout> {
+  /**
+   * place_note: position a note on a board's multiplayer canvas. Writes through
+   * the per-canvas content note (`anima:canvas:<id>`, plan 007 U3) so the agent
+   * and the frontend share one layout note post-migration. `canvasId` defaults
+   * to the shared board.
+   */
+  async place(noteId: string, x: number, y: number, canvasId = 'shared'): Promise<CanvasLayout> {
     const index = await this.#freshIndex();
     if (!index.get(noteId)) throw new Error(`Note ${noteId} not found in the vault — list_notes to see valid ids.`);
 
@@ -139,12 +144,18 @@ export class VaultClient {
         `Agent address ${this.agentAddress} cannot afford the layout write — fund it with testnet SUI/WAL and retry.`,
       );
     }
-    const layout = loadLayout(index);
-    layout[noteId] = { x, y };
-    await saveLayout(this.#deps!, index, layout, this.#cfg.agentName);
+    // read-merge-write the content note: keep this board's drawings + the other
+    // placed notes, set just this note's position.
+    const content = loadCanvasContent(index, canvasId);
+    content.layout[noteId] = { x, y };
+    const { migrationTx } = await saveCanvasContent(this.#deps!, index, canvasId, { layout: content.layout }, this.#cfg.agentName);
+    // A first shared write may hand back a delete tx for the legacy layout blob,
+    // but the agent key cannot sign the wallet-owned delete — drop it. It self-
+    // heals on the owner's next frontend shared-board write (U1 migration).
+    if (migrationTx) console.error('[anima-mcp] shared-board migration tx dropped (owner-signed); self-heals via the app.');
     this.#fetchedAt = Date.now();
     this.#saveCache();
-    return layout;
+    return content.layout;
   }
 
   async #connect(): Promise<QuiltDeps> {

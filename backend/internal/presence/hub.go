@@ -41,35 +41,48 @@ func NewHub() *Hub {
 	return &Hub{rooms: make(map[string]*room)}
 }
 
-func (h *Hub) getRoom(vault string) *room {
+// roomKey scopes a room to a single board: presence on one canvas never leaks to
+// another canvas of the same vault. canvas defaults to "shared" for back-compat
+// (a legacy ?vault= URL with no canvas lands in the shared room).
+func roomKey(vault, canvas string) string {
+	return vault + "|" + canvas
+}
+
+func (h *Hub) getRoom(key string) *room {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	r, ok := h.rooms[vault]
+	r, ok := h.rooms[key]
 	if !ok {
 		r = &room{peers: make(map[*peer]struct{})}
-		h.rooms[vault] = r
+		h.rooms[key] = r
 	}
 	return r
 }
 
-func (h *Hub) dropRoomIfEmpty(vault string, r *room) {
+func (h *Hub) dropRoomIfEmpty(key string, r *room) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	r.mu.Lock()
 	empty := len(r.peers) == 0
 	r.mu.Unlock()
 	if empty {
-		delete(h.rooms, vault)
+		delete(h.rooms, key)
 	}
 }
 
-// ServeHTTP upgrades GET /presence?vault=<id> and relays until disconnect.
+// ServeHTTP upgrades GET /presence?vault=<id>&canvas=<canvasId> and relays until
+// disconnect. canvas is optional and defaults to "shared".
 func (h *Hub) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	vault := req.URL.Query().Get("vault")
 	if vault == "" {
 		http.Error(w, "vault query param required", http.StatusBadRequest)
 		return
 	}
+	canvas := req.URL.Query().Get("canvas")
+	if canvas == "" {
+		canvas = "shared"
+	}
+	key := roomKey(vault, canvas)
 
 	conn, err := websocket.Accept(w, req, &websocket.AcceptOptions{
 		// browser + local MCP processes; payloads are non-sensitive by design
@@ -80,7 +93,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	conn.SetReadLimit(maxMsgBytes)
 
-	r := h.getRoom(vault)
+	r := h.getRoom(key)
 	p := &peer{conn: conn, send: make(chan []byte, 64)}
 
 	r.mu.Lock()
@@ -98,7 +111,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		r.mu.Lock()
 		delete(r.peers, p)
 		r.mu.Unlock()
-		h.dropRoomIfEmpty(vault, r)
+		h.dropRoomIfEmpty(key, r)
 		conn.Close(websocket.StatusNormalClosure, "")
 	}()
 

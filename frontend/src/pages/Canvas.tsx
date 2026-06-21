@@ -282,10 +282,10 @@ export function Canvas() {
   // durable layout seed reads the live index).
   const readyVaultId = session.phase === 'ready' ? session.vault.vaultId : null;
   useEffect(() => {
-    if (!isShared || !readyVaultId) return;
-    startPresence(readyVaultId);
+    if (!isShared || !readyVaultId || !canvasId) return;
+    startPresence(readyVaultId, canvasId);
     return () => stopPresence();
-  }, [isShared, readyVaultId]);
+  }, [isShared, readyVaultId, canvasId]);
 
   // Seed this board's drawings from its durable content note (resurrects shapes),
   // and reset the transient draw state. Image shapes are dropped on the map until

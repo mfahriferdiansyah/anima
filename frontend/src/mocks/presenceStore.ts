@@ -7,10 +7,13 @@
  * `peers[]` list. Nothing here is persisted; the relay sees no key. The peer
  * `label` is a NON-IDENTIFYING session handle, never a wallet address or name.
  *
- * The LAYOUT is DURABLE: it lives as the reserved `anima:canvas-layout` note on
- * Walrus (`saveLayout`/`loadLayout`), last-write-wins per object, written
- * SILENTLY (no toast). Overlapping drags are coalesced into one pending write so
- * two same-version layout quilts never ship (the resurrection-determinism guard).
+ * The LAYOUT is DURABLE: it lives in the active board's per-canvas content note
+ * (reserved `anima:canvas:<id>` via `loadCanvasContent`/`saveCanvasContent`,
+ * plan 007 U3), last-write-wins per object, written SILENTLY (no toast).
+ * Overlapping drags are coalesced into one pending write so two same-version
+ * layout quilts never ship (the resurrection-determinism guard). Presence is
+ * mounted only for the `shared` board today, so `activeCanvasId` is `shared`,
+ * but the canvas is threaded explicitly so the relay room keys on `vault|canvas`.
  *
  * Module load is side-effect-free (no WS, no env read) so the pure cores —
  * `reducePeers`, `serializeMsg`/`parseMsg`, and `createLayoutSaver` — stay
@@ -18,8 +21,16 @@
  * is called from the mounted board.
  */
 import { createStore } from './store';
-import { LAYOUT_TAG, loadLayout, saveLayout, type CanvasLayout, type PresenceMsg } from '../../../chain/core/src/index.js';
+import {
+  loadCanvasContent,
+  saveCanvasContent,
+  canvasContentTag,
+  SHARED_CANVAS_ID,
+  type CanvasLayout,
+  type PresenceMsg,
+} from '../../../chain/core/src/index.js';
 import { getQuiltDeps } from '../web3/session';
+import { runDestructiveTx } from '../hooks/useVault';
 import { vaultData } from '../web3/vaultData';
 
 export interface Peer {
@@ -228,11 +239,15 @@ let cursorThrottle: ReturnType<typeof setTimeout> | null = null;
 let saveDebounce: ReturnType<typeof setTimeout> | null = null;
 let layoutSaver: LayoutSaver | null = null;
 let materializeTimer: ReturnType<typeof setTimeout> | null = null;
+/** The board this presence session is scoped to — relay room + content-note key.
+ * Read LIVE by the lazily-created layout saver, so it must stay a module `let`. */
+let activeCanvasId: string = SHARED_CANVAS_ID;
 
-function backendWsUrl(vaultId: string): string {
+/** The relay URL for a board: rooms key on `vault|canvas` (default `canvas=shared`). */
+export function backendWsUrl(vaultId: string, canvasId: string = SHARED_CANVAS_ID): string {
   const base = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8080';
   const ws = base.replace(/^http/, 'ws');
-  return `${ws}/presence?vault=${encodeURIComponent(vaultId)}`;
+  return `${ws}/presence?vault=${encodeURIComponent(vaultId)}&canvas=${encodeURIComponent(canvasId)}`;
 }
 
 function send(msg: PresenceMsg): void {
@@ -260,24 +275,28 @@ function onFrame(msg: PresenceMsg): void {
 }
 
 /**
- * Begin presence for the shared board (canvas mount). Idempotent. Seeds the
- * layout from the durable reserved note, then connects the relay and announces
- * via `hello`. `vaultId` defaults to the ready vault's id (`getQuiltDeps()`); a
- * no-op if no vault is ready.
+ * Begin presence for a board (canvas mount). Idempotent. Seeds the layout from
+ * that board's durable content note, then connects the relay (room keyed
+ * `vault|canvas`) and announces via `hello`. `vaultId` defaults to the ready
+ * vault's id (`getQuiltDeps()`); a no-op if no vault is ready. `canvasId`
+ * defaults to the shared board (back-compat) and scopes both the relay room and
+ * the layout writes to that canvas.
  */
-export function startPresence(vaultId?: string): void {
+export function startPresence(vaultId?: string, canvasId: string = SHARED_CANVAS_ID): void {
   if (socket) return;
   const deps = getQuiltDeps();
   const id = vaultId ?? deps?.vaultId;
   if (!id) return;
 
-  // Seed positions from the durable layout note (resurrects the constellation).
+  activeCanvasId = canvasId;
+
+  // Seed positions from this board's durable content note (resurrects the constellation).
   const index = vaultData.getSnapshot().index;
-  const seeded: CanvasLayout = index ? loadLayout(index) : {};
+  const seeded: CanvasLayout = index ? loadCanvasContent(index, activeCanvasId).layout : {};
   store.update((prev) => ({ ...prev, layout: { ...seeded }, connection: 'live', peers: [] }));
 
   intentionalClose = false;
-  const ws = new WebSocket(backendWsUrl(id));
+  const ws = new WebSocket(backendWsUrl(id, activeCanvasId));
   socket = ws;
 
   ws.onopen = () => {
@@ -339,16 +358,21 @@ function ensureLayoutSaver(): LayoutSaver {
         // but still REGISTERS in vaultData.writeStates so the bulk-forget quiesce
         // (U7) — which awaits any in-flight {encrypting,certifying} write before a
         // vault wipe — covers the layout autosave too. The key is the reserved
-        // layout tag, so it never collides with a real note or shows in notes().
+        // per-canvas content tag (matching U2's drawings saver), so it never
+        // collides with a real note or shows in notes().
         const eventId = vaultData.beginWriteEvent({
-          noteId: LAYOUT_TAG,
+          noteId: canvasContentTag(activeCanvasId),
           noteTitle: 'Canvas layout',
           state: { phase: 'certifying' },
           silent: true,
         });
         try {
-          await saveLayout(deps, index, layout); // reserved note, last-write-wins
+          // per-canvas content note, last-write-wins per object (read-merge-write)
+          const res = await saveCanvasContent(deps, index, activeCanvasId, { layout });
           vaultData.updateWriteEvent(eventId, { phase: 'certified', blobObjectId: '', provenanceUrl: '' });
+          // best-effort: delete the legacy shared layout blob if U1 handed one back
+          // (the owner's wallet seam can sign it; NO-THROW when unwired).
+          if (res.migrationTx) void runDestructiveTx(res.migrationTx).catch(() => {});
         } catch (e) {
           vaultData.updateWriteEvent(eventId, { phase: 'failed' });
           throw e; // keep the coalescing .finally chain advancing
@@ -386,6 +410,7 @@ export function resetPresenceStore(): void {
   }
   layoutSaver = null;
   intentionalClose = false;
+  activeCanvasId = SHARED_CANVAS_ID;
   store.update(() => ({
     peers: [],
     layout: {},

@@ -20,7 +20,8 @@ export class Presence {
     if (!this.#cfg.presenceUrl) return null;
     if (this.#ws && this.#ws.readyState === WebSocket.OPEN) return this.#ws;
     try {
-      const url = `${this.#cfg.presenceUrl.replace(/\/$/, '')}?vault=${this.#cfg.vaultId}`;
+      const canvas = this.#cfg.canvas ?? 'shared';
+      const url = `${this.#cfg.presenceUrl.replace(/\/$/, '')}?vault=${this.#cfg.vaultId}&canvas=${canvas}`;
       this.#ws = new WebSocket(url);
       this.#ws.addEventListener('open', () => {
         this.#send({ t: 'hello', id: this.#id, label: this.#cfg.agentName, kind: 'agent' });

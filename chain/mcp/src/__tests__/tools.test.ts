@@ -20,13 +20,16 @@ vi.mock('../../../core/src/index.js', async (importOriginal) => {
     writeTurn: vi.fn(),
     listVaultQuilts: vi.fn(),
     readAll: vi.fn(),
+    // place() writes through saveCanvasContent (its internal ./quilts.js write is
+    // not reachable from this barrel mock); stub it to assert the canvasId forward.
+    saveCanvasContent: vi.fn(async () => ({ note: {}, migrationTx: undefined })),
   };
 });
 
-import { newNote, readVault, preflight, writeTurn, listVaultQuilts, readAll, type IndexedNote } from '../../../core/src/index.js';
+import { newNote, readVault, preflight, writeTurn, listVaultQuilts, readAll, saveCanvasContent, type IndexedNote } from '../../../core/src/index.js';
 import { loadConfig } from '../config.js';
 import { VaultClient } from '../vaultClient.js';
-import { recallTool, rememberTool, listNotesTool, readNoteTool, editNoteTool } from '../tools.js';
+import { recallTool, rememberTool, listNotesTool, readNoteTool, editNoteTool, placeNoteTool } from '../tools.js';
 
 const VAULT_ID = `0x${'1'.repeat(64)}`;
 const OWNER = `0x${'2'.repeat(64)}`;
@@ -193,6 +196,54 @@ describe('edit_note + list hygiene (U5)', () => {
     expect(res.content[0].text).toContain('Trip to Kyoto');
     expect(res.content[0].text).not.toContain('Canvas layout');
     expect(res.content[0].text).toContain('1 notes in the vault'); // only the user note counts
+  });
+});
+
+describe('place_note — canvas-aware (plan 007 U3)', () => {
+  it('forwards an explicit canvasId to client.place', async () => {
+    const client = { agentAddress: '0x0', place: vi.fn(async () => ({ n1: { x: 5, y: 6 } })) } as unknown as VaultClient;
+    const res = await placeNoteTool(client, { noteId: 'n1', x: 5, y: 6, canvasId: 'board-A' });
+    expect(res.isError).toBeUndefined();
+    expect(client.place).toHaveBeenCalledWith('n1', 5, 6, 'board-A');
+  });
+
+  it('passes undefined when no canvasId (place() defaults to shared)', async () => {
+    const client = { agentAddress: '0x0', place: vi.fn(async () => ({ n1: { x: 5, y: 6 } })) } as unknown as VaultClient;
+    await placeNoteTool(client, { noteId: 'n1', x: 5, y: 6 });
+    expect(client.place).toHaveBeenCalledWith('n1', 5, 6, undefined);
+  });
+
+  it('VaultClient.place writes through saveCanvasContent on the shared board by default', async () => {
+    const client = makeClient('claude-code');
+    const note = entry('Trip to Kyoto', 'Cherry blossoms.', ['travel']);
+    armClient(client, [note]);
+
+    const layout = await client.place(note.note.noteId, 12, 34); // no canvasId → shared
+    expect(layout[note.note.noteId]).toEqual({ x: 12, y: 34 });
+
+    // canvasId defaults to 'shared'; author (5th arg) preserves agent attribution
+    expect(saveCanvasContent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      'shared',
+      { layout: { [note.note.noteId]: { x: 12, y: 34 } } },
+      'claude-code',
+    );
+  });
+
+  it('VaultClient.place targets the given board through saveCanvasContent', async () => {
+    const client = makeClient('claude-code');
+    const note = entry('Trip to Kyoto', 'Cherry blossoms.', ['travel']);
+    armClient(client, [note]);
+
+    await client.place(note.note.noteId, 1, 2, 'board-A');
+    expect(saveCanvasContent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      'board-A',
+      { layout: { [note.note.noteId]: { x: 1, y: 2 } } },
+      'claude-code',
+    );
   });
 });
 

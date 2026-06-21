@@ -17,6 +17,7 @@ import {
   parseMsg,
   reducePeers,
   createLayoutSaver,
+  backendWsUrl,
   type Peer,
   type SaveFn,
 } from '../mocks/presenceStore';
@@ -54,6 +55,24 @@ describe('presence wire (de)serialization', () => {
     expect(parseMsg(JSON.stringify({ t: 'hello', id: 'p1', label: 'x', kind: 'robot' }))).toBeNull();
     expect(parseMsg(JSON.stringify({ t: 'cursor', id: 'p1', x: 'NaN', y: 0 }))).toBeNull();
     expect(parseMsg(JSON.stringify({ t: 'writing', id: 'p1', on: 'yes' }))).toBeNull();
+  });
+});
+
+// --- 1b. relay URL — vault|canvas room keying (plan 007 U3) ------------------
+
+describe('backendWsUrl — vault|canvas room scoping', () => {
+  it('defaults the canvas to shared (back-compat) when omitted', () => {
+    expect(backendWsUrl('0xabc')).toBe('ws://localhost:8080/presence?vault=0xabc&canvas=shared');
+  });
+
+  it('appends the given canvas so a board gets its own relay room', () => {
+    expect(backendWsUrl('0xabc', 'board-A')).toBe(
+      'ws://localhost:8080/presence?vault=0xabc&canvas=board-A',
+    );
+  });
+
+  it('url-encodes both the vault and canvas ids', () => {
+    expect(backendWsUrl('0x a', 'b/c')).toBe('ws://localhost:8080/presence?vault=0x%20a&canvas=b%2Fc');
   });
 });
 
