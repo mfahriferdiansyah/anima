@@ -1,10 +1,17 @@
 import { useSyncExternalStore } from 'react';
 import { presenceStore, type PresenceState } from '../mocks/presenceStore';
 
-/** Canvas peers, layout, and the savingLayout/materialize flags. */
+/** Canvas peers, layout, the savingLayout/materialize flags, and socket health. */
 export function usePresence(): PresenceState {
   return useSyncExternalStore(presenceStore.subscribe, presenceStore.getSnapshot);
 }
 
-export { startPresence, stopPresence, moveNote } from '../mocks/presenceStore';
-export type { PresenceState, Peer } from '../mocks/presenceStore';
+export {
+  startPresence,
+  stopPresence,
+  moveNote,
+  moveCursor,
+  setWriting,
+  resetPresenceStore,
+} from '../mocks/presenceStore';
+export type { PresenceState, Peer, ConnectionState } from '../mocks/presenceStore';

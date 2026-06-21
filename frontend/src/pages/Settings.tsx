@@ -9,14 +9,18 @@ import type { ToastItem } from '@/components/ToastStack';
 import type { ToastVariant } from '@/components/Toast';
 import { dismissLowBalance } from '@/hooks/useChat';
 import {
+  configureSettingsExec,
   connectExternalAgent,
-  regenerateAgentSecret,
+  refreshBalances,
   revokeKey,
   useSettings,
 } from '@/hooks/useSettings';
 import type { KeyEntry } from '@/hooks/useSettings';
 import { useVault } from '@/hooks/useVault';
 import { renameCompanion, useVaultSession } from '@/hooks/useVaultSession';
+import { useWalletExecTx } from '@/web3/walletExecTx';
+import { vaultData } from '@/web3/vaultData';
+import { exportVaultZip } from '../../../chain/core/src/index.js';
 import './settings.css';
 
 const WAL_LOW_THRESHOLD = 1;
@@ -79,6 +83,7 @@ function ConnectAgentDialog({ open, onClose, vaultId, issuedKey, onIssued }: Con
   const [agentName, setAgentName] = useState('');
   const [secret, setSecret] = useState('');
   const [copied, setCopied] = useState<'secret' | 'env' | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const copyTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -87,6 +92,7 @@ function ConnectAgentDialog({ open, onClose, vaultId, issuedKey, onIssued }: Con
     setAgentName('');
     setSecret('');
     setCopied(null);
+    setError(null);
     // the issued-or-generate fork is decided at open time only, so the
     // effect deliberately keys on `open` alone
   }, [open]);
@@ -105,20 +111,24 @@ function ConnectAgentDialog({ open, onClose, vaultId, issuedKey, onIssued }: Con
     copyTimer.current = window.setTimeout(() => setCopied(null), 1800);
   };
 
-  const generate = () => {
-    const issued = connectExternalAgent(agentName);
-    onIssued(issued.key);
-    setSecret(issued.secret);
-    setStep('secret');
-  };
+  const [busy, setBusy] = useState(false);
 
-  const regenerate = () => {
-    if (!issuedKey) return;
-    const next = regenerateAgentSecret(issuedKey.id);
-    if (!next) return;
-    setSecret(next);
-    setCopied(null);
-    setStep('secret');
+  const generate = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const issued = await connectExternalAgent(agentName);
+      onIssued(issued.key);
+      setSecret(issued.secret);
+      setStep('secret');
+    } catch {
+      // a declined wallet signature (or a failed register) leaves nothing
+      // authorized — re-arm the generate step with an inline reason.
+      setError('Signature was declined or the request failed. Nothing was authorized; try again when ready.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const envBlock = `ANIMA_VAULT_ID=${vaultId}\nANIMA_AGENT_KEY=${secret}`;
@@ -139,12 +149,13 @@ function ConnectAgentDialog({ open, onClose, vaultId, issuedKey, onIssued }: Con
               onChange={(event) => setAgentName(event.target.value)}
               placeholder="external agent"
             />
+            {error ? <div className="pgst-help" role="alert">{error}</div> : null}
             <div className="wallet-actions">
               <Button variant="quiet" onClick={onClose}>
                 Cancel
               </Button>
-              <Button variant="primary" onClick={generate}>
-                Generate key
+              <Button variant="primary" onClick={generate} disabled={busy}>
+                {busy ? 'Generating…' : 'Generate key'}
               </Button>
             </div>
           </>
@@ -174,15 +185,12 @@ function ConnectAgentDialog({ open, onClose, vaultId, issuedKey, onIssued }: Con
               <KeyIcon kind="external" />
               <div>
                 <div className="al">{issuedKey?.label}</div>
-                <div className="as">secret already issued, regenerate to replace it</div>
+                <div className="as">secret already issued; revoke this key and connect a new agent to replace it</div>
               </div>
             </div>
             <div className="wallet-actions">
-              <Button variant="quiet" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button variant="danger" onClick={regenerate}>
-                Regenerate
+              <Button variant="primary" onClick={onClose}>
+                Done
               </Button>
             </div>
           </>
@@ -207,7 +215,8 @@ function KeyRow({ entry, onRevoke }: { entry: KeyEntry; onRevoke: (entry: KeyEnt
           ) : null}
         </div>
         <div className="km" title={entry.address}>
-          {shortAddress(entry.address)} · added {entry.addedAt.slice(0, 10)}
+          {shortAddress(entry.address)}
+          {entry.addedAt ? ` · added ${entry.addedAt.slice(0, 10)}` : ''}
         </div>
       </div>
       {entry.thisDevice ? (
@@ -232,6 +241,7 @@ export function Settings() {
   const session = useVaultSession();
   const settings = useSettings();
   const { notes } = useVault();
+  const { execTx } = useWalletExecTx();
   const ready = session.phase === 'ready' ? session : null;
 
   const [name, setName] = useState(ready?.vault.name ?? '');
@@ -239,6 +249,20 @@ export function Settings() {
   const [issuedKeyId, setIssuedKeyId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastCounter = useRef(0);
+
+  // useWalletExecTx returns a fresh execTx each render; keep the latest in a ref
+  // so the settings layer always calls the current one (mirrors useVaultSession).
+  const execRef = useRef(execTx);
+  execRef.current = execTx;
+
+  // Wire the wallet-exec adapter into the settings layer and pull live balances
+  // once a vault is ready (preflight on the device agent address).
+  useEffect(() => {
+    configureSettingsExec((tx) => execRef.current(tx));
+    if (ready) void refreshBalances();
+    return () => configureSettingsExec(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- execTx read via execRef; refetch only when ready flips
+  }, [ready?.vault.vaultId]);
 
   const pushToast = (variant: ToastVariant, title: string, detail?: ReactNode) => {
     toastCounter.current += 1;
@@ -253,9 +277,13 @@ export function Settings() {
     pushToast('success', 'Companion renamed');
   };
 
-  const revoke = (entry: KeyEntry) => {
-    revokeKey(entry.id);
-    pushToast('success', 'Key revoked', entry.label);
+  const revoke = async (entry: KeyEntry) => {
+    try {
+      await revokeKey(entry.id);
+      pushToast('success', 'Key revoked', entry.label);
+    } catch {
+      pushToast('error', 'Revoke failed', entry.label);
+    }
   };
 
   const topUp = () => {
@@ -264,21 +292,16 @@ export function Settings() {
   };
 
   const exportVault = () => {
-    const payload = {
-      vaultId: ready.vault.vaultId,
-      owner: ready.vault.owner,
-      companion: ready.agent.name,
-      exportedAt: new Date().toISOString(),
-      notes,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const entries = vaultData.getSnapshot().index?.all() ?? [];
+    const zip = exportVaultZip(entries);
+    const blob = new Blob([zip as BlobPart], { type: 'application/zip' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = 'anima-vault-export.json';
+    anchor.download = 'anima-vault-export.zip';
     anchor.click();
     URL.revokeObjectURL(url);
-    pushToast('success', 'Vault exported', 'anima-vault-export.json');
+    pushToast('success', 'Vault exported', 'anima-vault-export.zip');
   };
 
   const forgetEverything = () => {
@@ -372,7 +395,7 @@ export function Settings() {
       <div className="pgh-label">EXPORT</div>
       <div className="pgst-row">
         <span className="pgst-k">
-          Every note as plain JSON, decrypted in this browser
+          Every note as a folder of markdown, decrypted in this browser
           <br />
           <span className="pgst-help">
             {notes.length} {notes.length === 1 ? 'note' : 'notes'} · leaving the app never means leaving your data

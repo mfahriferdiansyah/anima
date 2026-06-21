@@ -7,7 +7,9 @@
 import { createStore } from './store';
 import { mockMs } from './timing';
 import { AGENT_AUTHOR, chatScripts, type ChatIntent } from './fixture';
-import { createNote, saveNote } from './vaultStore';
+// createNote/saveNote now live in the migrated useVault (vaultStore was deleted in
+// U4); the scripted draft uses them until U6 migrates this store to real SSE+distill.
+import { createNote, saveNote } from '../hooks/useVault';
 import { appendTimelineEvent } from './agentTimeline';
 
 export type ChatRole = 'user' | 'agent' | 'event';

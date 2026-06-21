@@ -5,7 +5,8 @@
  * with no password is a public read-only share; adding a password gates it.
  */
 import { createStore } from './store';
-import { vaultStore } from './vaultStore';
+// vaultStore was deleted in U4; read notes from the live shared index instead.
+import { vaultData } from '../web3/vaultData';
 
 export type LinkAccess = 'edit' | 'view';
 
@@ -46,7 +47,7 @@ export function newSharePassword(): string {
 export function createShareLink(noteId: string, access: LinkAccess, titleOverride?: string): ShareLink {
   const existing = store.getSnapshot().links.find((link) => link.noteId === noteId);
   if (existing) return existing;
-  const note = vaultStore.getSnapshot().notes.find((entry) => entry.noteId === noteId);
+  const note = vaultData.getSnapshot().notes.find((entry) => entry.noteId === noteId);
   const title = titleOverride?.trim() || note?.title || noteId;
   const link: ShareLink = { noteId, access, password: null, url: `anima.app/s/${slugify(title)}` };
   store.update((prev) => ({ links: [link, ...prev.links] }));

@@ -6,7 +6,6 @@ import { App } from '@/app/App';
 import { AnimaProviders } from '@/web3/AnimaProviders';
 // imported after App so the responsive layer wins over shell/page CSS
 import '@/theme/responsive.css';
-import { failNextWrite } from '@/mocks/vaultStore';
 import { triggerLowBalance } from '@/mocks/chatStore';
 
 document.title = BRAND_NAME;
@@ -15,7 +14,6 @@ document.title = BRAND_NAME;
 declare global {
   interface Window {
     __anima?: {
-      failNextWrite: () => void;
       triggerLowBalance: () => void;
       /**
        * Dev/smoke-only: the browser smoke probe. Excluded from production builds.
@@ -26,7 +24,7 @@ declare global {
     };
   }
 }
-window.__anima = { failNextWrite, triggerLowBalance };
+window.__anima = { triggerLowBalance };
 
 // U2 smoke harness — mode-gated. In a production build MODE==='production', so
 // this whole block is dead code and browserSmoke (+ the wasm singleton + the

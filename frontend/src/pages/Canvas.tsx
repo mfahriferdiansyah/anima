@@ -7,7 +7,7 @@ import { SHARED_CANVAS_ID, updateCanvas, useCanvases } from '@/hooks/useCanvases
 import { CoverPicker } from '@/components/CoverPicker';
 import { CanvasHome } from './CanvasHome';
 import { ShareDialog } from './ShareDialog';
-import { moveNote, startPresence, stopPresence, usePresence } from '@/hooks/usePresence';
+import { moveCursor, moveNote, startPresence, stopPresence, usePresence } from '@/hooks/usePresence';
 import type { Peer } from '@/hooks/usePresence';
 import { scheduleAgentNote } from '@/hooks/useAgentTimeline';
 import { useVaultSession } from '@/hooks/useVaultSession';
@@ -159,7 +159,7 @@ export function Canvas() {
     setCoverOpen(false);
   };
   const { notes } = useVault();
-  const { peers, layout, savingLayout, materializedNoteId } = usePresence();
+  const { peers, layout, savingLayout, materializedNoteId, connection } = usePresence();
   const dragRef = useRef<DragState | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [tool, setTool] = useState('select');
@@ -184,12 +184,15 @@ export function Canvas() {
   const idSeq = useRef(0);
   const nextId = () => `sh${++idSeq.current}`;
 
-  // Presence + the live constellation belong to the shared board only.
+  // Presence + the live constellation belong to the shared board only, and only
+  // once the vault is ready (the relay room is keyed on the vault id, and the
+  // durable layout seed reads the live index).
+  const readyVaultId = session.phase === 'ready' ? session.vault.vaultId : null;
   useEffect(() => {
-    if (!isShared) return;
-    startPresence();
+    if (!isShared || !readyVaultId) return;
+    startPresence(readyVaultId);
     return () => stopPresence();
-  }, [isShared]);
+  }, [isShared, readyVaultId]);
 
   // Each board carries its own (session-local) drawings; switching clears them.
   useEffect(() => {
@@ -364,6 +367,12 @@ export function Canvas() {
   };
 
   const onCanvasPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    // Broadcast the local cursor (world coords, so peers render it where it
+    // lives on the shared plane). Throttled inside moveCursor; no-op off-board.
+    if (isShared) {
+      const wp = toWorld(event.clientX, event.clientY);
+      moveCursor(wp.x, wp.y);
+    }
     const d = draftRef.current;
     if (d) {
       const wp = toWorld(event.clientX, event.clientY);
@@ -527,6 +536,21 @@ export function Canvas() {
           Canvas / <b>{boardTitle}</b>
         </span>
         <span className="sp" />
+        {isShared && connection !== 'live' ? (
+          <span
+            role="status"
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '9.5px',
+              fontWeight: 700,
+              color: connection === 'full' ? '#B4231F' : 'rgba(22,24,29,.55)',
+            }}
+          >
+            {connection === 'full'
+              ? 'This board is full — try again later.'
+              : 'Connection lost — presence is offline.'}
+          </span>
+        ) : null}
         {savingLayout ? (
           <span className="pgcv-save">
             <span className="spin" aria-hidden="true">✦</span> saving layout…

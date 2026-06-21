@@ -8,10 +8,10 @@
  */
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
-import { useWalletExecTx } from '@/web3/walletExecTx';
-import { agentAddress, getOrCreateAgentKey } from '@/web3/agentKey';
-import { configureSession, disconnect, sessionStore, startSession } from '@/web3/session';
-import type { SessionState } from '@/web3/session';
+import { useWalletExecTx } from '../web3/walletExecTx';
+import { agentAddress, getOrCreateAgentKey } from '../web3/agentKey';
+import { configureSession, disconnect, sessionStore, startSession } from '../web3/session';
+import type { SessionState } from '../web3/session';
 
 export function useVaultSession(): SessionState {
   const account = useCurrentAccount();
