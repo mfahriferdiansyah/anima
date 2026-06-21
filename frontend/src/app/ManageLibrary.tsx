@@ -6,6 +6,7 @@ import { useWalletExecTx } from '@/web3/walletExecTx';
 import {
   addFolder,
   deleteCanvas,
+  deleteFolder,
   moveFolder,
   setCanvasFolder,
   updateCanvas,
@@ -117,6 +118,11 @@ export function ManageLibrary({ open, onClose }: { open: boolean; onClose: () =>
                   <button type="button" className="mlib-arrow" disabled={!inOrder || i === folders.length - 1} aria-label="Move folder down" onClick={() => moveFolder(folder.name, 1)}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
                   </button>
+                  {inOrder && folder.items.length === 0 ? (
+                    <button type="button" className="mlib-arrow" aria-label="Remove empty folder" onClick={() => deleteFolder(folder.name)}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18" /><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                    </button>
+                  ) : null}
                 </div>
 
                 {folder.items.length === 0 ? <div className="mlib-empty">Empty — move items here.</div> : null}
