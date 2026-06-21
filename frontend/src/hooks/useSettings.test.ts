@@ -36,6 +36,14 @@ vi.mock('../../../chain/core/src/index.js', () => ({
   ensureAgentWal: vi.fn(async () => true),
   preflight: vi.fn(async () => ({ sui: 0n, wal: 0n, ok: true, needsSui: false, needsWal: false })),
 }));
+// Milestones are exercised in milestones.test.ts; here they're stubbed so this
+// test stays on the keys/balances core (and the @/ alias never has to resolve).
+vi.mock('@/web3/milestones', () => ({
+  deriveMilestones: () => [],
+  gatherSyncSignals: () => ({ noteCount: 0, firstNoteAt: null, agentCount: 0, hasPublished: false, resurrected: false }),
+  computeResurrection: () => false,
+  fetchHasPublished: async () => false,
+}));
 vi.mock('@mysten/sui/keypairs/ed25519', () => ({
   Ed25519Keypair: class {
     toSuiAddress() {

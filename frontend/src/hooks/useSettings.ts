@@ -31,11 +31,19 @@ import {
   type Preflight,
 } from '../../../chain/core/src/index.js';
 import { sessionStore, getQuiltDeps } from '@/web3/session';
+import {
+  deriveMilestones,
+  gatherSyncSignals,
+  computeResurrection,
+  fetchHasPublished,
+  type Milestone,
+} from '@/web3/milestones';
 import type { KeyEntry } from '../mocks/fixture';
 
 export interface SettingsState {
   keys: KeyEntry[];
   balances: { sui: number; wal: number };
+  milestones: Milestone[];
 }
 
 /** Mirror the onboarding/pairing fund amount (0.3 SUI clears both thresholds after the swap). */
@@ -105,6 +113,9 @@ export function deriveKeys(
 /** Pure factory (mirrors `createVaultData`). The singleton below wraps one of these. */
 export function createSettings() {
   let balances = { sui: 0, wal: 0 };
+  // Cached async/side-effecting milestone signals; the sync ones (note/agent
+  // count) are read live in build(). Refreshed alongside balances when ready.
+  let mile = { hasPublished: false, resurrected: false };
   const localExternal: LocalExternal[] = [];
   let execTx: ExecTx | null = null;
   const listeners = new Set<() => void>();
@@ -126,6 +137,7 @@ export function createSettings() {
     return {
       keys: deriveKeys(deviceAddress(), vaultAgents(), localExternal),
       balances,
+      milestones: deriveMilestones(gatherSyncSignals(mile.hasPublished, mile.resurrected)),
     };
   }
   // Cached so useSyncExternalStore sees a stable reference until something changes.
@@ -155,6 +167,11 @@ export function createSettings() {
       if (!deps) return;
       const pf = await preflight(deps.suiClient, deps.agentSigner.toSuiAddress());
       balances = toBalances(pf);
+      emit();
+    },
+    /** Resolve the async/side-effecting milestone signals (published scan + resurrection flag). */
+    async refreshMilestones(): Promise<void> {
+      mile = { hasPublished: await fetchHasPublished(), resurrected: computeResurrection() };
       emit();
     },
     /**
@@ -202,6 +219,7 @@ export function createSettings() {
     },
     reset(): void {
       balances = { sui: 0, wal: 0 };
+      mile = { hasPublished: false, resurrected: false };
       localExternal.length = 0;
       execTx = null;
       emit();
@@ -230,6 +248,11 @@ export function configureSettingsExec(execTx: ExecTx | null): void {
 /** Re-fetch balances (e.g. when a vault becomes ready or after a funding action). */
 export function refreshBalances(): Promise<void> {
   return settings.refreshBalances();
+}
+
+/** Resolve the async milestone signals (published scan + resurrection flag). */
+export function refreshMilestones(): Promise<void> {
+  return settings.refreshMilestones();
 }
 
 /** Authorize + fund a fresh external agent; returns its key + once-shown secret. */

@@ -12,9 +12,11 @@ import {
   configureSettingsExec,
   connectExternalAgent,
   refreshBalances,
+  refreshMilestones,
   revokeKey,
   useSettings,
 } from '@/hooks/useSettings';
+import type { MilestoneKey } from '@/web3/milestones';
 import type { KeyEntry } from '@/hooks/useSettings';
 import { configureForgetExec, forgetEverything, useVault } from '@/hooks/useVault';
 import { renameCompanion, useVaultSession } from '@/hooks/useVaultSession';
@@ -237,6 +239,30 @@ function KeyRow({ entry, onRevoke }: { entry: KeyEntry; onRevoke: (entry: KeyEnt
  * The wallet appears for destructive actions only: revoke, regenerate,
  * forget everything. Renaming the companion is routine, so it never signs.
  */
+/** The glyph for a milestone row (accent-colored when achieved). */
+function milestoneIcon(key: MilestoneKey, achieved: boolean): ReactNode {
+  if (key === 'seal') return <span className={achieved ? 'mg ok' : 'mg'}>✦</span>;
+  if (key === 'paired') return <span className={achieved ? 'mg ag' : 'mg'}>✧</span>;
+  if (key === 'public')
+    return (
+      <span className="mg">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="2" y1="12" x2="22" y2="12" />
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+        </svg>
+      </span>
+    );
+  return (
+    <span className="mg">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+        <path d="M3 3v5h5" />
+      </svg>
+    </span>
+  );
+}
+
 export function Settings() {
   const session = useVaultSession();
   const settings = useSettings();
@@ -265,7 +291,10 @@ export function Settings() {
   useEffect(() => {
     configureSettingsExec((tx) => execRef.current(tx));
     configureForgetExec((tx) => execRef.current(tx));
-    if (ready) void refreshBalances();
+    if (ready) {
+      void refreshBalances();
+      void refreshMilestones();
+    }
     return () => configureSettingsExec(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- execTx read via execRef; refetch only when ready flips
   }, [ready?.vault.vaultId]);
@@ -383,31 +412,13 @@ export function Settings() {
 
       <div className="pgh-label">MILESTONES</div>
       <div className="pgst-miles">
-        <div className="mrow">
-          <span className="mg ok">✦</span>First seal<span className="md">Jun 2</span>
-        </div>
-        <div className="mrow">
-          <span className="mg ag">✧</span>External agent paired<span className="md">Jun 5</span>
-        </div>
-        <div className="mrow">
-          <span className="mg">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="2" y1="12" x2="22" y2="12" />
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-            </svg>
-          </span>
-          First public note<span className="md">Jun 8</span>
-        </div>
-        <div className="mrow dim">
-          <span className="mg">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-              <path d="M3 3v5h5" />
-            </svg>
-          </span>
-          Resurrected<span className="md">not yet</span>
-        </div>
+        {settings.milestones.map((m) => (
+          <div key={m.key} className={m.achieved ? 'mrow' : 'mrow dim'}>
+            {milestoneIcon(m.key, m.achieved)}
+            {m.label}
+            <span className="md">{m.date}</span>
+          </div>
+        ))}
       </div>
 
       <div className="pgh-label">EXPORT</div>
