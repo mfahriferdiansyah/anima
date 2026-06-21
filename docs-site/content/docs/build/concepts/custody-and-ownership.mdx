@@ -15,7 +15,7 @@ The vault itself is a shared on-chain object that tracks its name, owner, and th
 
 ## What the backend holds
 
-Nothing durable. The Anima backend is stateless. It holds no keys and stores no notes. It transiently sees decrypted chat context during inference (your client sends the relevant notes so the model can answer) and keeps none of it. Your keys live only on your devices, in browser storage or in an agent's environment.
+Nothing durable. The Anima backend is stateless. It holds no keys and stores no notes. It transiently sees decrypted note context during inference — for a chat reply, a distilled note, or a Nova suggestion, your client sends the relevant notes (and, if you connect it, calendar events) so the model can answer — and keeps none of it. Your keys live only on your devices, in browser storage or in an agent's environment.
 
 ## Why this beats "your data on our servers"
 

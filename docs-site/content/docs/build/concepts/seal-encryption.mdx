@@ -3,11 +3,11 @@ title: Seal encryption and access
 description: Notes are encrypted client-side, and decryption is gated by a Seal allowlist checked on every read. Revoking an agent denies its next session.
 ---
 
-Notes never leave your device in the clear. Each note is encrypted client-side before it goes to Walrus, and who can decrypt it is governed by Seal, a threshold key-server scheme on Sui.
+Your notes are never *stored* anywhere in the clear. Each note is encrypted client-side before it goes to Walrus, and who can decrypt it is governed by Seal, a threshold key-server scheme on Sui. The one transient exception: when you ask Nova (or an agent) something, your client decrypts the relevant notes and sends them to the language model for that single inference — they are kept nowhere afterward (see [Custody and ownership](./custody-and-ownership)).
 
 ## Encryption
 
-When a note is written, your client encrypts it against an identity tied to your vault. The ciphertext is also bound to the specific vault and note (additional authenticated data), so a blob from one vault cannot be replayed into another. The plaintext markdown and the keys exist only on your devices.
+When a note is written, your client encrypts it against an identity tied to your vault. The ciphertext is also bound to the specific vault and note (additional authenticated data), so a blob from one vault cannot be replayed into another. The keys exist only on your devices, and the plaintext markdown is never persisted off them — it is decrypted only in your client (and sent transiently to the model when you ask it something, as above).
 
 ## How a decrypt is gated
 

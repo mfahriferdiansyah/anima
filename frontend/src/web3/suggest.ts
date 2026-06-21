@@ -18,7 +18,7 @@
  */
 import { createStore } from '../mocks/store';
 import { ensureJwt } from './auth';
-import { agentEvents, draftSuggestion, materializeNoteSeed, type AgentEvent, type AgentEventType } from '../mocks/fixture';
+import { type AgentEvent, type AgentEventType } from '../mocks/fixture';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,8 +41,10 @@ export interface TimelineState {
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
+// The activity rail starts EMPTY — it fills with real accept/draft events. No
+// scripted fixture history (that would present fake Nova activity as real).
 const store = createStore<TimelineState>({
-  events: [...agentEvents],
+  events: [],
   draftRequested: false,
   suggestion: null,
 });
@@ -81,7 +83,6 @@ function backendUrl(): string {
 // ── Counter / id helpers ──────────────────────────────────────────────────────
 
 let eventCounter = 0;
-let agentNoteScheduled = false;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -160,18 +161,12 @@ export function requestDraft(opts: {
   store.update((prev) => ({ ...prev, draftRequested: true }));
 
   void requestSuggestions({ ...opts, targetNoteId: null }).then((suggestions) => {
+    // On an empty/failed /suggest, leave suggestion null — the honest empty rail
+    // shows. NEVER fall back to a fixture: the owner could "Add to vault" and
+    // seal a fabricated note as a real signed memory.
     const first = suggestions[0] ?? null;
-    store.update((prev) => ({
-      ...prev,
-      draftRequested: false,
-      suggestion: first ?? {
-        ...draftSuggestion,
-        id: newSuggestionId(),
-      },
-    }));
-    if (first) {
-      appendEvent('suggestion', first.summary, []);
-    }
+    store.update((prev) => ({ ...prev, draftRequested: false, suggestion: first }));
+    if (first) appendEvent('suggestion', first.summary, []);
   });
 }
 
@@ -211,19 +206,15 @@ export function clearSuggestion(): void {
 }
 
 /**
- * Canvas calls this once; ~6s later Nova logs that it added a note to the board.
- * The event is a lightweight activity log — no chain write here (Tier-2 Concern).
+ * Canvas hook for an agent-materialize activity beat. Real agent-on-canvas
+ * activity (an external agent placing a note) is a plan-007 concern; until then
+ * this is a no-op — it must NOT fabricate a "Nova added a note" event.
  */
 export function scheduleAgentNote(): void {
-  if (agentNoteScheduled) return;
-  agentNoteScheduled = true;
-  setTimeout(() => {
-    appendEvent('draft', `Nova added ${materializeNoteSeed.title} to the canvas`, []);
-  }, 6000);
+  // intentionally empty — no fabricated activity (see plan 007)
 }
 
 export function resetAgentTimeline(): void {
-  agentNoteScheduled = false;
   eventCounter = 0;
-  store.update(() => ({ events: [...agentEvents], draftRequested: false, suggestion: null }));
+  store.update(() => ({ events: [], draftRequested: false, suggestion: null }));
 }

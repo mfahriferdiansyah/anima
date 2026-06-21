@@ -183,13 +183,13 @@ describe('AE5 lifecycle', () => {
     expect(agentTimeline.getSnapshot().events[0].type).toBe('draft');
   });
 
-  it('resetAgentTimeline restores the fixture events and clears suggestion', () => {
+  it('resetAgentTimeline clears the activity log + suggestion (no fixture re-seed)', () => {
     acceptSuggestion(makeSuggestion()); // generates a live event
     resetAgentTimeline();
     const snap = agentTimeline.getSnapshot();
     expect(snap.suggestion).toBeNull();
     expect(snap.draftRequested).toBe(false);
-    // Should have the fixture agentEvents seeded back in.
-    expect(snap.events.length).toBeGreaterThan(0);
+    // The rail starts empty — no scripted fixture history.
+    expect(snap.events).toEqual([]);
   });
 });
