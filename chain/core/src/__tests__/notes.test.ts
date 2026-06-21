@@ -43,4 +43,40 @@ describe('notes', () => {
     expect(parsed.body).toContain('---');
     expect(parsed.title).toBe('tricky');
   });
+
+  it('round-trips a note WITH a preset cover', () => {
+    const n = { ...newNote({ title: 'With cover', body: 'body', author: 'owner' }), cover: '/covers/ethos-orbit.svg' };
+    const parsed = parseNote(serializeNote(n));
+    expect(parsed.cover).toBe('/covers/ethos-orbit.svg');
+    expect(parsed.title).toBe('With cover');
+  });
+
+  it('round-trips a note WITH a seal: cover ref', () => {
+    const n = { ...newNote({ title: 'Sealed cover', body: 'body', author: 'owner' }), cover: 'seal:abc123def456' };
+    const parsed = parseNote(serializeNote(n));
+    expect(parsed.cover).toBe('seal:abc123def456');
+  });
+
+  it('a note WITHOUT a cover serializes with no cover line', () => {
+    const n = newNote({ title: 'No cover', body: 'body', author: 'owner' });
+    const serialized = serializeNote(n);
+    expect(serialized).not.toContain('cover:');
+    const parsed = parseNote(serialized);
+    expect(parsed.cover).toBeUndefined();
+  });
+
+  it('editedNote accepts a cover change', () => {
+    const n = newNote({ title: 'x', body: 'y', author: 'a' });
+    const e = editedNote(n, { cover: 'seal:xyz' }, 'owner');
+    expect(e.cover).toBe('seal:xyz');
+    expect(e.version).toBe(2);
+  });
+
+  it('editedNote clears cover with empty string', () => {
+    const n = { ...newNote({ title: 'x', body: 'y', author: 'a' }), cover: 'seal:xyz' };
+    const e = editedNote(n, { cover: '' }, 'owner');
+    // empty string cover → serializes as absent
+    const serialized = serializeNote(e);
+    expect(serialized).not.toContain('cover:');
+  });
 });

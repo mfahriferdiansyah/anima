@@ -10,7 +10,7 @@ import { ulid } from './ulid.js';
 const FM_DELIM = '---';
 
 export function serializeNote(note: Note): string {
-  const fm = [
+  const lines = [
     FM_DELIM,
     `noteId: ${note.noteId}`,
     `version: ${note.version}`,
@@ -18,9 +18,10 @@ export function serializeNote(note: Note): string {
     `author: ${note.author}`,
     `tags: ${JSON.stringify(note.tags)}`,
     `links: ${JSON.stringify(note.links)}`,
-    FM_DELIM,
-  ].join('\n');
-  return `${fm}\n# ${note.title}\n\n${note.body}\n`;
+  ];
+  if (note.cover) lines.push(`cover: ${note.cover}`);
+  lines.push(FM_DELIM);
+  return `${lines.join('\n')}\n# ${note.title}\n\n${note.body}\n`;
 }
 
 export function parseNote(markdown: string): Note {
@@ -41,6 +42,7 @@ export function parseNote(markdown: string): Note {
     author: must(raw, 'author'),
     tags: JSON.parse(raw.tags ?? '[]'),
     links: JSON.parse(raw.links ?? '[]'),
+    ...(raw.cover !== undefined ? { cover: raw.cover } : {}),
   };
 
   const bodyLines = lines.slice(end + 1).join('\n').trim().split('\n');
@@ -83,7 +85,7 @@ export function newNote(input: {
 }
 
 /** Produce the next version of an edited note. */
-export function editedNote(prev: Note, changes: Partial<Pick<Note, 'title' | 'body' | 'tags' | 'links'>>, author: string): Note {
+export function editedNote(prev: Note, changes: Partial<Pick<Note, 'title' | 'body' | 'tags' | 'links' | 'cover'>>, author: string): Note {
   return {
     ...prev,
     ...changes,

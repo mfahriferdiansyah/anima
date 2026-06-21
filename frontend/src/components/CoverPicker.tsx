@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import type { ChangeEvent } from 'react';
 import { COVERS } from '@/mocks/covers';
+import { COVER_MAX_BYTES } from '../web3/covers';
 import './coverpicker.css';
 
 /**
@@ -14,6 +15,10 @@ export function CoverPicker({ onPick }: { onPick: (src: string) => void }) {
   const onUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      if (file.size > COVER_MAX_BYTES) {
+        event.target.value = '';
+        return; // silently ignore oversize files (persist layer enforces this too)
+      }
       const reader = new FileReader();
       reader.onload = () => onPick(String(reader.result));
       reader.readAsDataURL(file);

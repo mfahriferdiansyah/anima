@@ -17,10 +17,13 @@ import {
   buildForgetPlan,
   buildDeleteQuiltsTx,
   listVaultQuilts,
+  listVaultCovers,
+  uploadCover,
   readAll,
   VaultIndex,
   type NoteLocation,
 } from '../../../chain/core/src/index.js';
+import { dataUrlToBytes, COVER_MAX_BYTES } from '../web3/covers';
 import type { WriteState } from '../components/WriteStateCard';
 import { vaultData, type WriteEvent } from '../web3/vaultData';
 import { getQuiltDeps } from '../web3/session';
@@ -34,7 +37,7 @@ export interface NotePatch {
   body?: string;
   tags?: string[];
   links?: string[];
-  /** Cover image — a Tier-2 covers concern; accepted for the binding contract but not persisted to chain this tier. */
+  /** Cover image: preset path, empty string (clear), or data URL (upload). */
   image?: string;
 }
 
@@ -98,9 +101,30 @@ export function createNote(author: string = OWNER_AUTHOR): string {
   return note.noteId;
 }
 
-/** Only the chain-persisted fields (cover/image is dropped — Tier-2), undefined keys filtered. */
-function realChanges(patch: NotePatch): Partial<Pick<Note, 'title' | 'body' | 'tags' | 'links'>> {
-  const changes: Partial<Pick<Note, 'title' | 'body' | 'tags' | 'links'>> = {};
+/**
+ * Classify a cover patch: returns the ready cover value for preset/clear,
+ * pending upload bytes for data URLs, or null for oversize / no image patch.
+ * Called synchronously so the no-op guard can check for cover intent.
+ */
+function classifyCoverPatch(
+  image: string | undefined,
+): { kind: 'value'; cover: string } | { kind: 'upload'; bytes: Uint8Array } | null {
+  if (image === undefined) return null;
+  if (!image || !image.startsWith('data:')) return { kind: 'value', cover: image };
+  // data URL — decode and size-check before any async work
+  let bytes: Uint8Array;
+  try {
+    bytes = dataUrlToBytes(image);
+  } catch {
+    return null; // malformed data URL — treat as no cover intent
+  }
+  if (bytes.byteLength > COVER_MAX_BYTES) return null; // oversize — skip silently
+  return { kind: 'upload', bytes };
+}
+
+/** Chain-persisted scalar fields (title/body/tags/links). Cover is handled separately. */
+function realChanges(patch: NotePatch): Partial<Pick<Note, 'title' | 'body' | 'tags' | 'links' | 'cover'>> {
+  const changes: Partial<Pick<Note, 'title' | 'body' | 'tags' | 'links' | 'cover'>> = {};
   if (patch.title !== undefined) changes.title = patch.title;
   if (patch.body !== undefined) changes.body = patch.body;
   if (patch.tags !== undefined) changes.tags = patch.tags;
@@ -130,16 +154,30 @@ async function persist(id: string, patch: NotePatch): Promise<void> {
   const current = vaultData.getSnapshot().index?.get(id)?.note;
   if (!deps || !current) return; // no live vault, or unknown note
 
+  // 1) Classify scalar changes + cover intent synchronously
   const changes = realChanges(patch);
-  // cover-only / no-op patches don't warrant a chain write this tier
-  if (Object.keys(changes).length === 0) return;
+  const coverIntent = classifyCoverPatch(patch.image);
 
-  // preflight FIRST — a low balance surfaces the banner with NO write-state (Save preserved),
+  // no-op guard: no scalar changes AND no cover intent → nothing to write
+  if (Object.keys(changes).length === 0 && coverIntent === null) return;
+
+  // 2) preflight FIRST — a low balance surfaces the banner with NO write-state (Save preserved),
   // so the banner never shows under a 'certifying' indicator implying an in-flight upload.
   const pf = await preflight(deps.suiClient, deps.agentSigner.toSuiAddress());
   if (!pf.ok) {
     triggerLowBalance();
     return;
+  }
+
+  // 3) Resolve cover value (upload if needed — happens AFTER preflight)
+  if (coverIntent !== null) {
+    if (coverIntent.kind === 'value') {
+      changes.cover = coverIntent.cover;
+    } else {
+      // data URL upload: sealed private cover
+      const { ref } = await uploadCover(deps, coverIntent.bytes, { noteId: id });
+      changes.cover = ref;
+    }
   }
 
   const next = editedNote(current, changes, OWNER_AUTHOR);
@@ -212,18 +250,24 @@ export async function forgetNotes(ids: string[]): Promise<ScrubEvent> {
   const residency = await readAll(deps, await listVaultQuilts(deps));
   const plan = buildForgetPlan(residency, ids);
 
-  if (plan.affectedBlobObjectIds.length === 0) {
+  // cover blobs for the forgotten notes (a distinct blob kind, separate enumeration)
+  const coverBlobIds = await listVaultCovers(deps, ids);
+
+  // combined delete list (quilts + covers)
+  const blobsToDelete = [...plan.affectedBlobObjectIds, ...coverBlobIds];
+
+  if (blobsToDelete.length === 0) {
     // nothing on-chain to delete (e.g. unsaved drafts) — drop locally
     for (const id of ids) vaultData.remove(id);
     return { removed, line: scrubLine(removed) };
   }
 
-  // a quilt must die — assert the wallet exec BEFORE any rewrite/remove, so a
-  // missing exec creates no orphan and removes nothing (the note stays, retryable)
+  // a chain delete is needed — assert the wallet exec BEFORE any rewrite/remove,
+  // so a missing exec creates no orphan and removes nothing (the note stays, retryable)
   if (!forgetExec) throw new Error('forgetNotes: wallet exec not wired');
 
   // 2) rewrite ONLY survivors whose LATEST indexed location is still in a doomed
-  // blob (dedup to unique noteId + latest version + idempotence in one filter)
+  // quilt blob (covers have no survivors — don't let them enter the rewrite logic)
   const affected = new Set(plan.affectedBlobObjectIds);
   const index = vaultData.getSnapshot().index;
   const toRewrite = [...new Set(plan.survivors.map((s) => s.noteId))]
@@ -244,9 +288,8 @@ export async function forgetNotes(ids: string[]): Promise<ScrubEvent> {
     }
   }
 
-  // 4) ONE atomic wallet signature deletes every doomed quilt (let a rejection
-  // propagate — the forgotten note stays in the index, retryable)
-  const tx = await buildDeleteQuiltsTx(deps, plan.affectedBlobObjectIds);
+  // 4) ONE atomic wallet signature deletes every doomed quilt + cover blob
+  const tx = await buildDeleteQuiltsTx(deps, blobsToDelete);
   await forgetExec(tx);
 
   // 5) on-chain erasure done → drop the forgotten notes from the live index

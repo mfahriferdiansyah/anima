@@ -9,6 +9,7 @@ import type { Note } from '@/hooks/useVault';
 import { clearSuggestion, useAgentTimeline } from '@/hooks/useAgentTimeline';
 import { CoverPicker } from '@/components/CoverPicker';
 import { ShareDialog } from './ShareDialog';
+import { resolveCover, parseCoverRef } from '../web3/covers';
 
 /* ---------- markdown-lite: fixture bodies -> kit-classed blocks ---------- */
 
@@ -248,6 +249,39 @@ function slugify(title: string): string {
 let toastCounter = 0;
 
 /**
+ * Resolve a note's `cover` ref to a renderable URL. Presets resolve synchronously
+ * to the same path; blob/seal refs trigger an async fetch + decrypt. Cleans up
+ * object URLs on unmount or when the ref changes.
+ */
+function useResolvedCover(coverRef: string | undefined, noteId: string): string | null {
+  // Presets are directly-renderable paths — resolve them synchronously so they
+  // never flash the loading placeholder. Only blob:/seal: refs need an async
+  // aggregator fetch (+ Seal decrypt), which yields an object URL.
+  const preset = coverRef && parseCoverRef(coverRef).kind === 'preset' ? coverRef : null;
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (preset !== null || !coverRef) {
+      setBlobUrl(null);
+      return;
+    }
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    void resolveCover(coverRef, noteId).then((url) => {
+      if (cancelled) return;
+      setBlobUrl(url);
+      if (url?.startsWith('blob:')) objectUrl = url;
+    });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [coverRef, noteId, preset]);
+
+  return preset ?? blobUrl;
+}
+
+/**
  * The kit editor frame (section 12): tab, title, typed props, the rendered
  * body, the contenteditable type-block with [[ autocomplete, the selection
  * bubble, the agent suggestion block, and the status bar with save/share.
@@ -274,6 +308,11 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
   const [sharing, setSharing] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [coverOpen, setCoverOpen] = useState(false);
+
+  // Resolve note.cover (a ref: preset path, seal:, or blob:) to a renderable URL.
+  // Falls back to note.image for fixture demo notes that predate the cover field.
+  const resolvedCoverUrl = useResolvedCover(note.cover, note.noteId);
+  const displayCover = resolvedCoverUrl ?? note.image ?? null;
 
   const setCover = (src: string) => {
     saveNote(note.noteId, { image: src });
@@ -535,10 +574,14 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
         </button>
       </div>
       <div className="pged-scroll">
-        {note.image ? (
+        {(note.cover || note.image) ? (
           <div className="pgbanner-wrap">
             <div className="pgbanner">
-              <img src={note.image} alt="" />
+              {displayCover ? (
+                <img src={displayCover} alt="" />
+              ) : (
+                <div className="pgbanner-loading" aria-label="Loading cover…" />
+              )}
               <div className="pgbanner-acts">
                 <button type="button" className="pgbn-btn" onClick={() => setCoverOpen((o) => !o)}>Change cover</button>
                 <button type="button" className="pgbn-btn" onClick={removeCover}>Remove</button>
@@ -547,8 +590,8 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
             {coverOpen ? coverMenu : null}
           </div>
         ) : null}
-        <div className={note.image ? 'pgcol haz' : 'pgcol'}>
-          {!note.image ? (
+        <div className={(note.cover || note.image) ? 'pgcol haz' : 'pgcol'}>
+          {!(note.cover || note.image) ? (
             <div className="pgcover-add-wrap">
               <button type="button" className="pgcover-add" onClick={() => setCoverOpen((o) => !o)}>
                 <span aria-hidden="true">✦</span> Add cover

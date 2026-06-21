@@ -14,3 +14,4 @@ export { exportVaultZip } from './exportVault.js';
 export * from './vault.js';
 export * from './canvas.js';
 export * from './share.js';
+export { uploadCover, parseCoverRef, readCoverBytes, listVaultCovers } from './covers.js';

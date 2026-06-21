@@ -15,6 +15,8 @@ vi.mock('../../../chain/core/src/index.js', async (importOriginal) => ({
   writeTurn: vi.fn(),
   preflight: vi.fn(),
   listVaultQuilts: vi.fn(),
+  listVaultCovers: vi.fn(),
+  uploadCover: vi.fn(),
   readAll: vi.fn(),
   buildDeleteQuiltsTx: vi.fn(),
 }));
@@ -27,6 +29,8 @@ import {
   writeTurn,
   preflight,
   listVaultQuilts,
+  listVaultCovers,
+  uploadCover,
   readAll,
   buildDeleteQuiltsTx,
 } from '../../../chain/core/src/index.js';
@@ -51,10 +55,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getQuiltDeps).mockReturnValue(DEPS as never);
   vi.mocked(preflight).mockResolvedValue({ sui: 5n, wal: 5n, ok: true, needsSui: false, needsWal: false });
-  // forget I/O defaults: empty residency, a sentinel delete-tx, a resolving exec
+  // forget I/O defaults: empty residency, no covers, a sentinel delete-tx, a resolving exec
   vi.mocked(listVaultQuilts).mockResolvedValue([]);
+  vi.mocked(listVaultCovers).mockResolvedValue([]);
   vi.mocked(readAll).mockResolvedValue([]);
   vi.mocked(buildDeleteQuiltsTx).mockResolvedValue({ kind: 'delete-tx' } as never);
+  vi.mocked(uploadCover).mockResolvedValue({ blobId: 'cover-blob-1', ref: 'seal:cover-blob-1' });
   configureForgetExec(vi.fn().mockResolvedValue(undefined));
 });
 
@@ -124,11 +130,73 @@ describe('hooks/useVault saveNote', () => {
     expect(vi.mocked(writeTurn)).toHaveBeenCalledOnce();
   });
 
-  it('a cover-only / empty change does not trigger a chain write', async () => {
+  it('a truly empty patch (no fields, no image) does not trigger a chain write', async () => {
     const n = seedNote();
-    saveNote(n.noteId, { image: 'data:cover' }); // image is dropped (Tier-2), no real change
+    saveNote(n.noteId, {}); // no fields at all — genuine no-op
     await flush();
     expect(vi.mocked(writeTurn)).not.toHaveBeenCalled();
+  });
+
+  it('an oversize data URL image is silently dropped and does not trigger a chain write', async () => {
+    const n = seedNote();
+    // produce a data URL whose decoded bytes exceed COVER_MAX_BYTES (2MB)
+    const oversize = 'data:image/png;base64,' + btoa('x'.repeat(3 * 1024 * 1024));
+    saveNote(n.noteId, { image: oversize });
+    await flush();
+    expect(vi.mocked(writeTurn)).not.toHaveBeenCalled();
+    expect(vi.mocked(uploadCover)).not.toHaveBeenCalled();
+  });
+
+  it('a preset cover persists as cover: <path> on the note', async () => {
+    const n = seedNote();
+    vi.mocked(writeTurn).mockResolvedValue({
+      quiltBlobId: 'qb', blobObjectId: '0xCOVER', transferDigest: '0xd',
+      perNote: [{ noteId: n.noteId, version: 2, quiltPatchId: 'p1' }],
+    } as never);
+
+    saveNote(n.noteId, { image: '/covers/ethos-orbit.svg' });
+    await flush();
+
+    expect(vi.mocked(writeTurn)).toHaveBeenCalledOnce();
+    const writtenNote = vi.mocked(writeTurn).mock.calls[0][1][0] as { cover?: string };
+    expect(writtenNote.cover).toBe('/covers/ethos-orbit.svg');
+  });
+
+  it('empty string image clears the cover on the persisted note', async () => {
+    const n = { ...newNote({ title: 'x', body: 'y', author: 'owner' }), cover: 'seal:old' };
+    const { VaultIndex: VI } = await import('../../../chain/core/src/index.js');
+    vaultData.publish(VI.fromEntries([{ note: n, location: loc }]));
+    vi.mocked(writeTurn).mockResolvedValue({
+      quiltBlobId: 'qb', blobObjectId: '0xCOVER', transferDigest: '0xd',
+      perNote: [{ noteId: n.noteId, version: 2, quiltPatchId: 'p1' }],
+    } as never);
+
+    saveNote(n.noteId, { image: '' });
+    await flush();
+
+    expect(vi.mocked(writeTurn)).toHaveBeenCalledOnce();
+    const writtenNote = vi.mocked(writeTurn).mock.calls[0][1][0] as { cover?: string };
+    // empty string cover is serialized as absent by serializeNote, but the editedNote
+    // carries cover:'' which means "clear it"; the write still happens
+    expect(writtenNote.cover).toBe('');
+  });
+
+  it('a data URL image triggers uploadCover and the returned ref is persisted', async () => {
+    const n = seedNote();
+    vi.mocked(writeTurn).mockResolvedValue({
+      quiltBlobId: 'qb', blobObjectId: '0xCOVER', transferDigest: '0xd',
+      perNote: [{ noteId: n.noteId, version: 2, quiltPatchId: 'p1' }],
+    } as never);
+    vi.mocked(uploadCover).mockResolvedValue({ blobId: 'cover-blob-x', ref: 'seal:cover-blob-x' });
+
+    // valid small data URL (3 bytes → well under 2MB)
+    saveNote(n.noteId, { image: 'data:image/png;base64,AAAA' });
+    await flush();
+
+    expect(vi.mocked(uploadCover)).toHaveBeenCalledOnce();
+    expect(vi.mocked(writeTurn)).toHaveBeenCalledOnce();
+    const writtenNote = vi.mocked(writeTurn).mock.calls[0][1][0] as { cover?: string };
+    expect(writtenNote.cover).toBe('seal:cover-blob-x');
   });
 });
 
@@ -257,6 +325,40 @@ describe('hooks/useVault forgetNotes (U7 destructive)', () => {
     expect(vi.mocked(buildDeleteQuiltsTx)).toHaveBeenCalledOnce();
     expect([...vi.mocked(buildDeleteQuiltsTx).mock.calls[0][1]].sort()).toEqual(['blob1', 'blob2']);
     expect(exec).toHaveBeenCalledOnce();
+  });
+
+  it('forget cleans up cover blobs in the same delete PTB as the quilts', async () => {
+    const note = newNote({ title: 'Has cover', body: 'x', author: 'owner' });
+    vaultData.publish(VaultIndex.fromEntries([at(note, 'blobA')]));
+    vi.mocked(listVaultQuilts).mockResolvedValue(['blobA']);
+    vi.mocked(readAll).mockResolvedValue([at(note, 'blobA')] as never);
+    vi.mocked(listVaultCovers).mockResolvedValue(['cover-obj-1']); // one cover blob
+
+    await forgetNotes([note.noteId]);
+
+    expect(vi.mocked(buildDeleteQuiltsTx)).toHaveBeenCalledOnce();
+    const blobsDeleted = vi.mocked(buildDeleteQuiltsTx).mock.calls[0][1];
+    expect([...blobsDeleted].sort()).toEqual(['blobA', 'cover-obj-1'].sort());
+  });
+
+  it('forget cleans up cover blobs even when there are no affected quilt blobs (unsaved draft with uploaded cover)', async () => {
+    // note was never written to a quilt (draft), but its cover blob was uploaded
+    const note = newNote({ title: 'Draft with cover', body: 'x', author: 'owner' });
+    vaultData.publish(VaultIndex.fromEntries([{ note, location: { quiltPatchId: '', quiltBlobId: '', blobObjectId: '' } }]));
+    vi.mocked(listVaultQuilts).mockResolvedValue([]);
+    vi.mocked(readAll).mockResolvedValue([]);
+    vi.mocked(listVaultCovers).mockResolvedValue(['cover-obj-draft']);
+    const exec = vi.fn().mockResolvedValue(undefined);
+    configureForgetExec(exec);
+
+    await forgetNotes([note.noteId]);
+
+    // even with no quilt blobs, the cover blob must be deleted
+    expect(vi.mocked(buildDeleteQuiltsTx)).toHaveBeenCalledOnce();
+    const blobsDeleted = vi.mocked(buildDeleteQuiltsTx).mock.calls[0][1];
+    expect(blobsDeleted).toContain('cover-obj-draft');
+    expect(exec).toHaveBeenCalledOnce();
+    expect(vaultData.getSnapshot().notes).toHaveLength(0);
   });
 
   it('idempotence: delete rejected → re-invoke re-runs only the delete, no orphan survivor rewrite', async () => {

@@ -7,6 +7,7 @@ export interface NoteFrontmatter {
   author: string; // 'anima' | 'owner' | 'claude-code' | any paired agent name
   tags: string[];
   links: string[]; // noteIds this note references
+  cover?: string; // preset path, 'seal:<blobId>', or 'blob:<blobId>'
 }
 
 export interface Note extends NoteFrontmatter {

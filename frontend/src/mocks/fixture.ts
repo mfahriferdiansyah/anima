@@ -16,8 +16,10 @@ export interface Note {
   links: string[];
   title: string;
   body: string;
-  /** Optional banner cover (preset path or uploaded data URL). */
+  /** Optional banner cover (preset path or uploaded data URL — display only, not persisted). */
   image?: string;
+  /** Persisted cover ref: preset path, 'seal:<blobId>', or 'blob:<blobId>'. */
+  cover?: string;
 }
 
 export const COMPANION_NAME = 'Nova';
