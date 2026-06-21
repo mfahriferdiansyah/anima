@@ -1253,33 +1253,19 @@
   transform: translateX(-50%);
   z-index: 100;
   width: calc(100% - 40px);
-  max-width: 920px;
+  max-width: 880px;
   display: flex;
   align-items: center;
-  padding: 9px 9px;
+  justify-content: space-between;
+  padding: 8px 10px 8px 8px;
   border-radius: 999px;
-  border: 1px solid rgba(22, 24, 29, 0.18);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.42));
-  backdrop-filter: blur(30px) saturate(1.9);
-  -webkit-backdrop-filter: blur(30px) saturate(1.9);
+  border: 1px solid rgba(22, 24, 29, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.5));
+  backdrop-filter: blur(24px) saturate(1.7);
+  -webkit-backdrop-filter: blur(24px) saturate(1.7);
   box-shadow:
-    0 14px 40px rgba(22, 24, 29, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  transition:
-    max-width 0.45s var(--ease),
-    padding 0.45s var(--ease),
-    background 0.3s ease,
-    box-shadow 0.3s ease,
-    border-color 0.3s ease;
-}
-.lp-nav.is-scrolled {
-  max-width: 540px;
-  padding: 8px 8px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.76));
-  border-color: rgba(22, 24, 29, 0.18);
-  box-shadow:
-    0 16px 40px rgba(22, 24, 29, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+    0 8px 26px rgba(22, 24, 29, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 .lp-nav-mark {
   flex: none;
@@ -1291,7 +1277,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  padding: 10px 20px;
+  padding: 8px 14px;
   border-radius: 999px;
   transition: background 0.15s ease;
 }
@@ -1304,23 +1290,27 @@
   vertical-align: 0.38em;
   margin-left: 0.02em;
 }
+/* links are absolutely centered to the bar, so the bar stays balanced
+   regardless of the logo vs. right-group widths */
 .lp-nav-links {
-  flex: 1;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
+  gap: 2px;
 }
 .lp-nav-links a,
 .lp-nav-links button {
   font-family: var(--inter);
   font-size: 14px;
   font-weight: 500;
-  color: rgba(22, 24, 29, 0.72);
+  color: rgba(22, 24, 29, 0.66);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 7px 15px;
+  padding: 7px 14px;
   border-radius: 999px;
   text-decoration: none;
   transition:
@@ -1330,11 +1320,11 @@
 .lp-nav-links a:hover,
 .lp-nav-links button:hover {
   color: var(--ink);
-  background: rgba(22, 24, 29, 0.06);
+  background: rgba(22, 24, 29, 0.05);
 }
 .lp-nav-links button.on {
   color: var(--ink);
-  background: rgba(22, 24, 29, 0.08);
+  background: rgba(22, 24, 29, 0.07);
 }
 .lp-nav-right {
   flex: none;
@@ -1346,26 +1336,23 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border-radius: 999px;
-  color: rgba(22, 24, 29, 0.6);
+  color: rgba(22, 24, 29, 0.55);
   transition:
     color 0.15s ease,
     background 0.15s ease;
 }
 .lp-nav-gh:hover {
   color: var(--ink);
-  background: rgba(22, 24, 29, 0.06);
+  background: rgba(22, 24, 29, 0.05);
 }
 .lp-nav-gh svg {
   display: block;
 }
 .lp-nav-cta {
   flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   font-family: var(--inter);
   font-weight: 600;
   font-size: 14px;
@@ -1373,21 +1360,12 @@
   background: var(--orange);
   border: none;
   cursor: pointer;
-  padding: 10px 20px;
+  padding: 9px 18px;
   border-radius: 999px;
   transition: background 0.15s ease;
 }
 .lp-nav-cta:hover {
   background: #ff6a2e;
-}
-.lp-nav-cta svg {
-  display: block;
-}
-/* scrolled pill is tight, so the CTA collapses to a wallet icon button */
-.lp-nav.is-scrolled .lp-nav-cta {
-  width: 40px;
-  height: 40px;
-  padding: 0;
 }
 
 /* ---------------- pricing (card layout: name → price → desc → cta → features) ---------------- */
@@ -1708,6 +1686,358 @@
   top: auto;
   transform: none;
   width: 100%;
+}
+
+/* ---- mobile-native beat previews (rendered only in the static deck) ---- */
+.lpm {
+  position: relative;
+  width: 100%;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow:
+    0 18px 44px rgba(22, 24, 29, 0.1),
+    inset 0 0 0 1px var(--gray-200);
+}
+
+/* your day — agenda */
+.lpm-agenda {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 16px 8px;
+}
+.lpm-agenda-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--gray-200);
+}
+.lpm-agenda-h .d {
+  font-family: var(--sg);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--ink);
+}
+.lpm-agenda-h .s {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gray-400);
+}
+.lpm-ev {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 8px;
+  border-radius: 10px;
+}
+.lpm-ev .t {
+  flex: none;
+  width: 36px;
+  padding-top: 1px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gray-400);
+}
+.lpm-ev .n {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.lpm-ev.is-on {
+  background: rgba(255, 92, 26, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 92, 26, 0.18);
+}
+.lpm-ev .prep {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--orange);
+}
+.lpm-ev .prep .s {
+  margin-right: 2px;
+}
+
+/* notes — note card + phone-sized toolbar */
+.lpm-note {
+  padding: 16px;
+}
+.lpm-note-ttl {
+  font-family: var(--sg);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--ink);
+}
+.lpm-note-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--gray-400);
+  margin-top: 2px;
+}
+.lpm-note-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 14px 0 16px;
+}
+.lpm-note-lines .l {
+  height: 7px;
+  border-radius: 4px;
+  background: var(--gray-200);
+}
+.lpm-note-lines .l:nth-child(2) {
+  width: 82%;
+}
+.lpm-note-lines .l.ai {
+  height: auto;
+  background: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--orange);
+}
+.lpm-note-tb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--ink);
+  border-radius: 12px;
+  padding: 7px 9px;
+}
+.lpm-note-tb .ai {
+  margin-right: 2px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--orange);
+}
+.lpm-note-tb .g {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.78);
+}
+.lpm-note-tb .g.i {
+  font-style: italic;
+}
+.lpm-note-tb .g.mono {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+/* live session — presence + note/canvas tiles */
+.lpm-session {
+  padding: 14px;
+}
+.lpm-session-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.lpm-session-h .live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gray-600);
+}
+.lpm-session-h .live .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--teal);
+}
+.lpm-session-h .pres {
+  display: flex;
+}
+.lpm-session-h .av {
+  width: 24px;
+  height: 24px;
+  margin-left: -6px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+}
+.lpm-session-h .av.ag {
+  background: var(--ink);
+  font-family: var(--mono);
+}
+.lpm-session-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.lpm-st {
+  min-height: 88px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px var(--gray-200);
+}
+.lpm-st .t {
+  font-family: var(--sg);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--ink);
+}
+.lpm-st--note {
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lpm-st--note .l {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--gray-200);
+}
+.lpm-st--note .l.short {
+  width: 60%;
+}
+.lpm-st--canvas {
+  position: relative;
+  background: #fdfeff;
+  background-image: radial-gradient(#dfe5f0 1px, transparent 1.3px);
+  background-size: 16px 16px;
+  overflow: hidden;
+}
+.lpm-st--canvas .cc {
+  position: absolute;
+  width: 30px;
+  height: 19px;
+  border-radius: 5px;
+  background: #fff;
+  box-shadow: 0 4px 10px rgba(22, 24, 29, 0.13);
+}
+.lpm-st--canvas .cc:nth-child(2) {
+  left: 14px;
+  top: 38px;
+}
+.lpm-st--canvas .cc:nth-child(3) {
+  left: 52px;
+  top: 56px;
+}
+.lpm-st--canvas .cc.s {
+  left: 74px;
+  top: 34px;
+  width: 24px;
+  height: 16px;
+  background: var(--blue-100, #eef4ff);
+}
+.lpm-session-f {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--gray-600);
+}
+
+/* it remembers — compact memory flow */
+.lpm-mem {
+  padding: 20px 12px 16px;
+}
+.lpm-mem-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+}
+.lpm-chip {
+  flex: none;
+  width: 54px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+.lpm-chip .ic {
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 20px rgba(22, 24, 29, 0.12);
+}
+.lpm-chip .ic.note {
+  font-size: 20px;
+  color: var(--gray-400);
+  background: #fff;
+  box-shadow:
+    inset 0 0 0 1px var(--gray-200),
+    0 8px 20px rgba(22, 24, 29, 0.08);
+}
+.lpm-chip .ic.seal {
+  background: linear-gradient(160deg, #2f6bff, #1e50d6);
+}
+.lpm-chip .ic.walrus {
+  background: var(--ink);
+}
+.lpm-chip .ic.sui {
+  background: #eef4ff;
+  box-shadow:
+    inset 0 0 0 1px rgba(77, 162, 255, 0.25),
+    0 8px 20px rgba(77, 162, 255, 0.16);
+}
+.lpm-chip .cl {
+  font-family: var(--sg);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.lpm-mem .arr {
+  flex: none;
+  margin-top: 22px;
+  width: 13px;
+  height: 2px;
+  position: relative;
+  background: var(--blue-300);
+}
+.lpm-mem .arr::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-top: 2px solid var(--blue-300);
+  border-right: 2px solid var(--blue-300);
+  transform: translateY(-50%) rotate(45deg);
+}
+.lpm-mem-f {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--gray-600);
+}
+.lpm-mem-f .s {
+  margin-right: 3px;
+  color: var(--orange);
+  font-weight: 700;
 }
 
 /* ---------------- responsive ---------------- */

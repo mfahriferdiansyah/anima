@@ -549,6 +549,140 @@ function BeatVisual({ b, ready }: { b: Beat; ready: ReadySession | null }) {
   return <AgentsMini />;
 }
 
+/* ---------------- mobile-native beat visuals ----------------
+ * The desktop deck reuses scaled real-app renders + a wide canvas board, which
+ * don't survive at phone size (the Home calendar vanishes, the Notes toolbar is
+ * desktop-sized, the board crumbles). On mobile we render small, purpose-built
+ * previews that actually read at 360px. Desktop is untouched. */
+
+function MAgenda() {
+  return (
+    <div className="lpm lpm-agenda">
+      <div className="lpm-agenda-h">
+        <span className="d">Today</span>
+        <span className="s">Tue · Jun 24</span>
+      </div>
+      <div className="lpm-ev">
+        <span className="t">9:00</span>
+        <span className="n">Standup</span>
+      </div>
+      <div className="lpm-ev is-on">
+        <span className="t">2:00</span>
+        <span className="n">
+          Design review
+          <span className="prep"><span className="s">✧</span> nova prepped 3 notes</span>
+        </span>
+      </div>
+      <div className="lpm-ev">
+        <span className="t">4:30</span>
+        <span className="n">1:1 with Mira</span>
+      </div>
+    </div>
+  );
+}
+
+function MNote() {
+  return (
+    <div className="lpm lpm-note">
+      <div className="lpm-note-ttl">Cafe shortlist</div>
+      <div className="lpm-note-meta">lisbon · agent draft</div>
+      <div className="lpm-note-lines">
+        <span className="l" />
+        <span className="l" />
+        <span className="l ai"><span className="s">✧</span> nova is drafting…</span>
+      </div>
+      <div className="lpm-note-tb">
+        <span className="ai">✧ ai</span>
+        <span className="g b">B</span>
+        <span className="g i">i</span>
+        <span className="g">S</span>
+        <span className="g mono">&lt;/&gt;</span>
+        <span className="g mono">link</span>
+      </div>
+    </div>
+  );
+}
+
+function MSession() {
+  return (
+    <div className="lpm lpm-session">
+      <div className="lpm-session-h">
+        <span className="live"><span className="dot" /> live session</span>
+        <span className="pres">
+          <span className="av" style={{ background: 'var(--pink)' }}>M</span>
+          <span className="av ag">✧</span>
+          <span className="av ag">✧</span>
+        </span>
+      </div>
+      <div className="lpm-session-grid">
+        <div className="lpm-st lpm-st--note">
+          <span className="t">Lisbon · note</span>
+          <span className="l" />
+          <span className="l short" />
+        </div>
+        <div className="lpm-st lpm-st--canvas">
+          <span className="t">Canvas</span>
+          <span className="cc" />
+          <span className="cc" />
+          <span className="cc s" />
+        </div>
+      </div>
+      <div className="lpm-session-f">canvas and notes, your team and their agents, together</div>
+    </div>
+  );
+}
+
+function MMemory() {
+  return (
+    <div className="lpm lpm-mem">
+      <div className="lpm-mem-row">
+        <div className="lpm-chip">
+          <span className="ic note">≡</span>
+          <span className="cl">note</span>
+        </div>
+        <span className="arr" />
+        <div className="lpm-chip">
+          <span className="ic seal">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="4" y="11" width="16" height="9" rx="2" />
+              <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+            </svg>
+          </span>
+          <span className="cl">Seal</span>
+        </div>
+        <span className="arr" />
+        <div className="lpm-chip">
+          <span className="ic walrus">
+            <svg width="26" height="17" viewBox="0 0 1417.32 931.26" aria-hidden="true">
+              <path fill="#faf8f5" d={WALRUS_D} />
+            </svg>
+          </span>
+          <span className="cl">Walrus</span>
+        </div>
+        <span className="arr" />
+        <div className="lpm-chip">
+          <span className="ic sui">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="#4da2ff" d={SUI_D} />
+            </svg>
+          </span>
+          <span className="cl">Sui</span>
+        </div>
+      </div>
+      <div className="lpm-mem-f"><span className="s">✦</span> the key and the blob stay in your wallet, so any agent can recall it</div>
+    </div>
+  );
+}
+
+/** On mobile each beat gets a purpose-built compact visual (the agents hub mini
+ *  already reads fine at phone size, so it's reused as-is). */
+function MobileBeatVisual({ b }: { b: Beat }) {
+  if (b.kind === 'page') return b.route === '/app' ? <MAgenda /> : <MNote />;
+  if (b.kind === 'canvas') return <MSession />;
+  if (b.render === 'memory') return <MMemory />;
+  return <AgentsMini />;
+}
+
 function StackSection({ staticMode }: { staticMode: boolean }) {
   const sectionRef = useRef<HTMLElement>(null);
   const layers = useRef<(HTMLDivElement | null)[]>([]);
@@ -650,7 +784,7 @@ function StackSection({ staticMode }: { staticMode: boolean }) {
                 <p>{b.body}</p>
               </div>
               <div className="lp-mvis">
-                <BeatVisual b={b} ready={ready} />
+                <MobileBeatVisual b={b} />
               </div>
             </div>
           ))}
@@ -805,11 +939,9 @@ export function Landing() {
 
 function IslandNav({ onConnect }: { onConnect: () => void }) {
   const [active, setActive] = useState('hero');
-  const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const ids = ['hero', 'workspace', 'pricing'];
     const onScroll = () => {
-      setScrolled(window.scrollY > 40);
       const mark = window.scrollY + window.innerHeight * 0.38;
       let cur = 'hero';
       for (const id of ids) {
@@ -827,7 +959,7 @@ function IslandNav({ onConnect }: { onConnect: () => void }) {
   const goTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   return (
-    <nav className={`lp-nav${scrolled ? ' is-scrolled' : ''}`} aria-label="Primary">
+    <nav className="lp-nav" aria-label="Primary">
       <button type="button" className="lp-nav-mark" onClick={goTop}>
         anima<span className="s">✦</span>
       </button>
@@ -851,21 +983,8 @@ function IslandNav({ onConnect }: { onConnect: () => void }) {
             <path fill="currentColor" d={LOGOS.github.d} />
           </svg>
         </a>
-        <button
-          type="button"
-          className="lp-nav-cta"
-          onClick={onConnect}
-          aria-label="Connect wallet"
-          title="Connect wallet"
-        >
-          {scrolled ? (
-            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-              <path d="M21 12h-5a2 2 0 0 0 0 4h5a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1Z" />
-            </svg>
-          ) : (
-            'Connect wallet'
-          )}
+        <button type="button" className="lp-nav-cta" onClick={onConnect}>
+          Connect wallet
         </button>
       </div>
     </nav>
