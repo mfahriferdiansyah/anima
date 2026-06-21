@@ -75,6 +75,27 @@ export async function rememberTool(
   }
 }
 
+export async function editNoteTool(
+  client: VaultClient,
+  args: { noteId: string; title?: string; body?: string; tags?: string[]; links?: string[] },
+  presence?: Presence,
+): Promise<ToolResult> {
+  try {
+    presence?.writing(true);
+    const { noteId, ...changes } = args;
+    const { note, result } = await client.update(noteId, changes);
+    presence?.noteCreated(note.noteId); // canvas/peers refresh and see the new version
+    return text(
+      `Updated "${note.title}" (note ${note.noteId}) to version ${note.version} (author: ${note.author}).\n` +
+        `New sealed version on Walrus: quilt ${result.quiltBlobId}, blob object ${result.blobObjectId}.`,
+    );
+  } catch (e) {
+    return errorResult(e, client);
+  } finally {
+    presence?.writing(false);
+  }
+}
+
 export async function placeNoteTool(
   client: VaultClient,
   args: { noteId: string; x: number; y: number },

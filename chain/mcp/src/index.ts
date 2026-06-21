@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { loadConfig } from './config.js';
 import { VaultClient } from './vaultClient.js';
 import { Presence } from './presence.js';
-import { listNotesTool, placeNoteTool, readNoteTool, recallTool, rememberTool } from './tools.js';
+import { editNoteTool, listNotesTool, placeNoteTool, readNoteTool, recallTool, rememberTool } from './tools.js';
 
 let client: VaultClient;
 let presence: Presence;
@@ -61,6 +61,23 @@ server.registerTool(
     },
   },
   (args) => rememberTool(client, args, presence),
+);
+
+server.registerTool(
+  'edit_note',
+  {
+    title: 'Edit a note',
+    description:
+      "Write a new version of an existing note in the owner's vault (encrypted on Walrus, attributed to this agent). Use this to correct or extend what you know about the owner — durable, visible, correctable memory, not a hidden profile. Takes 10-20 seconds.",
+    inputSchema: {
+      noteId: z.string().describe('The note id (ULID) from recall or list_notes'),
+      title: z.string().optional().describe('New title (omit to keep the current one)'),
+      body: z.string().optional().describe('New body, markdown (omit to keep the current one)'),
+      tags: z.array(z.string()).optional().describe('New tags (replaces the current set)'),
+      links: z.array(z.string()).optional().describe('New outgoing links (replaces the current set)'),
+    },
+  },
+  (args) => editNoteTool(client, args, presence),
 );
 
 server.registerTool(

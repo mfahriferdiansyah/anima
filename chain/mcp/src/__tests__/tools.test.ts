@@ -26,7 +26,7 @@ vi.mock('../../../core/src/index.js', async (importOriginal) => {
 import { newNote, readVault, preflight, writeTurn, listVaultQuilts, readAll, type IndexedNote } from '../../../core/src/index.js';
 import { loadConfig } from '../config.js';
 import { VaultClient } from '../vaultClient.js';
-import { recallTool, rememberTool, listNotesTool, readNoteTool } from '../tools.js';
+import { recallTool, rememberTool, listNotesTool, readNoteTool, editNoteTool } from '../tools.js';
 
 const VAULT_ID = `0x${'1'.repeat(64)}`;
 const OWNER = `0x${'2'.repeat(64)}`;
@@ -47,6 +47,20 @@ const entry = (title: string, body: string, tags: string[] = []): IndexedNote =>
   note: newNote({ title, body, tags, author: 'anima' }),
   location: { quiltPatchId: 'p1', quiltBlobId: 'qb1', blobObjectId: 'ob1' },
 });
+
+/** Arm a real VaultClient over mocked core, with the given notes as the rebuilt index. */
+function armClient(client: VaultClient, entries: IndexedNote[] = []): void {
+  vi.mocked(readVault).mockResolvedValue({ vaultId: VAULT_ID, owner: OWNER, name: 'Anima', agents: [client.agentAddress] });
+  vi.mocked(listVaultQuilts).mockResolvedValue(entries.length ? ['q'] : []);
+  vi.mocked(readAll).mockResolvedValue(entries);
+  vi.mocked(preflight).mockResolvedValue({ sui: 1n, wal: 1n, ok: true, needsSui: false, needsWal: false });
+  vi.mocked(writeTurn).mockImplementation(async (_deps, notes) => ({
+    quiltBlobId: 'qb-new',
+    blobObjectId: 'ob-new',
+    transferDigest: 'digest',
+    perNote: notes.map((n) => ({ noteId: n.noteId, version: n.version, quiltPatchId: 'patch-new' })),
+  }));
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -137,6 +151,48 @@ describe('remember (VaultClient over mocked core)', () => {
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toContain(client.agentAddress);
     expect(res.content[0].text).toContain('Fund it');
+  });
+});
+
+describe('edit_note + list hygiene (U5)', () => {
+  it('writes a new version of an existing note, preserving untouched fields', async () => {
+    const client = makeClient('claude-code');
+    const existing = entry('Profile', 'Likes tea.', ['profile']);
+    armClient(client, [existing]);
+
+    const res = await editNoteTool(client, { noteId: existing.note.noteId, body: 'Likes tea and long walks.' });
+    expect(res.isError).toBeUndefined();
+
+    expect(writeTurn).toHaveBeenCalledTimes(1);
+    const [, notes] = vi.mocked(writeTurn).mock.calls[0];
+    expect(notes[0].noteId).toBe(existing.note.noteId); // same note
+    expect(notes[0].version).toBe(existing.note.version + 1); // bumped
+    expect(notes[0].body).toBe('Likes tea and long walks.');
+    expect(notes[0].title).toBe('Profile'); // untouched field preserved
+    expect(notes[0].author).toBe('claude-code');
+    expect(res.content[0].text).toContain(`version ${existing.note.version + 1}`);
+  });
+
+  it('on a missing noteId → clear error, no silent create', async () => {
+    const client = makeClient();
+    armClient(client, []);
+    const res = await editNoteTool(client, { noteId: 'NOPE', body: 'x' });
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain('Note NOPE not found');
+    expect(writeTurn).not.toHaveBeenCalled();
+  });
+
+  it('list_notes excludes reserved anima:* app-state notes (R19)', async () => {
+    const client = makeClient();
+    const userNote = entry('Trip to Kyoto', 'Cherry blossoms.', ['travel']);
+    const layout = entry('Canvas layout', '{}', ['anima:canvas-layout']);
+    armClient(client, [userNote, layout]);
+
+    const res = await listNotesTool(client);
+    expect(res.isError).toBeUndefined();
+    expect(res.content[0].text).toContain('Trip to Kyoto');
+    expect(res.content[0].text).not.toContain('Canvas layout');
+    expect(res.content[0].text).toContain('1 notes in the vault'); // only the user note counts
   });
 });
 

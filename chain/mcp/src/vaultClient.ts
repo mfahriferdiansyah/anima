@@ -10,7 +10,7 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import {
   createSuiClient, nodeFetchWithLongConnect,
   SealVault, writeTurn, readAll, listVaultQuilts, readVault,
-  VaultIndex, newNote, preflight,
+  VaultIndex, newNote, editedNote, preflight,
   loadLayout, saveLayout, type CanvasLayout,
   type QuiltDeps, type IndexedNote, type Note, type WriteResult,
 } from '../../core/src/index.js';
@@ -58,7 +58,9 @@ export class VaultClient {
   }
 
   async list(): Promise<IndexedNote[]> {
-    return (await this.#freshIndex()).all();
+    // reserved-filtered (R19): list_notes must not leak anima:* app-state notes
+    // (canvas layout, folders, …) — they are not the user's memories.
+    return (await this.#freshIndex()).notes();
   }
 
   async read(noteId: string): Promise<IndexedNote | undefined> {
@@ -88,6 +90,40 @@ export class VaultClient {
       blobObjectId: result.blobObjectId,
     });
     this.#fetchedAt = Date.now(); // the write-through index IS fresh as of this write
+    this.#saveCache();
+    return { note, result };
+  }
+
+  /** update(): write a new version of an existing note — durable, correctable memory (R33). */
+  async update(
+    noteId: string,
+    changes: { title?: string; body?: string; tags?: string[]; links?: string[] },
+  ): Promise<{ note: Note; result: WriteResult }> {
+    const index = await this.#freshIndex(); // also connects + verifies pairing
+    const existing = index.get(noteId);
+    if (!existing) {
+      throw new Error(`Note ${noteId} not found in the vault — list_notes to see valid ids, or use remember to create one.`);
+    }
+    const deps = this.#deps!;
+
+    const pf = await preflight(deps.suiClient, this.agentAddress);
+    if (!pf.ok) {
+      throw new FundingError(
+        `Agent address ${this.agentAddress} cannot afford this edit — ` +
+          `SUI: ${pf.sui} MIST${pf.needsSui ? ' (needs ≥ 0.1 SUI)' : ''}, ` +
+          `WAL: ${pf.wal} FROST${pf.needsWal ? ' (needs ≥ 0.02 WAL)' : ''}. ` +
+          `Fund it with testnet SUI (faucet) and exchange some for WAL, then retry.`,
+      );
+    }
+
+    const note = editedNote(existing.note, changes, this.#cfg.agentName);
+    const result = await writeTurn(deps, [note]);
+    index.upsert(note, {
+      quiltPatchId: result.perNote[0].quiltPatchId,
+      quiltBlobId: result.quiltBlobId,
+      blobObjectId: result.blobObjectId,
+    });
+    this.#fetchedAt = Date.now();
     this.#saveCache();
     return { note, result };
   }
