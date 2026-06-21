@@ -194,6 +194,16 @@ async function persist(id: string, patch: NotePatch): Promise<void> {
 
   const next = editedNote(current, changes, OWNER_AUTHOR);
   const title = next.title || 'Untitled note';
+
+  // OPTIMISTIC: reflect the edit in the live index immediately so the editor
+  // shows the saved content right away, instead of only after the ~10s seal+write
+  // (which previously made an edit "disappear" until a refresh). Keep the prior
+  // blob location until the write lands; we re-upsert with the new one below. A
+  // failed write surfaces via the write-state (and retryWrite re-attempts from
+  // this note), so the optimistic body is never silently lost.
+  const priorLoc = vaultData.getSnapshot().index?.get(id)?.location;
+  if (priorLoc) vaultData.upsert(next, priorLoc);
+
   const eventId = vaultData.beginWriteEvent({ noteId: id, noteTitle: title, state: { phase: 'encrypting' } });
   vaultData.updateWriteEvent(eventId, { phase: 'certifying' });
   try {

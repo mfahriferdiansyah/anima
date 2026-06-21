@@ -28,11 +28,13 @@ import {
   vaultIdFromCreateResult,
   ensureAgentWal,
   preflight,
+  syncNewQuilts,
   type QuiltDeps,
 } from '../../../chain/core/src/index.js';
 import { createStore } from '../mocks/store';
 import { getSuiClient } from './suiClient';
 import { vaultData } from './vaultData';
+import { loadIndexCache, saveIndexCache, clearIndexCache, enableIndexCache } from './indexCache';
 
 // 0.3 SUI: clears ensureAgentWal's 0.25 SUI swap floor AND leaves ≥0.1 SUI gas
 // after the swap, so a freshly-onboarded agent has WAL and can write (the 0.2
@@ -145,11 +147,28 @@ async function rebuildAndReady(vault: VaultInfo): Promise<void> {
   const gen = generation;
   pendingVault = vault;
   const suiClient = getSuiClient();
+  const seal = new SealVault({ suiClient, signer: wired.agentSigner, vaultId: vault.vaultId, ownerAddress: vault.owner });
+  // Assemble the live QuiltDeps now (vault + seal + agent signer known) so the
+  // write-path hooks can persist/forget the moment the vault is ready.
+  currentDeps = { suiClient, seal, agentSigner: wired.agentSigner, walletAddress: vault.owner, vaultId: vault.vaultId };
+
+  // CACHE-FIRST: a same-tab refresh restores the decrypted index from
+  // sessionStorage instantly, then pulls only NEW quilts in the background,
+  // instead of re-decrypting the whole vault every refresh.
+  const cached = loadIndexCache(vault.vaultId);
+  if (cached) {
+    if (gen !== generation) return;
+    vaultData.publish(cached);
+    goReady(vault, cached);
+    void backgroundSync(vault, cached, gen);
+    return;
+  }
+
   store.update(() => ({ phase: 'rebuilding', done: 0, total: 0, error: null }));
 
   let blobIds: string[];
   try {
-    blobIds = await listVaultQuilts({ suiClient, walletAddress: vault.owner, vaultId: vault.vaultId });
+    blobIds = await listVaultQuilts(currentDeps);
   } catch {
     if (gen !== generation) return;
     store.update(() => ({ phase: 'rebuilding', done: 0, total: 0, error: 'Could not list the vault. Retry when the connection settles.' }));
@@ -160,10 +179,6 @@ async function rebuildAndReady(vault: VaultInfo): Promise<void> {
   const total = blobIds.length;
   store.update(() => ({ phase: 'rebuilding', done: 0, total, error: null }));
 
-  const seal = new SealVault({ suiClient, signer: wired.agentSigner, vaultId: vault.vaultId, ownerAddress: vault.owner });
-  // Assemble the live QuiltDeps now (vault + seal + agent signer known) so the
-  // write-path hooks can persist/forget the moment the vault is ready.
-  currentDeps = { suiClient, seal, agentSigner: wired.agentSigner, walletAddress: vault.owner, vaultId: vault.vaultId };
   const entries = [];
   let done = 0;
   for (const blobId of blobIds) {
@@ -183,11 +198,32 @@ async function rebuildAndReady(vault: VaultInfo): Promise<void> {
   const index = VaultIndex.fromEntries(entries);
   if (gen !== generation) return;
   vaultData.publish(index);
+  saveIndexCache(vault.vaultId, index);
   goReady(vault, index);
+}
+
+/**
+ * Re-validate a cache-restored index: pull only quilts the index has not seen
+ * (cheap when nothing changed, e.g. a single-device user), publish if anything
+ * landed, and refresh the cache. Best-effort: a flaky network leaves the cached
+ * view standing. Generation-guarded so an account switch mid-sync never wins.
+ */
+async function backgroundSync(vault: VaultInfo, index: VaultIndex, gen: number): Promise<void> {
+  const deps = currentDeps;
+  if (!deps) return;
+  try {
+    const added = await syncNewQuilts(deps, index);
+    if (gen !== generation) return;
+    if (added.length > 0) vaultData.publish(index);
+    saveIndexCache(vault.vaultId, index);
+  } catch {
+    // offline / flaky key servers — keep the cached view, try again next load
+  }
 }
 
 function goReady(vault: VaultInfo, index: VaultIndex): void {
   if (!wired) return;
+  enableIndexCache(vault.vaultId); // auto-cache subsequent index changes for an instant refresh
   store.update(() => ({
     phase: 'ready',
     vault,
@@ -362,6 +398,7 @@ export function disconnect(): void {
   startedForOwner = null;
   pendingVault = null;
   currentDeps = null;
+  clearIndexCache(); // drop the cached decrypted index so a stale account never shows
   vaultData.reset();
   store.update(() => ({ phase: 'disconnected' }));
 }
