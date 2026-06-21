@@ -73,10 +73,22 @@ export async function syncNewQuilts(
   return added;
 }
 
-/** Presence wire format (relayed by the backend hub; never persisted). */
+/**
+ * Presence wire format (relayed by the backend hub; never persisted).
+ *
+ * The first five frames are the always-on canvas presence (cursors, pings). The
+ * last three are LIVE-COLLABORATION content ops (plan 008): they only flow while
+ * a share is active and carry plaintext document state through the relay — a
+ * `note-op` is a last-write-wins body snapshot, `note-writing` drives the
+ * per-note soft-lock, `canvas-op` is a last-write-wins layout snapshot. Inbound
+ * content frames are sanitized before they touch the DOM (see `web3/collabOps`).
+ */
 export type PresenceMsg =
   | { t: 'hello'; id: string; label: string; kind: 'human' | 'agent' }
   | { t: 'cursor'; id: string; x: number; y: number }
   | { t: 'writing'; id: string; on: boolean }
   | { t: 'note-created'; id: string; noteId: string }
-  | { t: 'bye'; id: string };
+  | { t: 'bye'; id: string }
+  | { t: 'note-op'; id: string; noteId: string; body: string }
+  | { t: 'note-writing'; id: string; noteId: string; on: boolean }
+  | { t: 'canvas-op'; id: string; canvasId: string; layout: CanvasLayout };

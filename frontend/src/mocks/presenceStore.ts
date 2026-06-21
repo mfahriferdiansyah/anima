@@ -112,6 +112,24 @@ export function parseMsg(raw: string): PresenceMsg | null {
     case 'bye':
       if (typeof m.id === 'string') return { t: 'bye', id: m.id };
       return null;
+    // live-collaboration content ops (plan 008) — relayed only during an active
+    // share. Decoded here so the socket recognizes them; the editor sanitizes a
+    // `note-op` body before it renders (web3/collabOps).
+    case 'note-op':
+      if (typeof m.id === 'string' && typeof m.noteId === 'string' && typeof m.body === 'string') {
+        return { t: 'note-op', id: m.id, noteId: m.noteId, body: m.body };
+      }
+      return null;
+    case 'note-writing':
+      if (typeof m.id === 'string' && typeof m.noteId === 'string' && typeof m.on === 'boolean') {
+        return { t: 'note-writing', id: m.id, noteId: m.noteId, on: m.on };
+      }
+      return null;
+    case 'canvas-op':
+      if (typeof m.id === 'string' && typeof m.canvasId === 'string' && m.layout && typeof m.layout === 'object') {
+        return { t: 'canvas-op', id: m.id, canvasId: m.canvasId, layout: m.layout as Record<string, { x: number; y: number }> };
+      }
+      return null;
     default:
       return null;
   }
@@ -158,6 +176,10 @@ export function reducePeers(peers: Peer[], msg: PresenceMsg): Peer[] {
     case 'bye':
       return peers.filter((p) => p.id !== msg.id);
     case 'note-created':
+    case 'note-op':
+    case 'note-writing':
+    case 'canvas-op':
+      // content ops carry document state, not peer state — the peer list is unchanged.
       return peers;
   }
 }

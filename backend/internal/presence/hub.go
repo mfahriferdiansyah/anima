@@ -1,12 +1,20 @@
-// Package presence is an ephemeral WebSocket relay for the multiplayer canvas.
+// Package presence is an ephemeral WebSocket relay for the multiplayer canvas
+// and live shared-doc collaboration.
 //
-// CUSTODY INVARIANT: nothing here is ever persisted or logged. Rooms exist in
-// memory only while peers are connected; payloads carry cursors/labels/pings —
-// never memory content. The vault (on Walrus) remains the only durable state.
+// CUSTODY INVARIANT: nothing here is ever persisted, logged, or parsed. Rooms
+// exist in memory only while peers are connected. During an ACTIVE SHARE the
+// relay also fans out plaintext note/canvas content-op frames between the
+// participants — authorized by the share, never durable, never inspected — so
+// the relay is explicitly NOT a confidentiality trust boundary for shared
+// content (disclosed in the docs). It still holds no key, signs nothing, and the
+// vault (sealed on Walrus) remains the only durable state. Private (unshared)
+// editing emits no content-ops; share rooms are keyed by an unguessable id, not
+// the public vault id, so a vault-id holder cannot eavesdrop a private session.
 package presence
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -15,10 +23,17 @@ import (
 )
 
 const (
-	maxMsgBytes   = 4 << 10 // cursors and pings are tiny; anything bigger is abuse
-	writeTimeout  = 5 * time.Second
-	maxRoomPeers  = 32
-	pingInterval  = 30 * time.Second
+	// Content-op frames (a note-body snapshot, a canvas op) are larger than a
+	// cursor ping but still bounded; anything past this cap is abuse.
+	maxMsgBytes  = 64 << 10
+	writeTimeout = 5 * time.Second
+	maxRoomPeers = 32
+	pingInterval = 30 * time.Second
+
+	// DoS bounds (overridable per-Hub for tests). Generous for real use; they
+	// only bite a flood.
+	defaultMaxConnsPerIP = 24   // one client opens a handful of tabs/agents
+	defaultMaxRooms      = 4096 // global ceiling on concurrent rooms
 )
 
 type peer struct {
@@ -31,14 +46,24 @@ type room struct {
 	peers map[*peer]struct{}
 }
 
-// Hub relays raw messages between peers of the same vault room.
+// Hub relays raw messages between peers of the same room.
 type Hub struct {
-	mu    sync.Mutex
-	rooms map[string]*room
+	mu        sync.Mutex
+	rooms     map[string]*room
+	connsByIP map[string]int
+
+	// DoS bounds — fields (not consts) so tests can lower them.
+	maxConnsPerIP int
+	maxRooms      int
 }
 
 func NewHub() *Hub {
-	return &Hub{rooms: make(map[string]*room)}
+	return &Hub{
+		rooms:         make(map[string]*room),
+		connsByIP:     make(map[string]int),
+		maxConnsPerIP: defaultMaxConnsPerIP,
+		maxRooms:      defaultMaxRooms,
+	}
 }
 
 // roomKey scopes a room to a single board: presence on one canvas never leaks to
@@ -48,14 +73,41 @@ func roomKey(vault, canvas string) string {
 	return vault + "|" + canvas
 }
 
+// reserveConn admits one connection from ip if it is under the per-IP cap.
+func (h *Hub) reserveConn(ip string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.connsByIP[ip] >= h.maxConnsPerIP {
+		return false
+	}
+	h.connsByIP[ip]++
+	return true
+}
+
+func (h *Hub) releaseConn(ip string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.connsByIP[ip] <= 1 {
+		delete(h.connsByIP, ip)
+		return
+	}
+	h.connsByIP[ip]--
+}
+
+// getRoom returns the room for key, creating it if absent. A NEW room is refused
+// (nil) once the global ceiling is hit — existing rooms are never affected.
 func (h *Hub) getRoom(key string) *room {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	r, ok := h.rooms[key]
-	if !ok {
-		r = &room{peers: make(map[*peer]struct{})}
-		h.rooms[key] = r
+	if ok {
+		return r
 	}
+	if len(h.rooms) >= h.maxRooms {
+		return nil
+	}
+	r = &room{peers: make(map[*peer]struct{})}
+	h.rooms[key] = r
 	return r
 }
 
@@ -70,19 +122,45 @@ func (h *Hub) dropRoomIfEmpty(key string, r *room) {
 	}
 }
 
-// ServeHTTP upgrades GET /presence?vault=<id>&canvas=<canvasId> and relays until
-// disconnect. canvas is optional and defaults to "shared".
+func clientIP(req *http.Request) string {
+	host, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		return req.RemoteAddr
+	}
+	return host
+}
+
+// ServeHTTP upgrades GET /presence and relays until disconnect. A normal canvas
+// peer connects with ?vault=<id>&canvas=<canvasId> (canvas defaults to "shared");
+// a live share participant connects with ?room=<unguessable-id>, which keys the
+// room directly so it is not derivable from the public vault id. Either vault or
+// room is required.
 func (h *Hub) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	vault := req.URL.Query().Get("vault")
-	if vault == "" {
-		http.Error(w, "vault query param required", http.StatusBadRequest)
+	q := req.URL.Query()
+	var key string
+	if shareRoom := q.Get("room"); shareRoom != "" {
+		// unguessable share-room id (008): the relay never maps it to a vault.
+		key = shareRoom
+	} else {
+		vault := q.Get("vault")
+		if vault == "" {
+			http.Error(w, "vault or room query param required", http.StatusBadRequest)
+			return
+		}
+		canvas := q.Get("canvas")
+		if canvas == "" {
+			canvas = "shared"
+		}
+		key = roomKey(vault, canvas)
+	}
+
+	// per-IP DoS bound — refuse before the upgrade so a flood is cheap to shed.
+	ip := clientIP(req)
+	if !h.reserveConn(ip) {
+		http.Error(w, "too many connections", http.StatusTooManyRequests)
 		return
 	}
-	canvas := req.URL.Query().Get("canvas")
-	if canvas == "" {
-		canvas = "shared"
-	}
-	key := roomKey(vault, canvas)
+	defer h.releaseConn(ip)
 
 	conn, err := websocket.Accept(w, req, &websocket.AcceptOptions{
 		// browser + local MCP processes; payloads are non-sensitive by design
@@ -94,6 +172,10 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	conn.SetReadLimit(maxMsgBytes)
 
 	r := h.getRoom(key)
+	if r == nil {
+		conn.Close(websocket.StatusPolicyViolation, "server at room capacity")
+		return
+	}
 	p := &peer{conn: conn, send: make(chan []byte, 64)}
 
 	r.mu.Lock()
