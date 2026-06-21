@@ -6,7 +6,7 @@
  * savingLayout pulse standing in for the new-version save.
  */
 import { createStore } from './store';
-import { mockMs } from './scenario';
+import { mockMs } from './timing';
 import { canvasLayout } from './fixture';
 
 export interface Peer {

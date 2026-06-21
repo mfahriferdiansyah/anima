@@ -9,7 +9,7 @@
  */
 import type { WriteState } from '../components/WriteStateCard';
 import { createStore } from './store';
-import { mockMs } from './scenario';
+import { mockMs } from './timing';
 import { OWNER_AUTHOR, type Note } from './fixture';
 import { beginWriteEvent, updateWriteEvent } from './writeStateStore';
 import { appendEventMessage } from './chatStore';

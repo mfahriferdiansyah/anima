@@ -8,7 +8,7 @@ export {
   writeTurn, readAll, listVaultQuilts, forgetNotes,
   buildForgetPlan, buildDeleteQuiltsTx, type QuiltDeps,
 } from './quilts.js';
-export { VaultIndex } from './vaultIndex.js';
+export { VaultIndex, isReservedNote } from './vaultIndex.js';
 export * from './funding.js';
 export { exportVaultZip } from './exportVault.js';
 export * from './vault.js';

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { startSession, useVaultSession } from '@/hooks/useVaultSession';
+import { useVaultSession } from '@/hooks/useVaultSession';
 import { Canvas } from '@/pages/Canvas';
 import { Companion } from '@/pages/Companion';
 import { Home } from '@/pages/Home';
@@ -11,25 +11,26 @@ import { Settings } from '@/pages/Settings';
 import { AppShell } from './AppShell';
 
 /**
- * Phase gate for every /app route: starts the session once on mount,
- * renders the workspace when ready, redirects to the landing page after
- * a disconnect, and shows the session-state placeholder in between.
+ * Phase gate for every /app route. `useVaultSession` self-drives discovery from
+ * the connected wallet (account change → configure + start; no wallet →
+ * disconnected), so the gate only reads the phase: render the workspace when
+ * ready, redirect to the landing after a disconnect, show the placeholder in
+ * between. The mount latch suppresses the first-tick redirect before the session
+ * hook's effect has run.
  */
 function AppGate() {
   const session = useVaultSession();
-  const startedRef = useRef(false);
+  const mountedRef = useRef(false);
 
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-    startSession();
+    mountedRef.current = true;
   }, []);
 
   if (session.phase === 'ready') return <AppShell session={session} />;
   if (session.phase === 'disconnected') {
-    // Before the mount effect runs the store still reads disconnected; only
-    // an actual disconnect (or a failed start) should bounce to the landing.
-    if (!startedRef.current) return null;
+    // Before the hook's effect runs the store still reads disconnected; only an
+    // actual disconnect (no wallet, or a failed start) should bounce to landing.
+    if (!mountedRef.current) return null;
     return <Navigate to="/" replace />;
   }
   return <SessionGate session={session} />;

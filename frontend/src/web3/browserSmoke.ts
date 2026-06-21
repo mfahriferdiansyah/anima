@@ -13,9 +13,19 @@
  *
  * The live run is gated on prerequisites (backend up + CORS origin reconciled
  * + the agent key currently allowlisted on the seeded vault) — see the plan.
+ *
+ * Tier-1 (plan U1) adds an optional WRITE round-trip leg (`opts.write`): after
+ * the read leg, prove a real browser `writeTurn` (the ~10s encrypt → Walrus
+ * upload → transfer-to-wallet) certifies a blob and reads back decrypted-equal.
+ * It is the single biggest unproven surface after Tier 0; the agent-signed path
+ * needs the key FUNDED (preflight) + allowlisted. The wallet-signed delete that
+ * would clean up the probe note is out of U1 scope (U7 proves delete), so a
+ * live write leaves one throwaway note in the seeded vault.
  */
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { discoverVault, SealVault, listVaultQuilts, readAll } from '../../../chain/core/src/index.js';
+import {
+  discoverVault, SealVault, listVaultQuilts, readAll, writeTurn, preflight, newNote,
+} from '../../../chain/core/src/index.js';
 import { getSuiClient } from './suiClient';
 
 export interface SmokeStep {
@@ -37,6 +47,12 @@ export interface SmokeOpts {
   agentSecret: string;
   /** The seeded vault's owner address. */
   ownerAddress: string;
+  /**
+   * Tier-1 (U1): also run the WRITE round-trip leg (preflight → writeTurn →
+   * read-back/decrypt-equal). Off by default so the read-only Tier-0 gate stays
+   * zero-tx; needs the agent key funded + allowlisted. Leaves a probe note.
+   */
+  write?: boolean;
   /** Injectable for unit tests; defaults to global fetch. */
   fetchImpl?: typeof fetch;
 }
@@ -107,6 +123,41 @@ export async function runBrowserSmoke(opts: SmokeOpts): Promise<SmokeResult> {
       if (notes.length < 1) throw new Error('no decryptable notes (key allowlisted? blobs present?)');
       return notes;
     });
+
+    // 4) Tier-1 (U1): prove a real browser WRITE round-trip. Off unless opts.write.
+    if (opts.write) {
+      const deps = { suiClient, seal, agentSigner: agent, walletAddress: vault.owner, vaultId: vault.vaultId };
+
+      // preflight FIRST — a clear funding message, not a cryptic write failure deep in writeTurn.
+      await step('preflight', 'sui-rpc', async () => {
+        const pf = await preflight(suiClient, agentAddress);
+        if (!pf.ok) {
+          const need = [pf.needsSui && 'SUI', pf.needsWal && 'WAL'].filter(Boolean).join(' + ');
+          throw new Error(`fund the agent key ${agentAddress}: needs ${need} (have ${pf.sui} MIST / ${pf.wal} FROST)`);
+        }
+        return pf;
+      });
+
+      const probe = newNote({ title: 'tier1-write-smoke', body: 'tier1 write→read→decrypt probe', author: 'agent:smoke' });
+
+      const written = await step('write', 'walrus-relay', async () => {
+        const res = await writeTurn(deps, [probe]);
+        if (!res.blobObjectId || !res.transferDigest) {
+          throw new Error('writeTurn returned no blobObjectId/transferDigest');
+        }
+        return res;
+      });
+
+      // read-back tolerates the certified-blob lag via readOneQuilt's internal retry;
+      // writeTurn already waitForTransaction'd the transfer, so listVaultQuilts sees the blob.
+      await step('write:readback', 'walrus-aggregator+seal-keyservers', async () => {
+        const entries = await readAll({ suiClient, seal }, await listVaultQuilts(deps));
+        const found = entries.find((e) => e.note.noteId === probe.noteId);
+        if (!found) throw new Error(`written note ${probe.noteId} not found on readback (blob lag? list stale?)`);
+        if (found.note.body !== probe.body) throw new Error('readback body mismatch — decrypt round-trip failed');
+        return { blobObjectId: written.blobObjectId, transferDigest: written.transferDigest };
+      });
+    }
 
     return { ok: true, steps };
   } catch (e) {

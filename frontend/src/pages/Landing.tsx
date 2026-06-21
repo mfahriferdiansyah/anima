@@ -1,14 +1,14 @@
 import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BRAND_NAME } from '@/brand';
-import { seedReady, useVaultSession } from '@/hooks/useVaultSession';
+import { useVaultSession } from '@/hooks/useVaultSession';
 import type { ReadySession } from '@/app/AppShell';
 import './landing.css';
 
 // The real-app previews (AppShell + every app page) are the heaviest thing on
 // the landing and only appear in the desktop deck. Load them as a separate
 // chunk, mounted only when the deck nears view — the initial load never pays for
-// them. (`landingSeed` is dynamically imported on the same trigger.)
+// them.
 const ScreenPreview = lazy(() => import('./ScreenPreview').then((m) => ({ default: m.ScreenPreview })));
 
 /**
@@ -718,7 +718,10 @@ function StackSection({ staticMode }: { staticMode: boolean }) {
         // actually fire once that overlap begins on scroll.
         if (entry.intersectionRatio <= 0) return;
         io.disconnect();
-        void import('./landingSeed').then(({ LANDING_NOTES }) => seedReady(LANDING_NOTES));
+        // Live preview seeding was a mock-session bypass (removed in the Tier-1
+        // session migration). The embedded preview now reflects the real session,
+        // which is disconnected on the public landing; restoring a seeded preview
+        // belongs to the separate Tier-2 landing track.
       },
       // rootMargin 0 (a positive bottom margin intersects at the fold = mounts at
       // load); threshold 0.01 gives a fire point as soon as real overlap starts,

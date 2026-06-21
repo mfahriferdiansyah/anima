@@ -1,10 +1,9 @@
 import { useEffect } from 'react';
-import { BrowserRouter, useLocation } from 'react-router-dom';
+import { BrowserRouter } from 'react-router-dom';
 import { WriteStateCard } from '@/components/WriteStateCard';
 import { dismissWriteEvent, retryWrite, useWriteEvents } from '@/hooks/useVault';
 import type { WriteEvent } from '@/hooks/useVault';
 import { AppRoutes } from './routes';
-import { MockedBadge } from './MockedBadge';
 import './shell.css';
 
 const VISIBLE_TOASTS = 3;
@@ -43,18 +42,11 @@ function WriteToasts() {
   );
 }
 
-/** The mock badge belongs to the workspace, not the public landing. */
-function GatedMockedBadge() {
-  const { pathname } = useLocation();
-  return pathname.startsWith('/app') ? <MockedBadge /> : null;
-}
-
 export function App() {
   return (
     <BrowserRouter>
       <AppRoutes />
       <WriteToasts />
-      <GatedMockedBadge />
     </BrowserRouter>
   );
 }

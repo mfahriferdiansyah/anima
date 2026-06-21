@@ -5,17 +5,14 @@
  * through here so pages only read the timeline.
  */
 import { createStore } from './store';
-import { mockMs } from './scenario';
+import { mockMs } from './timing';
 import {
-  AGENT_AUTHOR,
   agentEvents,
   draftSuggestion,
   materializeNoteSeed,
   type AgentEvent,
   type AgentEventType,
 } from './fixture';
-import { createNote, saveNote } from './vaultStore';
-import { materializeNote } from './presenceStore';
 
 export interface Suggestion {
   id: string;
@@ -87,21 +84,20 @@ export function clearSuggestion(): void {
   store.update((prev) => ({ ...prev, suggestion: null }));
 }
 
-/** Canvas calls this once; ~6s later Nova writes a note that materializes on the board. */
+/**
+ * Canvas calls this once; ~6s later Nova logs that it added a note to the board.
+ * Tier-1 decoupled this from the (migrating) vault/presence stores: it now only
+ * appends the activity event. Wiring Nova's canvas-materialize beat to a REAL
+ * sealed note + the real presence layer is Tier-2 (when this timeline migrates
+ * to the live companion-activity path).
+ */
 export function scheduleAgentNote(): void {
   if (agentNoteScheduled) return;
   agentNoteScheduled = true;
   const gen = timelineGeneration;
   setTimeout(() => {
     if (gen !== timelineGeneration) return;
-    const noteId = createNote(AGENT_AUTHOR);
-    saveNote(noteId, {
-      title: materializeNoteSeed.title,
-      body: materializeNoteSeed.body,
-      tags: materializeNoteSeed.tags,
-    });
-    materializeNote(noteId, materializeNoteSeed.x, materializeNoteSeed.y);
-    appendTimelineEvent('draft', `Nova added ${materializeNoteSeed.title} to the canvas`, [noteId]);
+    appendTimelineEvent('draft', `Nova added ${materializeNoteSeed.title} to the canvas`, []);
   }, mockMs(6000));
 }
 

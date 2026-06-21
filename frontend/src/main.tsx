@@ -7,7 +7,6 @@ import { AnimaProviders } from '@/web3/AnimaProviders';
 // imported after App so the responsive layer wins over shell/page CSS
 import '@/theme/responsive.css';
 import { failNextWrite } from '@/mocks/vaultStore';
-import { failNextRebuild } from '@/mocks/sessionStore';
 import { triggerLowBalance } from '@/mocks/chatStore';
 
 document.title = BRAND_NAME;
@@ -17,14 +16,17 @@ declare global {
   interface Window {
     __anima?: {
       failNextWrite: () => void;
-      failNextRebuild: () => void;
       triggerLowBalance: () => void;
-      /** Dev/smoke-only (U2): the browser smoke probe. Excluded from production builds. */
-      runSmoke?: (opts: { agentSecret: string; ownerAddress: string }) => Promise<unknown>;
+      /**
+       * Dev/smoke-only: the browser smoke probe. Excluded from production builds.
+       * `write: true` adds the Tier-1 (U1) write round-trip leg (needs the agent
+       * key funded + allowlisted); omit it for the zero-tx Tier-0 read gate.
+       */
+      runSmoke?: (opts: { agentSecret: string; ownerAddress: string; write?: boolean }) => Promise<unknown>;
     };
   }
 }
-window.__anima = { failNextWrite, failNextRebuild, triggerLowBalance };
+window.__anima = { failNextWrite, triggerLowBalance };
 
 // U2 smoke harness — mode-gated. In a production build MODE==='production', so
 // this whole block is dead code and browserSmoke (+ the wasm singleton + the

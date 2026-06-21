@@ -5,7 +5,7 @@
  * Ephemeral by design: nothing persists, a reload clears the transcript.
  */
 import { createStore } from './store';
-import { mockMs } from './scenario';
+import { mockMs } from './timing';
 import { AGENT_AUTHOR, chatScripts, type ChatIntent } from './fixture';
 import { createNote, saveNote } from './vaultStore';
 import { appendTimelineEvent } from './agentTimeline';

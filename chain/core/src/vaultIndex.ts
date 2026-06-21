@@ -5,6 +5,16 @@
  */
 import type { IndexedNote, Note, NoteLocation } from './types.js';
 
+/**
+ * Reserved app-state notes (canvas layout, future folders/registries) are tagged
+ * `anima:*`. They are durable vault notes but must never surface as user memory —
+ * they are filtered out of recall and the notes library (plan R19). Layout
+ * loaders that WANT the reserved note read it via `all()`/`findLayoutNote`.
+ */
+export function isReservedNote(note: Note): boolean {
+  return note.tags.some((t) => t.startsWith('anima:'));
+}
+
 export class VaultIndex {
   #byId = new Map<string, IndexedNote>();
 
@@ -30,17 +40,23 @@ export class VaultIndex {
     return this.#byId.get(noteId);
   }
 
+  /** Every entry, reserved app-state notes INCLUDED (layout loaders need this). */
   all(): IndexedNote[] {
     return [...this.#byId.values()].sort((a, b) => b.note.updatedAt.localeCompare(a.note.updatedAt));
+  }
+
+  /** User-facing notes only — reserved `anima:*` app-state filtered out (R19). */
+  notes(): IndexedNote[] {
+    return this.all().filter((e) => !isReservedNote(e.note));
   }
 
   get size(): number {
     return this.#byId.size;
   }
 
-  /** Backlinks: notes whose `links` reference the given noteId. */
+  /** Backlinks: user notes whose `links` reference the given noteId (reserved excluded). */
   backlinks(noteId: string): IndexedNote[] {
-    return this.all().filter((e) => e.note.links.includes(noteId));
+    return this.notes().filter((e) => e.note.links.includes(noteId));
   }
 
   /**
@@ -49,10 +65,12 @@ export class VaultIndex {
    */
   search(query: string, topK = 6): IndexedNote[] {
     const terms = query.toLowerCase().split(/\W+/).filter((t) => t.length > 2);
-    if (terms.length === 0) return this.all().slice(0, topK);
+    // Recall is over user notes only — the reserved layout note must never leak
+    // into Nova's context (frontend) or MCP recall (which calls search() directly).
+    if (terms.length === 0) return this.notes().slice(0, topK);
 
     const now = Date.now();
-    const scored = this.all().map((e) => {
+    const scored = this.notes().map((e) => {
       const title = e.note.title.toLowerCase();
       const body = e.note.body.toLowerCase();
       const tags = e.note.tags.join(' ').toLowerCase();
