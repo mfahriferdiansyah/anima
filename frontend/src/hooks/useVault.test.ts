@@ -14,11 +14,11 @@ vi.mock('../../../chain/core/src/index.js', async (importOriginal) => ({
   preflight: vi.fn(),
 }));
 vi.mock('../web3/session', () => ({ getQuiltDeps: vi.fn() }));
-vi.mock('../mocks/chatStore', () => ({ triggerLowBalance: vi.fn() }));
+vi.mock('./useChat', () => ({ triggerLowBalance: vi.fn() }));
 
 import { VaultIndex, newNote, writeTurn, preflight } from '../../../chain/core/src/index.js';
 import { getQuiltDeps } from '../web3/session';
-import { triggerLowBalance } from '../mocks/chatStore';
+import { triggerLowBalance } from './useChat';
 import { vaultData, resetVaultData } from '../web3/vaultData';
 import { saveNote, createNote, forgetNotes, useVault } from './useVault';
 

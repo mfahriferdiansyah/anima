@@ -19,7 +19,9 @@ import {
 import type { WriteState } from '../components/WriteStateCard';
 import { vaultData, type WriteEvent } from '../web3/vaultData';
 import { getQuiltDeps } from '../web3/session';
-import { triggerLowBalance } from '../mocks/chatStore';
+// low-balance banner lives in the chat layer; import via useChat so this survives
+// U6 deleting the chatStore mock (useChat keeps re-exporting triggerLowBalance).
+import { triggerLowBalance } from './useChat';
 import { OWNER_AUTHOR, type Note } from '../mocks/fixture';
 
 export interface NotePatch {
