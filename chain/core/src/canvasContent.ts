@@ -153,11 +153,16 @@ export async function saveCanvasContent(
     blobObjectId: result.blobObjectId,
   });
 
-  // shared-board migration: only on the FIRST shared write, only if a legacy
-  // layout note exists. Drop it from the live index now (so an in-session
-  // findLayoutNote is empty) and hand the caller a delete tx for the blob.
+  // shared-board migration: whenever a legacy `anima:canvas-layout` note still
+  // exists (not just the first write), so it self-heals across BOTH writers. If
+  // an external agent (MCP) creates `anima:canvas:shared` first, the agent key
+  // cannot sign the wallet-owned delete and drops the tx; the owner's frontend
+  // then still gets a migrationTx on its next shared write (the `!existing` gate
+  // would have skipped it, orphaning the legacy blob). Drop it from the live
+  // index now (so an in-session findLayoutNote is empty) and hand the caller a
+  // delete tx; once the legacy is gone, later writes find nothing to migrate.
   let migrationTx: Transaction | undefined;
-  if (canvasId === SHARED_CANVAS_ID && !existing) {
+  if (canvasId === SHARED_CANVAS_ID) {
     const legacy = findLayoutNote(index);
     if (legacy && legacy.note.tags.includes(LAYOUT_TAG)) {
       index.remove(legacy.note.noteId);
