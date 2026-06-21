@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/Button';
 import { createNote, useVault } from '@/hooks/useVault';
+import { vaultData } from '@/web3/vaultData';
 import { useFolders } from '@/hooks/useCanvases';
 import { notesMounted } from '@/hooks/useAgentTimeline';
 import { useVaultSession } from '@/hooks/useVaultSession';
@@ -100,9 +101,12 @@ function NotesHome({ name, onNew }: { name: string; onNew: () => void }) {
   const [query, setQuery] = useState('');
   const [manageOpen, setManageOpen] = useState(false);
   const titles = new Map(notes.map((note) => [note.noteId, note.title || 'Untitled']));
-  const q = query.trim().toLowerCase();
+  const q = query.trim();
+  // Index-ranked recall (title/body/tags + recency) instead of a title-substring
+  // filter; topK is uncapped to notes.length so search never hides notes.
+  const hits = q ? new Set(vaultData.search(q, notes.length).map((e) => e.note.noteId)) : null;
   const folders = buildLibrary(notes, [], folderOrder)
-    .map((folder) => ({ ...folder, items: q ? folder.items.filter((it) => it.title.toLowerCase().includes(q)) : folder.items }))
+    .map((folder) => ({ ...folder, items: hits ? folder.items.filter((it) => hits.has(it.id)) : folder.items }))
     .filter((folder) => folder.items.length > 0);
 
   return (

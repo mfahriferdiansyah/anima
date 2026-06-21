@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/Button';
 import { Modal } from '@/components/Modal';
-import { forgetNotes, setNoteFolder, useVault } from '@/hooks/useVault';
+import { configureForgetExec, forgetNotes, setNoteFolder, useVault } from '@/hooks/useVault';
+import { useWalletExecTx } from '@/web3/walletExecTx';
 import {
   addFolder,
   deleteCanvas,
@@ -28,6 +29,20 @@ export function ManageLibrary({ open, onClose }: { open: boolean; onClose: () =>
   const canvases = useCanvases();
   const folders = useFolders();
   const [newName, setNewName] = useState('');
+  // ids whose forget is awaiting the wallet signature — the row's delete is
+  // disabled while in flight (the delete is non-idempotent: one popup per click).
+  const [forgetting, setForgetting] = useState<Set<string>>(new Set());
+  const { execTx } = useWalletExecTx();
+
+  // useWalletExecTx returns a fresh execTx each render; keep the latest in a ref
+  // and register a stable wrapper. Set-only (no cleanup): this modal is mounted
+  // app-wide via AppShell, so nulling on unmount would clobber a live sibling.
+  const execRef = useRef(execTx);
+  execRef.current = execTx;
+  useEffect(() => {
+    configureForgetExec((tx) => execRef.current(tx));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- execTx read via execRef; register once
+  }, []);
 
   const library = buildLibrary(notes, canvases, folders);
   const folderOptions = library.map((f) => f.name);
@@ -42,13 +57,27 @@ export function ManageLibrary({ open, onClose }: { open: boolean; onClose: () =>
     else setNoteFolder(item.id, folder);
   };
 
-  // Destructive, but the real wallet confirms on-chain later — no stub modal.
-  const removeItem = (item: LibItem) => {
+  // Forget rewrites survivors then deletes the quilt(s) under one wallet
+  // signature; disable the row while it's in flight, and on a declined/failed
+  // signature re-enable it (the note stays — a failed delete is retryable).
+  const removeItem = async (item: LibItem) => {
     if (item.kind === 'canvas') {
       if (!item.canvas?.seed) deleteCanvas(item.id);
       return;
     }
-    forgetNotes([item.id]);
+    if (forgetting.has(item.id)) return;
+    setForgetting((prev) => new Set(prev).add(item.id));
+    try {
+      await forgetNotes([item.id]);
+    } catch {
+      // declined/failed signature — the note stays in the index, retryable
+    } finally {
+      setForgetting((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    }
   };
 
   return (
@@ -134,9 +163,9 @@ export function ManageLibrary({ open, onClose }: { open: boolean; onClose: () =>
                     <button
                       type="button"
                       className="mlib-del"
-                      disabled={item.kind === 'canvas' && item.canvas?.seed}
+                      disabled={(item.kind === 'canvas' && item.canvas?.seed) || forgetting.has(item.id)}
                       aria-label={item.kind === 'canvas' ? 'Delete canvas' : 'Forget note'}
-                      onClick={() => removeItem(item)}
+                      onClick={() => void removeItem(item)}
                     >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                     </button>

@@ -6,7 +6,7 @@ import { App } from '@/app/App';
 import { AnimaProviders } from '@/web3/AnimaProviders';
 // imported after App so the responsive layer wins over shell/page CSS
 import '@/theme/responsive.css';
-import { triggerLowBalance } from '@/mocks/chatStore';
+import { triggerLowBalance } from '@/hooks/useChat';
 
 document.title = BRAND_NAME;
 

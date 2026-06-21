@@ -16,7 +16,7 @@ import {
   useSettings,
 } from '@/hooks/useSettings';
 import type { KeyEntry } from '@/hooks/useSettings';
-import { useVault } from '@/hooks/useVault';
+import { configureForgetExec, forgetEverything, useVault } from '@/hooks/useVault';
 import { renameCompanion, useVaultSession } from '@/hooks/useVaultSession';
 import { useWalletExecTx } from '@/web3/walletExecTx';
 import { vaultData } from '@/web3/vaultData';
@@ -249,16 +249,22 @@ export function Settings() {
   const [issuedKeyId, setIssuedKeyId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastCounter = useRef(0);
+  const [confirmWipe, setConfirmWipe] = useState(false);
+  const [wiping, setWiping] = useState(false);
 
   // useWalletExecTx returns a fresh execTx each render; keep the latest in a ref
   // so the settings layer always calls the current one (mirrors useVaultSession).
   const execRef = useRef(execTx);
   execRef.current = execTx;
 
-  // Wire the wallet-exec adapter into the settings layer and pull live balances
-  // once a vault is ready (preflight on the device agent address).
+  // Wire the wallet-exec adapter into the settings + forget layers and pull live
+  // balances once a vault is ready (preflight on the device agent address). The
+  // forget wiring is set-only (NOT nulled on cleanup): ManageLibrary mounts the
+  // same adapter app-wide via AppShell, so nulling here would clobber it. The
+  // settings exec keeps its null-on-cleanup — that asymmetry is intentional.
   useEffect(() => {
     configureSettingsExec((tx) => execRef.current(tx));
+    configureForgetExec((tx) => execRef.current(tx));
     if (ready) void refreshBalances();
     return () => configureSettingsExec(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- execTx read via execRef; refetch only when ready flips
@@ -304,8 +310,20 @@ export function Settings() {
     pushToast('success', 'Vault exported', 'anima-vault-export.zip');
   };
 
-  const forgetEverything = () => {
-    pushToast('info', 'Not in the demo', 'forgetting everything is disabled in the mocked build');
+  // Wipe the whole vault: an explicit confirm precedes the one wallet signature.
+  // Quiesce + enumerate + delete run inside the hook; the Vault object survives
+  // (re-onboardable), so this clears every memory but never tears down.
+  const runWipe = async () => {
+    setConfirmWipe(false);
+    setWiping(true);
+    try {
+      await forgetEverything();
+      pushToast('success', 'Vault wiped', 'every memory was erased; the vault stays yours to re-fill');
+    } catch {
+      pushToast('error', 'Wipe cancelled', 'the signature was declined or failed; nothing was erased');
+    } finally {
+      setWiping(false);
+    }
   };
 
   const issuedKey = settings.keys.find((entry) => entry.id === issuedKeyId) ?? null;
@@ -410,10 +428,14 @@ export function Settings() {
       <div className="pgst-danger">
         <div>
           <b>Forget everything</b>
-          <span className="pgst-help">Erases every memory in the vault, for a signature. Disabled in the mocked build.</span>
+          <span className="pgst-help">
+            {wiping
+              ? 'Vault wipe in progress — finishing any open write, then erasing every quilt.'
+              : 'Erases every memory in the vault, for one signature. The vault itself stays yours.'}
+          </span>
         </div>
-        <button type="button" className="pgbtn danger" onClick={forgetEverything}>
-          Forget everything
+        <button type="button" className="pgbtn danger" disabled={wiping} onClick={() => setConfirmWipe(true)}>
+          {wiping ? 'Wiping…' : 'Forget everything'}
         </button>
       </div>
         </div>
@@ -426,6 +448,26 @@ export function Settings() {
         issuedKey={issuedKey}
         onIssued={(key) => setIssuedKeyId(key.id)}
       />
+      <Modal open={confirmWipe} onClose={() => setConfirmWipe(false)}>
+        <div className="dh">
+          <div className="dt">Forget everything?</div>
+          <div className="dd2">
+            This erases every memory in {ready.vault.name || 'this vault'} — {notes.length}{' '}
+            {notes.length === 1 ? 'note' : 'notes'} — in one signed transaction. It cannot be undone.
+            The vault stays yours to fill again.
+          </div>
+        </div>
+        <div className="db">
+          <div className="wallet-actions">
+            <Button variant="quiet" onClick={() => setConfirmWipe(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={() => void runWipe()}>
+              Forget everything
+            </Button>
+          </div>
+        </div>
+      </Modal>
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );

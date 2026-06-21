@@ -39,6 +39,19 @@ describe('web3/vaultData', () => {
     expect(vd.search('hello')[0]?.note.noteId).toBe(user.noteId);
   });
 
+  it('backlinks delegate to the index over a populated vault (reserved linker excluded)', () => {
+    // U5: the search-page derivation reads vaultData.backlinks(noteId); the empty
+    // guard is tested above, this pins the populated path + reserved exclusion the
+    // store inherits from the index (index-level cases live in vaultIndex.test.ts).
+    const target = newNote({ title: 'target', body: 'pointed-to', author: 'owner' });
+    const referrer = newNote({ title: 'referrer', body: 'points', author: 'owner', links: [target.noteId] });
+    const reservedReferrer = newNote({ title: 'layout', body: 'positions', author: 'owner', tags: ['anima:canvas-layout'], links: [target.noteId] });
+    vd.publish(VaultIndex.fromEntries([entry(target, 1), entry(referrer, 2), entry(reservedReferrer, 3)]));
+
+    expect(vd.backlinks(target.noteId).map((e) => e.note.noteId)).toEqual([referrer.noteId]);
+    expect(vd.backlinks(referrer.noteId)).toEqual([]); // no inbound links
+  });
+
   it('emits a new snapshot reference on every mutation (useSyncExternalStore identity)', () => {
     const before = vd.getSnapshot();
     vd.publish(VaultIndex.fromEntries([entry(newNote({ title: 'a', body: 'b', author: 'o' }))]));

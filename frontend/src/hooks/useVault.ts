@@ -14,6 +14,11 @@ import {
   editedNote,
   writeTurn,
   preflight,
+  buildForgetPlan,
+  buildDeleteQuiltsTx,
+  listVaultQuilts,
+  readAll,
+  VaultIndex,
   type NoteLocation,
 } from '../../../chain/core/src/index.js';
 import type { WriteState } from '../components/WriteStateCard';
@@ -46,6 +51,33 @@ export interface ScrubEvent {
 
 /** An unsaved draft has no chain location yet; saveNote replaces it with the real one. */
 const DRAFT_LOCATION: NoteLocation = { quiltPatchId: '', quiltBlobId: '', blobObjectId: '' };
+
+/** Runs a forget/wipe PTB through the wallet (one popup). Injected by the React layer. */
+type ExecTx = (transaction: unknown) => Promise<unknown>;
+
+/**
+ * The wallet-exec for the destructive forget paths. The wallet can only be
+ * reached through React hooks, so — like the session engine and the settings
+ * layer — the forget functions read an injected `execTx` wired from
+ * `useWalletExecTx()`. Set-only (no null-on-unmount): ManageLibrary (always
+ * mounted via AppShell) and Settings/Notes/CanvasHome can be co-mounted and
+ * would clobber each other's cleanup, but every `execTx` is the same wallet
+ * adapter, so last-writer-wins has no wrong winner. The deps-null guard is the
+ * real safety: forget early-returns without a ready vault regardless.
+ */
+let forgetExec: ExecTx | null = null;
+
+/** Wire the wallet-exec adapter for forget — called by ManageLibrary/Settings from `useWalletExecTx()`. */
+export function configureForgetExec(execTx: ExecTx): void {
+  forgetExec = execTx;
+}
+
+/**
+ * Block new note writes for the confirm→delete window of a bulk wipe, so a save
+ * can't slip a fresh quilt onto Walrus between the point-in-time enumeration and
+ * the delete. `persist()` early-returns while this is set.
+ */
+let wipeInProgress = false;
 
 /** Notes plus the latest write state per note — selected from the live vaultData index. */
 export function useVault(): VaultState {
@@ -88,6 +120,8 @@ export function saveNote(noteId: string | undefined, patch: NotePatch = {}): str
 }
 
 async function persist(id: string, patch: NotePatch): Promise<void> {
+  // a bulk wipe is enumerating+deleting; block new quilts until it clears
+  if (wipeInProgress) return;
   // double-submit guard: the in-flight write-state map is the signal
   const ws = vaultData.getSnapshot().writeStates[id];
   if (ws && (ws.phase === 'encrypting' || ws.phase === 'certifying')) return;
@@ -141,25 +175,122 @@ export function setNoteFolder(noteId: string, folder: string): void {
   saveNote(noteId, { tags: [folder, ...current.tags.slice(1)] });
 }
 
+function scrubLine(removed: ScrubEvent['removed']): string {
+  const titles = removed.map((e) => e.title).join(', ');
+  return removed.length === 1
+    ? `Forgot 1 memory: ${titles}. Transcript references were scrubbed.`
+    : `Forgot ${removed.length} memories: ${titles}. Transcript references were scrubbed.`;
+}
+
 /**
- * Forget — TIER-1 U4 STUB. Removes the notes from the live index + returns the
- * scrub event so the library/UI updates. The REAL destructive path (survivors-
- * rewrite → one wallet-signed delete of the quilts → on-chain erasure) is U7;
- * until then this only drops them locally and does NOT delete on Walrus.
+ * Forget for real (plan U7): rewrite co-resident survivors into a fresh quilt,
+ * then delete the old quilts in ONE wallet-signed PTB.
+ *
+ * The affected blobs come from FULL PHYSICAL RESIDENCY (`readAll(listVaultQuilts)`),
+ * NOT the latest-wins index: an edited note has stale prior-version quilts the
+ * index forgot about, and feeding the index would delete only the latest blob,
+ * leaving decryptable prior-version ciphertext on Walrus that resurrects at v1
+ * (the AE2 leak). Survivors-first: a survivor sharing a doomed quilt is rewritten
+ * and upserted to its NEW location BEFORE the delete, so a same-session re-forget
+ * targets the new blob and a delete failure leaves it durable. Only survivors
+ * whose LATEST indexed location still sits in a doomed blob are rewritten — an
+ * already-rewritten survivor (run 2 of a retried forget) is skipped, so a rejected
+ * delete re-runs the delete alone with no orphan duplicate (idempotence).
  */
-export function forgetNotes(ids: string[]): ScrubEvent {
+export async function forgetNotes(ids: string[]): Promise<ScrubEvent> {
+  // capture titles from the live index FIRST (before any rewrite/remove churn)
   const idSet = new Set(ids);
   const removed = vaultData
     .getSnapshot()
     .notes.filter((n) => idSet.has(n.noteId))
     .map((n) => ({ noteId: n.noteId, title: n.title || 'Untitled note' }));
+
+  const deps = getQuiltDeps();
+  if (!deps) return { removed, line: scrubLine(removed) };
+
+  // 1) full physical residency → which quilts die, which notes co-resided
+  const residency = await readAll(deps, await listVaultQuilts(deps));
+  const plan = buildForgetPlan(residency, ids);
+
+  if (plan.affectedBlobObjectIds.length === 0) {
+    // nothing on-chain to delete (e.g. unsaved drafts) — drop locally
+    for (const id of ids) vaultData.remove(id);
+    return { removed, line: scrubLine(removed) };
+  }
+
+  // a quilt must die — assert the wallet exec BEFORE any rewrite/remove, so a
+  // missing exec creates no orphan and removes nothing (the note stays, retryable)
+  if (!forgetExec) throw new Error('forgetNotes: wallet exec not wired');
+
+  // 2) rewrite ONLY survivors whose LATEST indexed location is still in a doomed
+  // blob (dedup to unique noteId + latest version + idempotence in one filter)
+  const affected = new Set(plan.affectedBlobObjectIds);
+  const index = vaultData.getSnapshot().index;
+  const toRewrite = [...new Set(plan.survivors.map((s) => s.noteId))]
+    .map((id) => index?.get(id))
+    .filter((e): e is NonNullable<typeof e> => !!e && affected.has(e.location.blobObjectId))
+    .map((e) => e.note);
+
+  // 3) survivors-first: rewrite + upsert to the NEW blob BEFORE the delete
+  if (toRewrite.length > 0) {
+    const res = await writeTurn(deps, toRewrite);
+    for (const survivor of toRewrite) {
+      const per = res.perNote.find((p) => p.noteId === survivor.noteId) ?? res.perNote[0];
+      vaultData.upsert(survivor, {
+        quiltPatchId: per.quiltPatchId,
+        quiltBlobId: res.quiltBlobId,
+        blobObjectId: res.blobObjectId,
+      });
+    }
+  }
+
+  // 4) ONE atomic wallet signature deletes every doomed quilt (let a rejection
+  // propagate — the forgotten note stays in the index, retryable)
+  const tx = await buildDeleteQuiltsTx(deps, plan.affectedBlobObjectIds);
+  await forgetExec(tx);
+
+  // 5) on-chain erasure done → drop the forgotten notes from the live index
   for (const id of ids) vaultData.remove(id);
-  const titles = removed.map((e) => e.title).join(', ');
-  const line =
-    removed.length === 1
-      ? `Forgot 1 memory: ${titles}. Transcript references were scrubbed.`
-      : `Forgot ${removed.length} memories: ${titles}. Transcript references were scrubbed.`;
-  return { removed, line };
+  return { removed, line: scrubLine(removed) };
+}
+
+/**
+ * Forget everything (plan U7 bulk): wipe every quilt in the vault under one
+ * wallet signature. Quiesce first — wait out any in-flight encrypting/certifying
+ * write (silent layout/survivor writes included, since they register in
+ * writeStates) and block new writes for the confirm→delete window, so the
+ * enumeration is a faithful point-in-time snapshot. Sui PTB atomicity means a
+ * rejected signature leaves nothing deleted. The Vault object SURVIVES — the
+ * index is cleared but not nulled (re-onboardable, no teardown).
+ */
+export async function forgetEverything(): Promise<void> {
+  const deps = getQuiltDeps();
+  if (!deps) return;
+  // assert the wallet exec up front: a missing exec must NOT clear the index
+  // (a skipped delete + emptied index = a lying "wiped" that leaks every quilt)
+  if (!forgetExec) throw new Error('forgetEverything: wallet exec not wired');
+
+  wipeInProgress = true;
+  try {
+    // quiesce: wait while any write is mid-flight (covers silent writes too)
+    while (
+      Object.values(vaultData.getSnapshot().writeStates).some(
+        (ws) => ws.phase === 'encrypting' || ws.phase === 'certifying',
+      )
+    ) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+
+    // point-in-time enumeration, then ONE atomic delete of every quilt
+    const blobs = await listVaultQuilts(deps);
+    const tx = await buildDeleteQuiltsTx(deps, blobs);
+    await forgetExec(tx);
+
+    // clear the index in place — the Vault survives, so it stays re-onboardable
+    vaultData.publish(VaultIndex.fromEntries([]));
+  } finally {
+    wipeInProgress = false;
+  }
 }
 
 /** Dismiss a toast from the global write-event stack (App.tsx). */

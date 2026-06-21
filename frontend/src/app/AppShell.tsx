@@ -7,6 +7,7 @@ import { disconnect } from '@/hooks/useVaultSession';
 import type { SessionState } from '@/hooks/useVaultSession';
 import { closePopup, expandPopup, openPopup, setOnCompanionRoute, useChat } from '@/hooks/useChat';
 import { createNote, useVault } from '@/hooks/useVault';
+import { vaultData } from '@/web3/vaultData';
 import { createCanvas, useCanvases, useFolders } from '@/hooks/useCanvases';
 import { buildLibrary } from './library';
 import { ManageLibrary } from './ManageLibrary';
@@ -150,17 +151,21 @@ function MemoryTree() {
   const [filter, setFilter] = useState<DocFilter>('all');
   const [manageOpen, setManageOpen] = useState(false);
 
-  // Notes + canvases filed into folders. Search filters by title; the
+  // Notes + canvases filed into folders. Notes search through the index
+  // (title/body/tags + recency, uncapped to notes.length so nothing is hidden);
+  // canvases keep the title substring (the index holds only notes). The
   // All / Notes / Canvas control filters by type. While searching, folders
   // force-open so matches surface; empty folders drop out here.
-  const q = query.trim().toLowerCase();
+  const q = query.trim();
+  const ql = q.toLowerCase();
+  const noteHits = q ? new Set(vaultData.search(q, notes.length).map((e) => e.note.noteId)) : null;
+  const matches = (item: { kind: string; id: string; title: string }) =>
+    !q || (item.kind === 'note' ? noteHits!.has(item.id) : item.title.toLowerCase().includes(ql));
   const kindWanted = filter === 'notes' ? 'note' : 'canvas'; // DocFilter 'notes' -> LibItem 'note'
   const library = buildLibrary(notes, canvases, folderOrder)
     .map((folder) => ({
       ...folder,
-      items: folder.items.filter(
-        (item) => (filter === 'all' || item.kind === kindWanted) && (!q || item.title.toLowerCase().includes(q)),
-      ),
+      items: folder.items.filter((item) => (filter === 'all' || item.kind === kindWanted) && matches(item)),
     }))
     .filter((folder) => folder.items.length > 0);
   const noMatches = q.length > 0 && library.length === 0;
