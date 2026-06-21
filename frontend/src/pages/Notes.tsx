@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/Button';
 import { createNote, useVault } from '@/hooks/useVault';
+import type { Note } from '@/hooks/useVault';
+import { resolveCover, parseCoverRef } from '@/web3/covers';
 import { vaultData } from '@/web3/vaultData';
 import { useFolders } from '@/hooks/useCanvases';
 import { notesMounted } from '@/hooks/useAgentTimeline';
@@ -34,6 +36,68 @@ function excerptOf(body: string, titles: Map<string, string>): string {
     .map((line) => line.replace(/^[\s\->#]*(\[[ x]\]\s*)?/, '').trim())
     .filter(Boolean)
     .join(' ');
+}
+
+/**
+ * Resolve a note's cover ref to a renderable URL (mirrors NoteEditor): preset
+ * paths resolve synchronously so they never flash; blob:/seal: refs fetch (+ Seal
+ * decrypt) into an object URL. Lets the list card show the same cover the editor
+ * does.
+ */
+function useResolvedCover(coverRef: string | undefined, noteId: string): string | null {
+  const preset = coverRef && parseCoverRef(coverRef).kind === 'preset' ? coverRef : null;
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (preset !== null || !coverRef) {
+      setBlobUrl(null);
+      return;
+    }
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    void resolveCover(coverRef, noteId).then((url) => {
+      if (cancelled) return;
+      setBlobUrl(url);
+      if (url?.startsWith('blob:')) objectUrl = url;
+    });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [coverRef, noteId, preset]);
+  return preset ?? blobUrl;
+}
+
+/** A note tile in the library grid. Its own component so the cover hook is legal (one per card). */
+function NoteCard({
+  note,
+  title,
+  titles,
+  agentName,
+  onOpen,
+}: {
+  note: Note;
+  title: string;
+  titles: Map<string, string>;
+  agentName: string;
+  onOpen: () => void;
+}) {
+  // The real cover lives on note.cover; note.image is the legacy fixture field.
+  const cover = useResolvedCover(note.cover ?? note.image, note.noteId);
+  const byAgent = note.author.startsWith('agent');
+  return (
+    <button type="button" className="pglib-card" onClick={onOpen}>
+      {cover ? <span className="pglib-cover"><img src={cover} alt="" /></span> : null}
+      <span className="pglib-body">
+        <span className="pglib-t">{title}</span>
+        <span className="pglib-x">{excerptOf(note.body, titles) || 'Empty note'}</span>
+        {byAgent ? (
+          <span className="pglib-m">
+            <i>✧ {agentName.toLowerCase()} · {shortAge(note.updatedAt)}</i>
+          </span>
+        ) : null}
+      </span>
+    </button>
+  );
 }
 
 /**
@@ -139,29 +203,16 @@ function NotesHome({ name, onNew }: { name: string; onNew: () => void }) {
                 <span className="hr" />
               </div>
               <div className="pglib-grid">
-                {folder.items.map((item) => {
-                  const note = item.note!;
-                  const byAgent = note.author.startsWith('agent');
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className="pglib-card"
-                      onClick={() => navigate(`/app/notes/${note.noteId}`)}
-                    >
-                      {note.image ? <span className="pglib-cover"><img src={note.image} alt="" /></span> : null}
-                      <span className="pglib-body">
-                        <span className="pglib-t">{item.title}</span>
-                        <span className="pglib-x">{excerptOf(note.body, titles) || 'Empty note'}</span>
-                        {byAgent ? (
-                          <span className="pglib-m">
-                            <i>✧ {name.toLowerCase()} · {shortAge(note.updatedAt)}</i>
-                          </span>
-                        ) : null}
-                      </span>
-                    </button>
-                  );
-                })}
+                {folder.items.map((item) => (
+                  <NoteCard
+                    key={item.id}
+                    note={item.note!}
+                    title={item.title}
+                    titles={titles}
+                    agentName={name}
+                    onOpen={() => navigate(`/app/notes/${item.note!.noteId}`)}
+                  />
+                ))}
               </div>
             </div>
           ))}
