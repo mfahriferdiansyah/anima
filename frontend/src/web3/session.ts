@@ -79,6 +79,15 @@ interface WiredDeps {
 
 let wired: WiredDeps | null = null;
 let generation = 0;
+/**
+ * The owner `startSession` is already driving discovery for. EVERY page that
+ * calls `useVaultSession()` (Home, Notes, Canvas, ...) fires `startSession` on
+ * mount, and reaching `ready` mounts a page, so without this guard a page mount
+ * would restart discovery, which unmounts the page, which restarts it: an
+ * infinite rebuild loop. We only (re)drive on a real account change, a
+ * disconnect/reconnect, or to recover from an error phase.
+ */
+let startedForOwner: string | null = null;
 /** The vault under rebuild, stashed so retryRebuild can resume it. */
 let pendingVault: VaultInfo | null = null;
 /**
@@ -193,13 +202,25 @@ function goReady(vault: VaultInfo, index: VaultIndex): void {
  * change; safe to call when not wired (→ disconnected).
  */
 export async function startSession(): Promise<void> {
-  generation += 1;
-  const gen = generation;
   if (!wired) {
+    startedForOwner = null;
+    generation += 1;
     store.update(() => ({ phase: 'disconnected' }));
     return;
   }
   const { owner, agentAddress } = wired;
+
+  // Idempotency: a redundant page-mount call for the SAME account that is already
+  // active (and not sitting on an error to recover from) is a no-op. Crucially we
+  // skip BEFORE bumping `generation`, so we never abort the in-flight rebuild.
+  const snap = store.getSnapshot();
+  const sameAccountActive =
+    startedForOwner === owner && snap.phase !== 'disconnected' && !('error' in snap && snap.error);
+  if (sameAccountActive) return;
+  startedForOwner = owner;
+
+  generation += 1;
+  const gen = generation;
   store.update(() => ({ phase: 'checking' }));
 
   let vault: VaultInfo | null = null;
@@ -338,6 +359,7 @@ export function renameCompanion(name: string): void {
 /** Disconnect: cancel any in-flight async, clear the shared index, go disconnected. */
 export function disconnect(): void {
   generation += 1;
+  startedForOwner = null;
   pendingVault = null;
   currentDeps = null;
   vaultData.reset();
@@ -347,6 +369,7 @@ export function disconnect(): void {
 /** Test/lifecycle reset (mirrors the mocks' reset*Store()). */
 export function resetSessionStore(): void {
   generation += 1;
+  startedForOwner = null;
   pendingVault = null;
   currentDeps = null;
   wired = null;
