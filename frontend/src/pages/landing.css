@@ -1829,6 +1829,49 @@
     width: 92px;
     padding: 8px 9px 9px;
   }
+
+  /* the flat real-app screenshots (Home, Notes) read as big empty boxes on a
+     phone — shrink them to modest centered previews. (Canvas keeps its full
+     board so its cards stay spaced; the memory pipeline stays full width.) */
+  .lp-mvis .lp-page:not(.lp-page--story):not(.lp-page--canvas) {
+    max-width: 250px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* pricing: compact the section + cards so the three tiers don't sprawl */
+  .lp-price {
+    padding: 56px 20px 64px;
+  }
+  .lp-price-head {
+    margin-bottom: 28px;
+  }
+  .lp-price-head h2 {
+    font-size: 28px;
+  }
+  .lp-price-grid {
+    gap: 14px;
+  }
+  .lp-tier {
+    padding: 22px 22px;
+    border-radius: 18px;
+  }
+  .lp-tier-head .name {
+    font-size: 19px;
+  }
+  .lp-tier-price {
+    margin-top: 16px;
+  }
+  .lp-tier-price .amt {
+    font-size: 34px;
+  }
+  .lp-tier-price .was {
+    font-size: 18px;
+  }
+  .lp-tier-desc {
+    margin-top: 10px;
+    font-size: 14px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
