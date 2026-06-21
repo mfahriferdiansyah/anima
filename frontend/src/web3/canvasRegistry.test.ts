@@ -11,6 +11,10 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// canvasRegistry now imports web3/covers (for the cover-patch classifier), which
+// imports web3/session — stub it so the pure-core test stays DOM-free / node-env.
+vi.mock('./session', () => ({ getQuiltDeps: vi.fn() }));
+
 vi.mock('../../../chain/core/src/index.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../chain/core/src/index.js')>()),
   writeTurn: vi.fn(),
@@ -35,8 +39,10 @@ import {
   patchCanvas,
   removeCanvas,
   newCanvasId,
+  classifyCanvasCoverPatch,
   type CanvasDoc,
 } from './canvasRegistry';
+import { COVER_MAX_BYTES } from './covers';
 
 const DEPS = { suiClient: {}, seal: {}, agentSigner: { toSuiAddress: () => '0xa' }, walletAddress: '0xo', vaultId: '0xv' } as never;
 const RES = { perNote: [{ noteId: 'x', quiltPatchId: 'p', quiltBlobId: 'qb', blobObjectId: 'bo' }], quiltBlobId: 'qb', blobObjectId: 'bo' };
@@ -204,5 +210,52 @@ describe('placed-note edge cases', () => {
     const index = VaultIndex.fromEntries([{ note: registryNote([...DEFAULT_REGISTRY, { canvasId: 'c-empty', title: 'E', desc: '', folder: 'work' }]), location: emptyLoc }]);
     // registered, but no anima:canvas:c-empty content note exists yet
     expect(loadCanvasContent(index, 'c-empty')).toEqual({ layout: {}, drawings: [] });
+  });
+});
+
+describe('canvas covers (U4)', () => {
+  /** Build a data URL of `n` raw bytes (base64, 4 chars per 3 bytes). */
+  function dataUrl(n: number): string {
+    return `data:image/png;base64,${btoa('a'.repeat(n))}`;
+  }
+
+  it('preset and uploaded (blob:) covers both resurrect their ref through loadCanvases', () => {
+    // The cover ref is just a string field on the registry entry — a preset path
+    // and a public-upload blob: ref both survive a registry-note round-trip.
+    const cPreset: CanvasDoc = { canvasId: 'c-p', title: 'Preset', desc: '', folder: 'work', image: '/covers/ethos-pulse.svg' };
+    const cBlob: CanvasDoc = { canvasId: 'c-b', title: 'Uploaded', desc: '', folder: 'work', image: 'blob:abc123' };
+    const list: CanvasDoc[] = [...DEFAULT_REGISTRY, cPreset, cBlob];
+
+    const index = VaultIndex.fromEntries([{ note: registryNote(list), location: emptyLoc }]);
+    const back = loadCanvases(index);
+    expect(back.find((c) => c.canvasId === 'c-p')!.image).toBe('/covers/ethos-pulse.svg');
+    expect(back.find((c) => c.canvasId === 'c-b')!.image).toBe('blob:abc123');
+  });
+
+  it('classifies a preset/path cover as a direct value (no upload)', () => {
+    expect(classifyCanvasCoverPatch('/covers/ethos-field.svg', undefined)).toEqual({ kind: 'value', cover: '/covers/ethos-field.svg' });
+    expect(classifyCanvasCoverPatch('', '/covers/old.svg')).toEqual({ kind: 'value', cover: '' }); // clear
+  });
+
+  it('classifies a small data URL as an upload', () => {
+    const res = classifyCanvasCoverPatch(dataUrl(16), undefined);
+    expect(res?.kind).toBe('upload');
+    expect((res as { bytes: Uint8Array }).bytes.byteLength).toBe(16);
+  });
+
+  it('re-saving an unchanged cover does not re-upload (returns null)', () => {
+    // a preset unchanged
+    expect(classifyCanvasCoverPatch('/covers/ethos-pulse.svg', '/covers/ethos-pulse.svg')).toBeNull();
+    // an already-uploaded blob: ref re-submitted (the manage modal echoing the current value)
+    expect(classifyCanvasCoverPatch('blob:abc123', 'blob:abc123')).toBeNull();
+    // no image key in the patch at all
+    expect(classifyCanvasCoverPatch(undefined, '/covers/ethos-pulse.svg')).toBeNull();
+  });
+
+  it('an oversize or malformed upload yields null (the prior cover is left untouched)', () => {
+    // oversize → skipped silently (no upload, the registry entry keeps its old ref)
+    expect(classifyCanvasCoverPatch(dataUrl(COVER_MAX_BYTES + 1), '/covers/old.svg')).toBeNull();
+    // malformed data URL (no comma) → treated as no cover intent
+    expect(classifyCanvasCoverPatch('data:image/png;base64', undefined)).toBeNull();
   });
 });

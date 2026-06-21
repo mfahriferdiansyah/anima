@@ -8,13 +8,15 @@ import {
   addCanvas,
   patchCanvas,
   removeCanvas,
+  classifyCanvasCoverPatch,
   DEFAULT_REGISTRY,
   SHARED_CANVAS_ID,
   type CanvasDoc,
 } from '../web3/canvasRegistry';
 import { getQuiltDeps } from '../web3/session';
 import { vaultData } from '../web3/vaultData';
-import type { VaultIndex } from '../../../chain/core/src/index.js';
+import { runDestructiveTx } from './useVault';
+import { uploadCover, listVaultCovers, buildDeleteQuiltsTx, type VaultIndex } from '../../../chain/core/src/index.js';
 
 // ── Canvases (Tier-2 / plan 007 U2) ─────────────────────────────────────────
 // The durable canvas registry, persisted as the `anima:canvas-registry` reserved
@@ -53,12 +55,45 @@ export function createCanvas(folder = 'untitled', title = 'Untitled canvas'): st
   return canvasId;
 }
 
-/** Edit a canvas title / description / cover (manage modal). */
+/**
+ * Edit a canvas title / description / cover (manage modal). Cover handling mirrors
+ * useVault's `saveNote`/`persist`: scalar edits (and a preset/clear cover) persist
+ * immediately and optimistically; a `data:` upload is decoded + size-checked, then
+ * kicked off async (fire-and-forget, returning void) — the resolved `blob:` ref is
+ * persisted once the upload lands. The data URL itself is NEVER written to the
+ * registry note (KTD2 size bound). Canvas covers are board chrome → uploaded PUBLIC
+ * so the board renders without a connected wallet. Oversize/malformed → skipped.
+ */
 export function updateCanvas(
   canvasId: string,
   patch: { title?: string; desc?: string; image?: string; folder?: string },
 ): void {
-  persistCanvases(patchCanvas(canvasesLocal.getSnapshot(), canvasId, patch));
+  const current = canvasesLocal.getSnapshot().find((c) => c.canvasId === canvasId)?.image;
+  const cover = classifyCanvasCoverPatch(patch.image, current);
+  // Strip the raw image from the immediate patch; re-add only a ready value (preset/clear).
+  const { image: _image, ...rest } = patch;
+  const immediate: typeof patch = { ...rest };
+  if (cover?.kind === 'value') immediate.image = cover.cover;
+
+  // Persist the immediate part only if it carries a real change (a cover-only upload
+  // with no scalar edit would otherwise bump a redundant registry version).
+  if (Object.keys(immediate).length > 0) {
+    persistCanvases(patchCanvas(canvasesLocal.getSnapshot(), canvasId, immediate));
+  }
+
+  // A data-URL cover: upload (public/plaintext) off the main path, then store the ref.
+  if (cover?.kind === 'upload') {
+    const deps = getQuiltDeps();
+    if (!deps) return; // no live vault — drop the cover silently (mirrors persist())
+    void (async () => {
+      try {
+        const { ref } = await uploadCover(deps, cover.bytes, { noteId: canvasId, public: true });
+        persistCanvases(patchCanvas(canvasesLocal.getSnapshot(), canvasId, { image: ref }));
+      } catch {
+        // upload failed — leave the prior cover untouched (no crash, no toast)
+      }
+    })();
+  }
 }
 
 /** Move a canvas into a folder (manage modal). */
@@ -67,13 +102,29 @@ export function setCanvasFolder(canvasId: string, folder: string): void {
 }
 
 /**
- * Delete a canvas (manage modal). Removes the registry entry only — the shared/
- * seed board is not removable. The per-canvas content note is left as an orphaned
- * reserved blob (reserved, filtered, harmless); we do not force a wallet popup on
- * delete, and the placed-note blobs stay in the library.
+ * Delete a canvas (manage modal). Removes the registry entry — the meaningful
+ * delete; the shared/seed board is not removable. The per-canvas content note is
+ * left as an orphaned reserved blob (reserved, filtered, harmless), and the
+ * placed-note blobs stay in the library. The canvas's cover blob is cleaned up
+ * best-effort through the same wallet seam as forget (`runDestructiveTx`): it
+ * never forces a wallet popup and never blocks the delete — an orphaned plaintext
+ * cover blob is harmless, so any failure (unwired seam, enumeration error) is
+ * swallowed.
  */
 export function deleteCanvas(canvasId: string): void {
   persistCanvases(removeCanvas(canvasesLocal.getSnapshot(), canvasId));
+  const deps = getQuiltDeps();
+  if (!deps) return;
+  void (async () => {
+    try {
+      const coverBlobIds = await listVaultCovers(deps, [canvasId]);
+      if (coverBlobIds.length === 0) return;
+      const tx = await buildDeleteQuiltsTx(deps, coverBlobIds);
+      await runDestructiveTx(tx);
+    } catch {
+      // best-effort — an orphaned plaintext cover blob is harmless
+    }
+  })();
 }
 
 /** Test-only reset of the local canvas store. */

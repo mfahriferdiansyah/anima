@@ -13,6 +13,7 @@
  * test can assert the right list DOM-free.
  */
 import { loadAppState, saveAppState } from './appState';
+import { dataUrlToBytes, COVER_MAX_BYTES } from './covers';
 import { ulid, type QuiltDeps, type VaultIndex } from '../../../chain/core/src/index.js';
 
 /** The legacy single-board id; always present in the registry (the live constellation). */
@@ -88,4 +89,32 @@ export function patchCanvas(
 /** Remove a canvas by id. The seed (shared) board is NOT removable. */
 export function removeCanvas(list: CanvasDoc[], canvasId: string): CanvasDoc[] {
   return list.filter((c) => !(c.canvasId === canvasId && !c.seed));
+}
+
+/**
+ * Classify a canvas-cover patch (mirrors useVault's `classifyCoverPatch`): a
+ * preset/path/clear stores the value directly; a `data:` URL is decoded +
+ * size-checked for an async upload. `current` is the canvas's existing cover ref
+ * — an unchanged value is a no-op (no redundant write, no re-upload). Returns:
+ * - `null`        → no cover intent / unchanged / oversize / malformed (skip)
+ * - `{value}`     → store this ref directly (preset path or '' clear)
+ * - `{bytes}`     → upload these bytes, then store the returned `blob:` ref
+ * Canvas covers are board chrome → uploaded PUBLIC (plaintext) so the board can
+ * render them without a connected wallet.
+ */
+export function classifyCanvasCoverPatch(
+  image: string | undefined,
+  current: string | undefined,
+): { kind: 'value'; cover: string } | { kind: 'upload'; bytes: Uint8Array } | null {
+  if (image === undefined || image === current) return null; // no intent / unchanged
+  if (!image.startsWith('data:')) return { kind: 'value', cover: image };
+  // data URL — decode and size-check before any async work
+  let bytes: Uint8Array;
+  try {
+    bytes = dataUrlToBytes(image);
+  } catch {
+    return null; // malformed data URL — treat as no cover intent
+  }
+  if (bytes.byteLength > COVER_MAX_BYTES) return null; // oversize — skip silently
+  return { kind: 'upload', bytes };
 }

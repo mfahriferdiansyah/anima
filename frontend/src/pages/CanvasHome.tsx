@@ -1,12 +1,44 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createCanvas, deleteCanvas, useCanvases, useFolders } from '@/hooks/useCanvases';
+import { createCanvas, deleteCanvas, useCanvases, useFolders, type CanvasDoc } from '@/hooks/useCanvases';
 import { buildLibrary } from '@/app/library';
 import { ManageLibrary } from '@/app/ManageLibrary';
+import { resolveCover, parseCoverRef } from '@/web3/covers';
 import './sectionhome.css';
 
 function titleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+/**
+ * Resolve a canvas cover ref to a renderable URL (mirrors NoteEditor's
+ * `useResolvedCover`): presets resolve synchronously to their path; `blob:`/`seal:`
+ * refs async-resolve to an object URL (revoked on unmount/change). Canvas covers
+ * are uploaded PUBLIC, so a `blob:` ref needs no wallet to fetch.
+ */
+function useResolvedCanvasCover(coverRef: string | undefined, canvasId: string): string | null {
+  const preset = coverRef && parseCoverRef(coverRef).kind === 'preset' ? coverRef : null;
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (preset !== null || !coverRef) {
+      setBlobUrl(null);
+      return;
+    }
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    void resolveCover(coverRef, canvasId).then((url) => {
+      if (cancelled) return;
+      setBlobUrl(url);
+      if (url?.startsWith('blob:')) objectUrl = url;
+    });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [coverRef, canvasId, preset]);
+
+  return preset ?? blobUrl;
 }
 
 const GRID_GLYPH = (
@@ -17,6 +49,68 @@ const GRID_GLYPH = (
     <rect x="14" y="14" width="7" height="7" rx="1.5" />
   </svg>
 );
+
+/**
+ * One canvas gallery card. Lives as its own component so the cover-resolve hook
+ * runs once per canvas (rules of hooks — it cannot be called inside the grid map).
+ * The cover slot is held while a `blob:` cover resolves (the `.pglib-cover` gray
+ * background is the loading state); the grid glyph shows only when there is no
+ * cover ref at all, so a resolving cover never flashes the glyph.
+ */
+function CanvasCard({
+  canvas,
+  confirming,
+  onOpen,
+  onAskDelete,
+  onCancelDelete,
+  onConfirmDelete,
+}: {
+  canvas: CanvasDoc;
+  confirming: boolean;
+  onOpen: () => void;
+  onAskDelete: () => void;
+  onCancelDelete: () => void;
+  onConfirmDelete: () => void;
+}) {
+  const cover = useResolvedCanvasCover(canvas.image, canvas.canvasId);
+  const hasCoverRef = !!canvas.image;
+  return (
+    <div className="pglib-cardwrap">
+      <button type="button" className="pglib-card canvas" onClick={onOpen}>
+        {hasCoverRef ? (
+          <span className="pglib-cover">{cover ? <img src={cover} alt="" /> : null}</span>
+        ) : null}
+        <span className="pglib-body">
+          {!hasCoverRef ? <span className="pglib-ic">{GRID_GLYPH}</span> : null}
+          <span className="pglib-t">{canvas.title || 'Untitled canvas'}</span>
+          <span className="pglib-x">{canvas.desc || 'A blank canvas to draw on.'}</span>
+        </span>
+      </button>
+      {!canvas.seed ? (
+        <button
+          type="button"
+          className="pglib-carddel"
+          aria-label={`Delete ${canvas.title || 'canvas'}`}
+          onClick={onAskDelete}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          </svg>
+        </button>
+      ) : null}
+      {confirming ? (
+        <div className="pglib-cardconfirm" role="dialog" aria-label="Confirm delete canvas">
+          <span className="pglib-cardconfirm-t">Delete this board?</span>
+          <span className="pglib-cardconfirm-x">This removes the board — your notes stay in your vault.</span>
+          <div className="pglib-cardconfirm-row">
+            <button type="button" className="pgbtn" onClick={onCancelDelete}>Cancel</button>
+            <button type="button" className="pgbtn danger" onClick={onConfirmDelete}>Delete board</button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 /** Canvas home: the overview reached from the Canvas nav — every canvas as a
  *  card (cover or grid glyph + title + description), grouped into the same
@@ -75,48 +169,17 @@ export function CanvasHome() {
                 <span className="hr" />
               </div>
               <div className="pglib-grid">
-                {folder.items.map((item) => {
-                  const canvas = item.canvas!;
-                  const confirming = confirmDelete === canvas.canvasId;
-                  return (
-                    <div key={item.id} className="pglib-cardwrap">
-                      <button
-                        type="button"
-                        className="pglib-card canvas"
-                        onClick={() => navigate(`/app/canvas/${canvas.canvasId}`)}
-                      >
-                        {canvas.image ? <span className="pglib-cover"><img src={canvas.image} alt="" /></span> : null}
-                        <span className="pglib-body">
-                          {!canvas.image ? <span className="pglib-ic">{GRID_GLYPH}</span> : null}
-                          <span className="pglib-t">{canvas.title || 'Untitled canvas'}</span>
-                          <span className="pglib-x">{canvas.desc || 'A blank canvas to draw on.'}</span>
-                        </span>
-                      </button>
-                      {!canvas.seed ? (
-                        <button
-                          type="button"
-                          className="pglib-carddel"
-                          aria-label={`Delete ${canvas.title || 'canvas'}`}
-                          onClick={() => setConfirmDelete(canvas.canvasId)}
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                          </svg>
-                        </button>
-                      ) : null}
-                      {confirming ? (
-                        <div className="pglib-cardconfirm" role="dialog" aria-label="Confirm delete canvas">
-                          <span className="pglib-cardconfirm-t">Delete this board?</span>
-                          <span className="pglib-cardconfirm-x">This removes the board — your notes stay in your vault.</span>
-                          <div className="pglib-cardconfirm-row">
-                            <button type="button" className="pgbtn" onClick={() => setConfirmDelete(null)}>Cancel</button>
-                            <button type="button" className="pgbtn danger" onClick={() => removeCanvas(canvas.canvasId)}>Delete board</button>
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
+                {folder.items.map((item) => (
+                  <CanvasCard
+                    key={item.id}
+                    canvas={item.canvas!}
+                    confirming={confirmDelete === item.canvas!.canvasId}
+                    onOpen={() => navigate(`/app/canvas/${item.canvas!.canvasId}`)}
+                    onAskDelete={() => setConfirmDelete(item.canvas!.canvasId)}
+                    onCancelDelete={() => setConfirmDelete(null)}
+                    onConfirmDelete={() => removeCanvas(item.canvas!.canvasId)}
+                  />
+                ))}
               </div>
             </div>
           ))}
