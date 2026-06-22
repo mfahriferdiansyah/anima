@@ -476,7 +476,7 @@
   .wikilink.unresolved:hover{background:var(--gray-100);}
   .edcheck{display:flex;gap:9px;align-items:flex-start;margin:5px 0;}
   .edcheck input{margin-top:5px;accent-color:var(--blue-600);}
-  .edtype{flex:1;min-height:70px;outline:none;font-size:14px;line-height:1.75;color:var(--ink-900);padding:6px 0;cursor:text;caret-color:var(--blue-600);}
+  .edtype{flex:1;min-height:70px;outline:none;font-size:14px;line-height:1.75;color:var(--ink-900);padding:6px 0;cursor:text;caret-color:var(--blue-600);white-space:pre-wrap;}
   .edtype:empty::before{content:attr(data-ph);color:#B9C2D4;pointer-events:none;}
   .bubble{
     position:absolute;z-index:30;background:var(--ink-900);color:#fff;border-radius:11px;padding:4px;

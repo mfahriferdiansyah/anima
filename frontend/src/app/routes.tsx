@@ -1,5 +1,11 @@
 import { useEffect, useRef } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import {
+  Navigate,
+  Outlet,
+  Route,
+  createBrowserRouter,
+  createRoutesFromElements,
+} from 'react-router-dom';
 import { useVaultSession } from '@/hooks/useVaultSession';
 import { Canvas } from '@/pages/Canvas';
 import { Companion } from '@/pages/Companion';
@@ -9,6 +15,7 @@ import { Notes } from '@/pages/Notes';
 import { SessionGate } from '@/pages/SessionStates';
 import { Settings } from '@/pages/Settings';
 import { AppShell } from './AppShell';
+import { WriteToasts } from './WriteToasts';
 
 /**
  * Phase gate for every /app route. `useVaultSession` self-drives discovery from
@@ -36,9 +43,24 @@ function AppGate() {
   return <SessionGate session={session} />;
 }
 
-export function AppRoutes() {
+/**
+ * Root layout: the global write-state toast stack renders on every route (it was
+ * a sibling of <BrowserRouter> before the data-router migration). The matched
+ * route renders in the <Outlet/>.
+ */
+function RootLayout() {
   return (
-    <Routes>
+    <>
+      <Outlet />
+      <WriteToasts />
+    </>
+  );
+}
+
+/** One data router, created once at module scope (never in render). */
+export const router = createBrowserRouter(
+  createRoutesFromElements(
+    <Route element={<RootLayout />}>
       <Route path="/" element={<Landing />} />
       <Route path="/app" element={<AppGate />}>
         <Route index element={<Home />} />
@@ -48,6 +70,6 @@ export function AppRoutes() {
         <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  );
-}
+    </Route>,
+  ),
+);

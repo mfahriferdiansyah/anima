@@ -1,7 +1,8 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
+import { useBlocker } from 'react-router-dom';
 import { Button } from '@/components/Button';
+import { Modal } from '@/components/Modal';
 import { ToastStack } from '@/components/ToastStack';
 import type { ToastItem } from '@/components/ToastStack';
 import { createNote, saveNote, useVault } from '@/hooks/useVault';
@@ -11,215 +12,6 @@ import { CoverPicker } from '@/components/CoverPicker';
 import { ShareDialog } from './ShareDialog';
 import { useShareCollab } from '../web3/shareCollab';
 import { resolveCover, parseCoverRef } from '../web3/covers';
-
-/* ---------- markdown-lite: fixture bodies -> kit-classed blocks ---------- */
-
-type CalloutType = 'info' | 'tip' | 'warn' | 'danger';
-
-type Block =
-  | { kind: 'p'; text: string }
-  | { kind: 'callout'; type: CalloutType; title: string; body: string }
-  | { kind: 'check'; line: number; checked: boolean; text: string }
-  | { kind: 'ul'; items: string[] }
-  | { kind: 'ol'; items: string[] };
-
-const CALLOUT_TYPES: Record<string, { type: CalloutType; title: string }> = {
-  info: { type: 'info', title: 'Info' },
-  note: { type: 'info', title: 'Note' },
-  tip: { type: 'tip', title: 'Tip' },
-  warning: { type: 'warn', title: 'Warning' },
-  warn: { type: 'warn', title: 'Warning' },
-  danger: { type: 'danger', title: 'Danger' },
-};
-
-function parseBlocks(body: string): Block[] {
-  const lines = body.split('\n');
-  const blocks: Block[] = [];
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    if (!line.trim()) {
-      i += 1;
-      continue;
-    }
-    const check = line.match(/^- \[( |x)\] (.*)$/);
-    if (check) {
-      blocks.push({ kind: 'check', line: i, checked: check[1] === 'x', text: check[2] });
-      i += 1;
-      continue;
-    }
-    if (line.startsWith('>')) {
-      const quote: string[] = [];
-      while (i < lines.length && lines[i].startsWith('>')) {
-        quote.push(lines[i].replace(/^> ?/, ''));
-        i += 1;
-      }
-      const typed = quote[0]?.match(/^\[!(\w+)\]\s*(.*)$/);
-      const meta = typed ? (CALLOUT_TYPES[typed[1].toLowerCase()] ?? CALLOUT_TYPES.note) : CALLOUT_TYPES.note;
-      const rest = typed ? [typed[2], ...quote.slice(1)] : quote;
-      blocks.push({ kind: 'callout', type: meta.type, title: meta.title, body: rest.filter(Boolean).join(' ') });
-      continue;
-    }
-    if (/^\d+\. /.test(line)) {
-      const items: string[] = [];
-      while (i < lines.length && /^\d+\. /.test(lines[i])) {
-        items.push(lines[i].replace(/^\d+\. /, ''));
-        i += 1;
-      }
-      blocks.push({ kind: 'ol', items });
-      continue;
-    }
-    if (line.startsWith('- ')) {
-      const items: string[] = [];
-      while (i < lines.length && lines[i].startsWith('- ') && !/^- \[( |x)\]/.test(lines[i])) {
-        items.push(lines[i].slice(2));
-        i += 1;
-      }
-      blocks.push({ kind: 'ul', items });
-      continue;
-    }
-    const para: string[] = [line];
-    i += 1;
-    while (i < lines.length && lines[i].trim() && !/^([->]|\d+\. )/.test(lines[i])) {
-      para.push(lines[i]);
-      i += 1;
-    }
-    blocks.push({ kind: 'p', text: para.join(' ') });
-  }
-  return blocks;
-}
-
-/* ---------- wiki links: fixture bodies link by noteId, typed links by title ---------- */
-
-function resolveLink(notes: Note[], token: string): Note | undefined {
-  const key = token.trim().toLowerCase();
-  return (
-    notes.find((note) => note.noteId.toLowerCase() === key) ??
-    notes.find((note) => (note.title || '').toLowerCase() === key)
-  );
-}
-
-function flatExcerpt(note: Note, notes: Note[]): string {
-  const text = note.body
-    .replace(/\[\[([^\]]+)\]\]/g, (_, token: string) => resolveLink(notes, token)?.title ?? token)
-    .split('\n')
-    .map((line) => line.replace(/^(- \[( |x)\] |- |> ?|\d+\. )/, ''))
-    .filter(Boolean)
-    .join(' ');
-  return text.length > 120 ? `${text.slice(0, 119)}…` : text;
-}
-
-interface LinkHandlers {
-  onOpen: (noteId: string) => void;
-  onHoverStart: (noteId: string, el: HTMLElement) => void;
-  onHoverEnd: () => void;
-}
-
-function InlineText({ text, notes, handlers }: { text: string; notes: Note[]; handlers: LinkHandlers }) {
-  const parts = text.split(/(\[\[[^\]]+\]\])/g);
-  return (
-    <>
-      {parts.map((part, index) => {
-        const match = part.match(/^\[\[([^\]]+)\]\]$/);
-        if (!match) return <Fragment key={index}>{part}</Fragment>;
-        const target = resolveLink(notes, match[1]);
-        if (!target) {
-          return (
-            <span key={index} className="wikilink unresolved">
-              {match[1]}
-            </span>
-          );
-        }
-        return (
-          <span
-            key={index}
-            className="wikilink"
-            role="link"
-            tabIndex={0}
-            onClick={() => handlers.onOpen(target.noteId)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') handlers.onOpen(target.noteId);
-            }}
-            onMouseEnter={(event) => handlers.onHoverStart(target.noteId, event.currentTarget)}
-            onMouseLeave={handlers.onHoverEnd}
-          >
-            {target.title || 'Untitled note'}
-          </span>
-        );
-      })}
-    </>
-  );
-}
-
-/* ---------- callouts ---------- */
-
-function CalloutIcon({ type }: { type: CalloutType }) {
-  const paths: Record<CalloutType, ReactNode> = {
-    info: (
-      <>
-        <circle cx="12" cy="12" r="10" />
-        <path d="M12 16v-4" />
-        <path d="M12 8h.01" />
-      </>
-    ),
-    tip: (
-      <>
-        <path d="M15 14c.2-1 .7-1.7 1.5-2.5A7 7 0 1 0 5 9c0 1 .5 2.5 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
-        <path d="M9 18h6" />
-        <path d="M10 22h4" />
-      </>
-    ),
-    warn: (
-      <>
-        <path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-        <path d="M12 9v4" />
-        <path d="M12 17h.01" />
-      </>
-    ),
-    danger: (
-      <>
-        <circle cx="12" cy="12" r="10" />
-        <path d="m15 9-6 6" />
-        <path d="m9 9 6 6" />
-      </>
-    ),
-  };
-  return (
-    <svg className="ci" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {paths[type]}
-    </svg>
-  );
-}
-
-function Callout({ type, title, body, notes, handlers }: { type: CalloutType; title: string; body: string; notes: Note[]; handlers: LinkHandlers }) {
-  const [folded, setFolded] = useState(false);
-  return (
-    <div className={`callout c-${type}${folded ? ' folded' : ''}`}>
-      <div
-        className="ch"
-        role="button"
-        tabIndex={0}
-        aria-expanded={!folded}
-        onClick={() => setFolded((prev) => !prev)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            setFolded((prev) => !prev);
-          }
-        }}
-      >
-        <CalloutIcon type={type} />
-        {title}
-        <svg className="car" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M1 3l4 4 4-4" />
-        </svg>
-      </div>
-      <div className="cbody">
-        <InlineText text={body} notes={notes} handlers={handlers} />
-      </div>
-    </div>
-  );
-}
 
 /* ---------- editor ---------- */
 
@@ -283,14 +75,16 @@ function useResolvedCover(coverRef: string | undefined, noteId: string): string 
 }
 
 /**
- * The kit editor frame (section 12): tab, title, typed props, the rendered
- * body, the contenteditable type-block with [[ autocomplete, the selection
- * bubble, the agent suggestion block, and the status bar with save/share.
- * The editable block is an uncontrolled ref island; React never writes
- * its children, so StrictMode double-mounts cannot clobber typed text.
+ * The kit editor frame (section 12): tab, title, typed props, and the always-on
+ * editable body — a contenteditable source surface (markdown-lite) prefilled with
+ * the saved note so anything kept can be freely rewritten, not just appended. It
+ * carries [[ autocomplete, the selection bubble, the agent suggestion block, and
+ * the status bar with save/share. The editable block is an uncontrolled ref
+ * island; React never writes its children, so StrictMode double-mounts cannot
+ * clobber typed text. Unsaved edits gate navigation away (useBlocker + the
+ * save/discard dialog) so a save is a deliberate seal, never silent autosave.
  */
 export function NoteEditor({ note, agentName }: { note: Note; agentName: string }) {
-  const navigate = useNavigate();
   const { notes, writeStates } = useVault();
   const { suggestion } = useAgentTimeline();
 
@@ -299,9 +93,7 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
   const typeRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
-  const hoverTimer = useRef<number | null>(null);
 
-  const [hover, setHover] = useState<{ noteId: string; left: number; top: number } | null>(null);
   const [bubble, setBubble] = useState<{ centerX: number; top: number } | null>(null);
   const [pop, setPop] = useState<{ prefix: string; left: number; top: number } | null>(null);
   const [popIndex, setPopIndex] = useState(0);
@@ -309,6 +101,10 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
   const [sharing, setSharing] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [coverOpen, setCoverOpen] = useState(false);
+  // The note is editable the moment it opens (Notion-style, no edit toggle).
+  // `dirty` = the live surface differs from the saved body; it drives the
+  // Save/Saved button, the navigation guard, and the beforeunload warning.
+  const [dirty, setDirty] = useState(false);
 
   // While an edit share is active for this note, the owner joins the live room as
   // the allowlisted writer: guest edits become sealed, wallet-owned snapshots
@@ -329,7 +125,6 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
     setCoverOpen(false);
   };
 
-  const blocks = useMemo(() => parseBlocks(note.body), [note.body]);
   const writeState = writeStates[note.noteId];
   const certified = writeState?.phase === 'certified' ? writeState : undefined;
   const wordCount = note.body.split(/\s+/).filter(Boolean).length;
@@ -341,40 +136,22 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
   };
   const dismissToast = (id: string) => setToasts((prev) => prev.filter((toast) => toast.id !== id));
 
-  /* ----- wiki link hover preview (350ms hold) ----- */
+  /* ----- prefill the editable source surface ----- */
 
-  const hoverStart = (noteId: string, el: HTMLElement) => {
-    if (hoverTimer.current) window.clearTimeout(hoverTimer.current);
-    hoverTimer.current = window.setTimeout(() => {
-      const frame = frameRef.current;
-      if (!frame) return;
-      const rect = el.getBoundingClientRect();
-      const frameRect = frame.getBoundingClientRect();
-      setHover({
-        noteId,
-        left: Math.max(8, Math.min(rect.left - frameRect.left, frameRect.width - 296)),
-        top: rect.bottom - frameRect.top + 8,
-      });
-    }, 350);
-  };
-  const hoverEnd = () => {
-    if (hoverTimer.current) window.clearTimeout(hoverTimer.current);
-    hoverTimer.current = null;
-    setHover(null);
-  };
-  useEffect(
-    () => () => {
-      if (hoverTimer.current) window.clearTimeout(hoverTimer.current);
-    },
-    [],
-  );
-
-  const handlers: LinkHandlers = {
-    onOpen: (id) => navigate(`/app/notes/${id}`),
-    onHoverStart: hoverStart,
-    onHoverEnd: hoverEnd,
-  };
-  const hoverNote = hover ? notes.find((entry) => entry.noteId === hover.noteId) : undefined;
+  // Write the saved body into the uncontrolled edit island imperatively (never via
+  // JSX children — the StrictMode ref-island contract). Keyed on noteId only: the
+  // component is remounted per note (key={noteId} in Notes.tsx), and NOT depending
+  // on note.body means a background/optimistic body change can't clobber an
+  // in-progress edit. A fresh, empty note gets focus so writing starts immediately;
+  // an existing note is left unfocused so a click lands the caret exactly where the
+  // reader wants to edit.
+  useLayoutEffect(() => {
+    const el = typeRef.current;
+    if (!el) return;
+    el.textContent = note.body;
+    if (note.body.trim().length === 0) el.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note.noteId]);
 
   /* ----- selection bubble (200ms settle, Escape hides) ----- */
 
@@ -458,6 +235,15 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
     setPopIndex(0);
   };
 
+  // The edit surface fires this on every input: keep the [[ autocomplete in sync
+  // and recompute dirty against the saved body (trim trailing newlines the
+  // contenteditable adds so an untouched note never reads as dirty).
+  const onTypeInput = () => {
+    detectPopup();
+    const el = typeRef.current;
+    setDirty(el ? el.innerText.trimEnd() !== note.body.trimEnd() : false);
+  };
+
   const popMatches = useMemo(() => {
     if (!pop) return [];
     const prefix = pop.prefix.toLowerCase();
@@ -484,6 +270,9 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
     range.collapse(true);
     sel.removeAllRanges();
     sel.addRange(range);
+    // an inserted link mutates the body — reflect it in the dirty flag
+    const el = typeRef.current;
+    setDirty(el ? el.innerText.trimEnd() !== note.body.trimEnd() : false);
   };
 
   const choosePopOption = (index: number) => {
@@ -517,14 +306,6 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
 
   /* ----- save flow ----- */
 
-  const toggleCheck = (line: number) => {
-    const lines = note.body.split('\n');
-    lines[line] = lines[line].startsWith('- [x]')
-      ? lines[line].replace('- [x]', '- [ ]')
-      : lines[line].replace('- [ ]', '- [x]');
-    saveNote(note.noteId, { body: lines.join('\n') });
-  };
-
   const saveTitle = () => {
     const value = titleRef.current?.textContent?.trim() ?? '';
     if (value !== note.title) saveNote(note.noteId, { title: value });
@@ -532,12 +313,34 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
 
   const save = () => {
     const title = titleRef.current?.textContent?.trim() || note.title;
-    const typed = typeRef.current?.innerText.trim() ?? '';
-    const body = typed ? (note.body ? `${note.body}\n\n${typed}` : typed) : note.body;
-    if (typeRef.current) typeRef.current.textContent = '';
+    // The surface holds the full body — REPLACE it (not append). `innerText`
+    // round-trips the contenteditable's line breaks; trailing blank lines the
+    // browser adds are trimmed.
+    const body = (typeRef.current?.innerText ?? note.body).trimEnd();
     setPop(null);
+    setDirty(false);
     saveNote(note.noteId, { title, body });
   };
+
+  /* ----- unsaved-changes guards ----- */
+
+  // SPA navigation (switch note, nav section, back/forward): block while dirty and
+  // offer Save / Discard / Keep editing. useBlocker requires the data router that
+  // App now mounts via RouterProvider. The blocker fires before navigation
+  // commits, while this editor (and its typeRef) is still mounted, so save() can
+  // read the live buffer.
+  const blocker = useBlocker(dirty);
+
+  // Tab close / refresh / external link — the case the SPA blocker can't catch.
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
 
   /* ----- agent suggestion block (never auto-applies, P5) ----- */
 
@@ -580,9 +383,15 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
         <button type="button" className="pgbtn" onClick={() => setSharing(true)}>
           Share
         </button>
-        <button type="button" className="pgbtn primary" onClick={save}>
-          Save
-        </button>
+        {dirty ? (
+          <button type="button" className="pgbtn primary" onClick={save}>
+            Save
+          </button>
+        ) : (
+          <button type="button" className="pgbtn" disabled aria-label="All changes saved">
+            Saved
+          </button>
+        )}
       </div>
       <div className="pged-scroll">
         {(note.cover || note.image) ? (
@@ -649,87 +458,42 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
             ) : null}
           </div>
           <div ref={selRef}>
-            <div className="edcontent">
-              {blocks.map((block, index) => {
-              switch (block.kind) {
-                case 'p':
-                  return (
-                    <p key={index}>
-                      <InlineText text={block.text} notes={notes} handlers={handlers} />
-                    </p>
-                  );
-                case 'callout':
-                  return <Callout key={index} type={block.type} title={block.title} body={block.body} notes={notes} handlers={handlers} />;
-                case 'check': {
-                  const id = `check-${note.noteId}-${block.line}`;
-                  return (
-                    <div key={index} className="edcheck">
-                      <input type="checkbox" id={id} checked={block.checked} onChange={() => toggleCheck(block.line)} />
-                      <label htmlFor={id}>
-                        <InlineText text={block.text} notes={notes} handlers={handlers} />
-                      </label>
-                    </div>
-                  );
-                }
-                case 'ul':
-                  return (
-                    <ul key={index}>
-                      {block.items.map((item, itemIndex) => (
-                        <li key={itemIndex}>
-                          <InlineText text={item} notes={notes} handlers={handlers} />
-                        </li>
-                      ))}
-                    </ul>
-                  );
-                case 'ol':
-                  return (
-                    <ol key={index}>
-                      {block.items.map((item, itemIndex) => (
-                        <li key={itemIndex}>
-                          <InlineText text={item} notes={notes} handlers={handlers} />
-                        </li>
-                      ))}
-                    </ol>
-                  );
-              }
-            })}
-          </div>
-          <div
-            ref={typeRef}
-            className="edtype"
-            contentEditable
-            suppressContentEditableWarning
-            spellCheck={false}
-            role="textbox"
-            aria-label="Write in the note"
-            data-ph="Write, press [[ to link a note…"
-            onInput={detectPopup}
-            onKeyDown={onTypeKeyDown}
-            onBlur={() => setPop(null)}
-          />
-          {targeted ? (
-            <div className={fading ? 'suggest fading' : 'suggest'}>
-              <div className="sh">
-                <span className="ag" aria-hidden="true">✧</span> {agentLower} suggests · just now
+            <div
+              ref={typeRef}
+              className="edtype"
+              contentEditable
+              suppressContentEditableWarning
+              spellCheck={false}
+              role="textbox"
+              aria-label="Note body"
+              data-ph="Write your note… press [[ to link another"
+              onInput={onTypeInput}
+              onKeyDown={onTypeKeyDown}
+              onBlur={() => setPop(null)}
+            />
+            {targeted ? (
+              <div className={fading ? 'suggest fading' : 'suggest'}>
+                <div className="sh">
+                  <span className="ag" aria-hidden="true">✧</span> {agentLower} suggests · just now
+                </div>
+                <div className="sdiff">
+                  <del>{firstLine}</del> <ins>{targeted.body}</ins>
+                </div>
+                <div className="swhy">
+                  <b>Reason:</b> the current opening states the format, not the hook. This one proves the memory claim
+                  before the first slide.
+                </div>
+                <div className="sact">
+                  <Button variant="primary" size="sm" onClick={acceptSuggestion}>
+                    Accept
+                  </Button>
+                  <Button variant="quiet" size="sm" onClick={rejectSuggestion}>
+                    Reject
+                  </Button>
+                  <span className="scope">undo scope: this agent run</span>
+                </div>
               </div>
-              <div className="sdiff">
-                <del>{firstLine}</del> <ins>{targeted.body}</ins>
-              </div>
-              <div className="swhy">
-                <b>Reason:</b> the current opening states the format, not the hook. This one proves the memory claim
-                before the first slide.
-              </div>
-              <div className="sact">
-                <Button variant="primary" size="sm" onClick={acceptSuggestion}>
-                  Accept
-                </Button>
-                <Button variant="quiet" size="sm" onClick={rejectSuggestion}>
-                  Reject
-                </Button>
-                <span className="scope">undo scope: this agent run</span>
-              </div>
-            </div>
-          ) : null}
+            ) : null}
           </div>
         </div>
       </div>
@@ -751,16 +515,6 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
           anima.app/c/{slugify(note.title || 'untitled')}
         </span>
       </div>
-
-      {hover && hoverNote ? (
-        <div className="hovercard float show" style={{ left: hover.left, top: hover.top }}>
-          <div className="ht">{hoverNote.title || 'Untitled note'}</div>
-          <div className="hm">
-            {(hoverNote.tags[0] ?? 'unsorted')}/ · ✦ rev {hoverNote.version} · {hoverNote.links.length} links
-          </div>
-          <div className="hb">{flatExcerpt(hoverNote, notes)}</div>
-        </div>
-      ) : null}
 
       {pop && popTotal > 0 ? (
         <div className="lcpop float" style={{ left: pop.left, top: pop.top }}>
@@ -828,6 +582,35 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
           </button>
         </div>
       ) : null}
+
+      <Modal open={blocker.state === 'blocked'} onClose={() => blocker.reset?.()}>
+        <div className="dh">
+          <div className="dt">Save your changes?</div>
+          <div className="dd2">
+            This note has edits that aren&apos;t sealed yet. Save to seal them to your vault, or discard to leave the
+            note as it was.
+          </div>
+        </div>
+        <div className="db">
+          <div className="wallet-actions">
+            <Button variant="quiet" onClick={() => blocker.reset?.()}>
+              Keep editing
+            </Button>
+            <Button variant="danger" onClick={() => blocker.proceed?.()}>
+              Discard
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                save();
+                blocker.proceed?.();
+              }}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <ShareDialog
         open={sharing}
