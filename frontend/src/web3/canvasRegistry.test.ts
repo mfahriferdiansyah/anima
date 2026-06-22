@@ -159,9 +159,12 @@ describe('AE3-full — both boards rebuild from the index alone (Walrus + chain,
     // registry rebuilds both boards
     expect(loadCanvases(index)).toEqual(list);
 
-    // each board's layout + drawings rebuild from its content note
-    expect(loadCanvasContent(index, 'c-a')).toEqual(contentA);
-    expect(loadCanvasContent(index, 'c-b')).toEqual(contentB);
+    // each board's layout + drawings rebuild from its content note (elements is the
+    // migrate-on-read view; the legacy layout/drawings still round-trip identically)
+    const a = loadCanvasContent(index, 'c-a');
+    expect({ layout: a.layout, drawings: a.drawings }).toEqual(contentA);
+    const b = loadCanvasContent(index, 'c-b');
+    expect({ layout: b.layout, drawings: b.drawings }).toEqual(contentB);
   });
 });
 
@@ -209,7 +212,9 @@ describe('placed-note edge cases', () => {
   it('a canvas with no content loads as an empty board', () => {
     const index = VaultIndex.fromEntries([{ note: registryNote([...DEFAULT_REGISTRY, { canvasId: 'c-empty', title: 'E', desc: '', folder: 'work' }]), location: emptyLoc }]);
     // registered, but no anima:canvas:c-empty content note exists yet
-    expect(loadCanvasContent(index, 'c-empty')).toEqual({ layout: {}, drawings: [] });
+    const empty = loadCanvasContent(index, 'c-empty');
+    expect({ layout: empty.layout, drawings: empty.drawings }).toEqual({ layout: {}, drawings: [] });
+    expect(empty.elements).toEqual([]);
   });
 });
 

@@ -14,6 +14,7 @@ import {
   type CanvasContent,
 } from '../canvasContent.js';
 import { LAYOUT_TAG, findLayoutNote, type CanvasLayout } from '../canvas.js';
+import type { CanvasElement } from '../elements.js';
 import { VaultIndex, isReservedNote } from '../vaultIndex.js';
 import { newNote } from '../notes.js';
 import type { IndexedNote, Note } from '../types.js';
@@ -77,23 +78,32 @@ beforeEach(() => {
 });
 
 describe('loadCanvasContent', () => {
-  it('returns {layout:{}, drawings:[]} for a canvas with no content (never throws)', () => {
+  it('returns empty layout/drawings/elements for a canvas with no content (never throws)', () => {
     const index = new VaultIndex();
-    expect(loadCanvasContent(index, 'board-x')).toEqual({ layout: {}, drawings: [] });
+    const c = loadCanvasContent(index, 'board-x');
+    expect(c.layout).toEqual({});
+    expect(c.drawings).toEqual([]);
+    expect(c.elements).toEqual([]); // migrate-on-read of nothing
   });
 
   it('shared read-aliases the legacy anima:canvas-layout note pre-migration', () => {
     const layout = { 'note-1': { x: 10, y: 20 } };
     const index = VaultIndex.fromEntries([entry(legacyLayoutNote(layout))]);
     // no anima:canvas:shared yet → falls back to the legacy layout, no drawings
-    expect(loadCanvasContent(index, 'shared')).toEqual({ layout, drawings: [] });
+    const c = loadCanvasContent(index, 'shared');
+    expect(c.layout).toEqual(layout);
+    expect(c.drawings).toEqual([]);
+    // legacy layout is migrated-on-read into a note element
+    expect(c.elements?.map((e) => (e.type === 'note' ? e.noteId : e.type))).toEqual(['note-1']);
   });
 
   it('parses an existing content note body', () => {
     const content: CanvasContent = { layout: { n1: { x: 1, y: 2 } }, drawings: [] };
     const note = newNote({ title: 'Canvas b', body: JSON.stringify(content), author: 'anima', tags: [canvasContentTag('b')] });
     const index = VaultIndex.fromEntries([entry(note)]);
-    expect(loadCanvasContent(index, 'b')).toEqual(content);
+    const c = loadCanvasContent(index, 'b');
+    expect(c.layout).toEqual(content.layout);
+    expect(c.drawings).toEqual(content.drawings);
   });
 });
 
@@ -120,7 +130,7 @@ describe('saveCanvasContent — shared-board migration (KTD4)', () => {
     const index = VaultIndex.fromEntries([entry(legacy)]);
 
     // pre-migration: shared reads the legacy layout
-    expect(loadCanvasContent(index, 'shared')).toEqual({ layout, drawings: [] });
+    expect(loadCanvasContent(index, 'shared').layout).toEqual(layout);
 
     const { migrationTx } = await saveCanvasContent(deps as any, index, 'shared', {
       drawings: [{ id: 's1', kind: 'rect', x: 0, y: 0, w: 5, h: 5 }],
@@ -233,6 +243,44 @@ describe('saveCanvasContent — AE3 drawings round-trip', () => {
     expect(body).not.toContain('base64');
     expect(body).not.toContain('"src"');
     expect(body).toContain('blob:imgblob');
+  });
+});
+
+describe('U5 — additive elements model', () => {
+  const elBase = { angle: 0, version: 1, versionNonce: 1 };
+  const noteEl = (id: string, noteId: string, x: number, y: number): CanvasElement => ({ ...elBase, id, type: 'note', noteId, x, y, w: 190, h: 88, index: 0 });
+  const rectEl = (id: string, x: number, y: number, w: number, h: number): CanvasElement => ({ ...elBase, id, type: 'rect', x, y, w, h, index: 1 });
+
+  it('saves an elements list as the source of truth and derives the layout mirror', async () => {
+    const index = new VaultIndex();
+    await saveCanvasContent(deps as any, index, 'b', { elements: [noteEl('e1', 'noteA', 10, 20), rectEl('e2', 0, 0, 5, 5)] });
+    const loaded = loadCanvasContent(index, 'b');
+    expect(loaded.elements?.map((e) => e.id).sort()).toEqual(['e1', 'e2']);
+    expect(loaded.layout).toEqual({ noteA: { x: 10, y: 20 } }); // derived mirror keeps MCP/layout readers working
+  });
+
+  it('migrates a legacy {layout,drawings} board into elements on read', () => {
+    const content: CanvasContent = { layout: { nA: { x: 1, y: 2 } }, drawings: [{ id: 'd', kind: 'rect', x: 0, y: 0, w: 3, h: 3 }] };
+    const note = newNote({ title: 'Canvas leg', body: JSON.stringify(content), author: 'anima', tags: [canvasContentTag('leg')] });
+    const index = VaultIndex.fromEntries([entry(note)]);
+    expect(loadCanvasContent(index, 'leg').elements!.map((e) => e.type).sort()).toEqual(['note', 'rect']);
+  });
+
+  it('surfaces an MCP layout-only write as a note element after elements exist', async () => {
+    const index = new VaultIndex();
+    await saveCanvasContent(deps as any, index, 'b', { elements: [noteEl('e1', 'noteA', 1, 1)] });
+    await saveCanvasContent(deps as any, index, 'b', { layout: { noteA: { x: 1, y: 1 }, fresh: { x: 9, y: 9 } } });
+    const noteIds = loadCanvasContent(index, 'b').elements!.map((e) => (e.type === 'note' ? e.noteId : null)).filter(Boolean).sort();
+    expect(noteIds).toEqual(['fresh', 'noteA']);
+  });
+
+  it('a legacy board stays legacy (no elements field written) on a drawings-only save', async () => {
+    const note = newNote({ title: 'Canvas leg2', body: JSON.stringify({ layout: {}, drawings: [] } as CanvasContent), author: 'anima', tags: [canvasContentTag('leg2')] });
+    const index = VaultIndex.fromEntries([entry(note)]);
+    await saveCanvasContent(deps as any, index, 'leg2', { drawings: [{ id: 'd', kind: 'rect', x: 0, y: 0, w: 2, h: 2 }] });
+    const body = index.all().find((e) => e.note.tags.includes(canvasContentTag('leg2')))!.note.body;
+    expect(JSON.parse(body).elements).toBeUndefined(); // stays legacy in storage
+    expect(loadCanvasContent(index, 'leg2').elements!.map((e) => e.type)).toEqual(['rect']); // but read exposes elements
   });
 });
 

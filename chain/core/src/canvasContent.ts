@@ -24,6 +24,12 @@ import { newNote, editedNote } from './notes.js';
 import { writeTurn, buildDeleteQuiltsTx, type QuiltDeps } from './quilts.js';
 import { VaultIndex } from './vaultIndex.js';
 import { LAYOUT_TAG, type CanvasLayout, findLayoutNote } from './canvas.js';
+import {
+  type CanvasElement,
+  elementsFromLegacy,
+  layoutFromElements,
+  mergeLayoutIntoElements,
+} from './elements.js';
 
 /** The legacy single-board layout note (read-aliased for `shared` pre-migration). */
 export const SHARED_CANVAS_ID = 'shared';
@@ -48,10 +54,19 @@ export type Shape =
   | { id: string; kind: 'text'; x: number; y: number; text: string }
   | { id: string; kind: 'image'; x: number; y: number; w: number; h: number; ref: string };
 
-/** A canvas's durable content: placed-note layout + drawn shapes. */
+/**
+ * A canvas's durable content. `elements` is the unified Excalidraw-style model and
+ * the source of truth once present (plan 2026-06-22 U5); `layout` + `drawings` are
+ * the legacy split kept for back-compat and migrate-on-read. When `elements` is
+ * written, `layout` is re-derived as a mirror so the MCP `place()` writer and any
+ * layout reader keep working; the destructive removal of layout/drawings is a
+ * later, user-verified step.
+ */
 export interface CanvasContent {
   layout: CanvasLayout;
   drawings: Shape[];
+  /** The unified element model; absent on legacy boards (migrated on read). */
+  elements?: CanvasElement[];
 }
 
 /** A FRESH empty content (a new object each call, since consumers mutate it as React state). */
@@ -71,6 +86,9 @@ function asContent(parsed: unknown): CanvasContent {
   return {
     layout: p.layout ?? {},
     drawings: Array.isArray(p.drawings) ? p.drawings : [],
+    // Preserve undefined-vs-empty: a board saved with the element model has an
+    // `elements` field (possibly []); a legacy board has none (migrated on read).
+    elements: Array.isArray(p.elements) ? p.elements : undefined,
   };
 }
 
@@ -81,6 +99,19 @@ function asContent(parsed: unknown): CanvasContent {
  * drawings) so the live single-board layout survives until the first write.
  */
 export function loadCanvasContent(index: VaultIndex, canvasId: string): CanvasContent {
+  const raw = readRawContent(index, canvasId);
+  // Always expose a populated `elements` list (U5). If the board already uses the
+  // model, fold in any layout noteIds the MCP wrote since (so a freshly placed note
+  // shows up); otherwise migrate-on-read from the legacy {layout, drawings}.
+  const elements =
+    raw.elements !== undefined
+      ? mergeLayoutIntoElements(raw.elements, raw.layout)
+      : elementsFromLegacy(raw.layout, raw.drawings);
+  return { ...raw, elements };
+}
+
+/** The stored content as written (no element migration); `elements` may be undefined. */
+function readRawContent(index: VaultIndex, canvasId: string): CanvasContent {
   const entry = findContentNote(index, canvasId);
   if (entry) {
     try {
@@ -128,18 +159,30 @@ export async function saveCanvasContent(
 ): Promise<{ note: Note; migrationTx?: Transaction }> {
   const existing = findContentNote(index, canvasId);
 
-  // read base: the content note if it exists, else the legacy read-alias (for
-  // shared), NOT empty, so a drawings-only first shared write keeps the live
-  // layout instead of silently dropping it.
-  const base = existing
-    ? asContent(safeParse(existing.note.body))
-    : loadCanvasContent(index, canvasId);
+  // read base: the RAW stored content (no element migration), so `base.elements`
+  // reflects what is actually persisted — undefined for a legacy/new board, which
+  // keeps it legacy until an explicit elements save. For `shared` pre-migration
+  // this still read-aliases the legacy layout (handled in readRawContent), so a
+  // drawings-only first shared write keeps the live layout instead of dropping it.
+  const base = readRawContent(index, canvasId);
 
   // merge ONLY the provided fields over the base
   const merged: CanvasContent = {
     layout: partial.layout ?? base.layout,
     drawings: partial.drawings ?? base.drawings,
   };
+  if (partial.elements !== undefined) {
+    // Frontend full-scene save: `elements` is the source of truth. Re-derive the
+    // `layout` mirror so MCP place() / layout readers still see note positions.
+    // Legacy `drawings` are left untouched (non-destructive; ignored on read).
+    merged.elements = partial.elements;
+    merged.layout = layoutFromElements(partial.elements);
+  } else if (base.elements !== undefined) {
+    // A layout-only / drawings-only write (MCP place(), the legacy layout saver) on
+    // a board that already uses the model: fold any new layout noteIds into the
+    // element list so a placed note renders as a note element on the next read.
+    merged.elements = mergeLayoutIntoElements(base.elements, merged.layout);
+  }
 
   const body = JSON.stringify(merged);
   const note = existing
@@ -171,12 +214,4 @@ export async function saveCanvasContent(
   }
 
   return { note, migrationTx };
-}
-
-function safeParse(body: string): unknown {
-  try {
-    return JSON.parse(body);
-  } catch {
-    return {};
-  }
 }

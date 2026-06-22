@@ -17,5 +17,11 @@ export {
   loadCanvasContent, saveCanvasContent, canvasContentTag, SHARED_CANVAS_ID,
   type Shape, type CanvasContent,
 } from './canvasContent.js';
+export {
+  type CanvasElement, type LinearElement, type ElementBinding, type ElementBase,
+  isLinear, isBindable, newElementId, newVersionNonce, bumpVersion,
+  elementBounds, commonBounds, normalizeLinear, NOTE_W, NOTE_H,
+  elementsFromLegacy, layoutFromElements, mergeLayoutIntoElements,
+} from './elements.js';
 export * from './share.js';
 export { uploadCover, parseCoverRef, readCoverBytes, listVaultCovers } from './covers.js';
