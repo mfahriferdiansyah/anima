@@ -12,13 +12,15 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      // Two entries: the app shell + the chromeless reader. Keeping `reader.html`
-      // a separate input means its VIEW read chunk has its own static graph, which
+      // Two entries: the app shell + the chromeless reader. `read.html` is a
+      // separate input so its VIEW read chunk has its own static graph, which
       // (by construction) excludes `@mysten/*` — the multiplayer editor is behind a
       // dynamic import so the wallet stack it pulls lands in a separate async chunk.
+      // The filename must stay `read.html`: share links resolve to `/read.html`
+      // (see chain/core/src/share-crypto.ts and web3/share.ts).
       input: {
         main: path.resolve(__dirname, 'index.html'),
-        reader: path.resolve(__dirname, 'reader.html'),
+        reader: path.resolve(__dirname, 'read.html'),
       },
     },
   },

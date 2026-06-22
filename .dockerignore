@@ -1,0 +1,20 @@
+# Build context hygiene for the frontend image (built from the repo root because
+# the SPA imports shared code from chain/ and there is no frontend/package.json).
+# The backend image uses its own context (backend/) and is unaffected by this file.
+.git
+node_modules
+**/node_modules
+dist
+**/dist
+frontend/.shots
+.shots
+docs-site/.next
+docs-site/out
+docs-site/.source
+chain/core/.spike-keys.json
+backend/api
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
