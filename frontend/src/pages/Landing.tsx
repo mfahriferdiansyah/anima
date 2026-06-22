@@ -957,7 +957,7 @@ export function Landing() {
           </div>
           <p className="lp-kick">agent-native workspace</p>
           <h1>
-            Shared memory for you, your team, and <span className="hl">your agents.</span>
+            Notes that grow <span className="hl">alongside you.</span>
           </h1>
           <p className="lp-desc">
             A shared workspace for your team and your <b>own ai agents</b>, on the same notes and
