@@ -157,29 +157,34 @@ export function normalizeLinear<T extends LinearElement>(el: T): T {
 
 // ── Legacy {layout, drawings} ⇄ elements migration (U5, non-destructive) ────────
 
-function baseFrom(index: number, x: number, y: number, w: number, h: number): ElementBase {
-  return { id: newElementId(), x, y, w, h, angle: 0, index, version: 1, versionNonce: newVersionNonce() };
+// Migration mints STABLE ids derived from the legacy data (`sh:<shapeId>`,
+// `note:<noteId>`), NOT random ones — migrate-on-read runs on every load of a
+// legacy board, so random ids would change every read and dangle any arrow
+// binding (which stores an `elementId`) plus churn React keys on re-seed.
+function baseFrom(id: string, index: number, x: number, y: number, w: number, h: number): ElementBase {
+  return { id, x, y, w, h, angle: 0, index, version: 1, versionNonce: newVersionNonce() };
 }
 
 /** Map one legacy `Shape` to a `CanvasElement`. Linear shapes become relative-point lines. */
 function elementFromShape(shape: Shape, index: number): CanvasElement {
+  const id = `sh:${shape.id}`;
   switch (shape.kind) {
     case 'rect': {
       const s = shape;
-      return { ...baseFrom(index, s.x, s.y, s.w, s.h), type: 'rect' };
+      return { ...baseFrom(id, index, s.x, s.y, s.w, s.h), type: 'rect' };
     }
     case 'text': {
       const s = shape;
-      return { ...baseFrom(index, s.x, s.y, 0, 0), type: 'text', text: s.text };
+      return { ...baseFrom(id, index, s.x, s.y, 0, 0), type: 'text', text: s.text };
     }
     case 'image': {
       const s = shape;
-      return { ...baseFrom(index, s.x, s.y, s.w, s.h), type: 'image', ref: s.ref };
+      return { ...baseFrom(id, index, s.x, s.y, s.w, s.h), type: 'image', ref: s.ref };
     }
     case 'arrow': {
       const s = shape;
       const el: CanvasElement = {
-        ...baseFrom(index, s.x1, s.y1, Math.abs(s.x2 - s.x1), Math.abs(s.y2 - s.y1)),
+        ...baseFrom(id, index, s.x1, s.y1, Math.abs(s.x2 - s.x1), Math.abs(s.y2 - s.y1)),
         type: 'arrow',
         points: [0, 0, s.x2 - s.x1, s.y2 - s.y1],
       };
@@ -192,7 +197,7 @@ function elementFromShape(shape: Shape, index: number): CanvasElement {
       const { dx, dy } = pointsBounds(pts);
       const rel: number[] = [];
       for (let i = 0; i < pts.length; i += 2) rel.push(pts[i] - dx, pts[i + 1] - dy);
-      const el: CanvasElement = { ...baseFrom(index, dx, dy, 0, 0), type: 'draw', points: rel };
+      const el: CanvasElement = { ...baseFrom(id, index, dx, dy, 0, 0), type: 'draw', points: rel };
       return normalizeLinear(el as LinearElement);
     }
   }
@@ -209,7 +214,7 @@ export function elementsFromLegacy(layout: CanvasLayout, drawings: Shape[]): Can
   let index = 0;
   for (const shape of drawings) out.push(elementFromShape(shape, index++));
   for (const [noteId, pos] of Object.entries(layout)) {
-    out.push({ ...baseFrom(index++, pos.x, pos.y, NOTE_W, NOTE_H), type: 'note', noteId });
+    out.push({ ...baseFrom(`note:${noteId}`, index++, pos.x, pos.y, NOTE_W, NOTE_H), type: 'note', noteId });
   }
   return out;
 }
@@ -240,7 +245,7 @@ export function mergeLayoutIntoElements(elements: CanvasElement[], layout: Canva
   let index = elements.reduce((m, e) => Math.max(m, e.index), -1) + 1;
   for (const [noteId, pos] of Object.entries(layout)) {
     if (present.has(noteId)) continue;
-    merged.push({ ...baseFrom(index++, pos.x, pos.y, NOTE_W, NOTE_H), type: 'note', noteId });
+    merged.push({ ...baseFrom(`note:${noteId}`, index++, pos.x, pos.y, NOTE_W, NOTE_H), type: 'note', noteId });
   }
   return merged;
 }

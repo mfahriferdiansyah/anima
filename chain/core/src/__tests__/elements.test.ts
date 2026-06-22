@@ -43,6 +43,17 @@ describe('elementsFromLegacy (migrate-on-read)', () => {
     expect(arrow.points[1]).toBe(0); // first point re-anchored to [0,0]
     expect({ x: arrow.x, y: arrow.y, w: arrow.w, h: arrow.h }).toEqual({ x: 100, y: 100, w: 60, h: 40 });
   });
+
+  it('mints STABLE ids (sh:/note:) so migrate-on-read does not churn ids across reads', () => {
+    const draw: Shape[] = [{ id: 's1', kind: 'rect', x: 0, y: 0, w: 1, h: 1 }];
+    const lay: CanvasLayout = { nA: { x: 1, y: 2 } };
+    // migrate-on-read runs every load; ids MUST be identical across calls (else
+    // arrow bindings dangle and React keys churn on re-seed)
+    expect(elementsFromLegacy(lay, draw).map((e) => e.id)).toEqual(elementsFromLegacy(lay, draw).map((e) => e.id));
+    const els = elementsFromLegacy(lay, draw);
+    expect(els.find((e) => e.type === 'rect')!.id).toBe('sh:s1');
+    expect(els.find((e) => e.type === 'note')!.id).toBe('note:nA');
+  });
 });
 
 describe('layoutFromElements (derived mirror)', () => {
