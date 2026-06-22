@@ -26,6 +26,7 @@ import {
 import { dataUrlToBytes, COVER_MAX_BYTES } from '../web3/covers';
 import type { WriteState } from '../components/WriteStateCard';
 import { vaultData, type WriteEvent } from '../web3/vaultData';
+import { runWithReceipt, txProvenanceUrl, digestOf } from '../web3/onchainToast';
 import { getQuiltDeps } from '../web3/session';
 // low-balance banner lives in the chat layer; import via useChat so this survives
 // U6 deleting the chatStore mock (useChat keeps re-exporting triggerLowBalance).
@@ -83,8 +84,9 @@ export function configureForgetExec(execTx: ExecTx): void {
  * is consistent; the on-chain blob delete simply self-heals on a later write once
  * the seam (ManageLibrary/Settings) is wired.
  */
-export async function runDestructiveTx(tx: unknown): Promise<void> {
-  if (forgetExec) await forgetExec(tx);
+export async function runDestructiveTx(tx: unknown): Promise<unknown> {
+  if (forgetExec) return forgetExec(tx);
+  return undefined;
 }
 
 /**
@@ -173,36 +175,65 @@ async function persist(id: string, patch: NotePatch): Promise<void> {
   // no-op guard: no scalar changes AND no cover intent → nothing to write
   if (Object.keys(changes).length === 0 && coverIntent === null) return;
 
-  // 2) preflight FIRST — a low balance surfaces the banner with NO write-state (Save preserved),
-  // so the banner never shows under a 'certifying' indicator implying an in-flight upload.
-  const pf = await preflight(deps.suiClient, deps.agentSigner.toSuiAddress());
-  if (!pf.ok) {
+  // A ready cover value (a preset path or a clear) applies synchronously; only a
+  // data-URL upload needs the network (resolved after preflight, below).
+  if (coverIntent?.kind === 'value') changes.cover = coverIntent.cover;
+
+  const priorLoc = vaultData.getSnapshot().index?.get(id)?.location;
+
+  // 2) OPTIMISTIC + SYNCHRONOUS: reflect the edit (title/body and a preset cover)
+  // in the live index right now, BEFORE any await, so it shows instantly and the
+  // banner changes in real time (a data-URL cover folds in after its upload). A
+  // failed write surfaces via the write-state and retryWrite re-attempts, so the
+  // optimistic state is never silently lost.
+  if (Object.keys(changes).length > 0 && priorLoc) {
+    vaultData.upsert(editedNote(current, changes, OWNER_AUTHOR), priorLoc);
+  }
+
+  // 3) Funding preflight. A network/RPC error here must NOT kill the save silently
+  // (the old behavior threw out of persist, leaving no toast and no feedback). On
+  // a thrown check we proceed to the write so the user always gets a write-event
+  // (certified, or a clear 'failed' they can retry). A successful check that
+  // reports a low balance still surfaces the funding banner instead of writing.
+  let pf: Awaited<ReturnType<typeof preflight>> | null = null;
+  try {
+    pf = await preflight(deps.suiClient, deps.agentSigner.toSuiAddress());
+  } catch {
+    pf = null; // RPC unreachable — let the write attempt surface the real outcome
+  }
+  if (pf && !pf.ok) {
+    // The agent can't afford the write. Surface it as a VISIBLE global toast
+    // (bottom-left, on any surface) with a top-up action — not just the chat-layer
+    // banner the user can't see from the editor. Dedup: one low-balance toast per
+    // note (repeated blocked saves don't stack). The chat banner stays too.
+    const already = vaultData.getSnapshot().writeEvents.some((e) => e.noteId === id && e.state.phase === 'low-balance');
+    if (!already) {
+      vaultData.beginWriteEvent({
+        noteId: id,
+        noteTitle: current.title || 'Untitled note',
+        state: { phase: 'low-balance', needsSui: pf.needsSui, needsWal: pf.needsWal },
+      });
+    }
     triggerLowBalance();
     return;
   }
 
-  // 3) Resolve cover value (upload if needed — happens AFTER preflight)
-  if (coverIntent !== null) {
-    if (coverIntent.kind === 'value') {
-      changes.cover = coverIntent.cover;
-    } else {
-      // data URL upload: sealed private cover
-      const { ref } = await uploadCover(deps, coverIntent.bytes, { noteId: id });
-      changes.cover = ref;
-    }
+  // 4) Upload a data-URL cover (sealed) after the funding check.
+  if (coverIntent?.kind === 'upload') {
+    const { ref } = await uploadCover(deps, coverIntent.bytes, { noteId: id });
+    changes.cover = ref;
   }
 
   const next = editedNote(current, changes, OWNER_AUTHOR);
   const title = next.title || 'Untitled note';
-
-  // OPTIMISTIC: reflect the edit in the live index immediately so the editor
-  // shows the saved content right away, instead of only after the ~10s seal+write
-  // (which previously made an edit "disappear" until a refresh). Keep the prior
-  // blob location until the write lands; we re-upsert with the new one below. A
-  // failed write surfaces via the write-state (and retryWrite re-attempts from
-  // this note), so the optimistic body is never silently lost.
-  const priorLoc = vaultData.getSnapshot().index?.get(id)?.location;
+  // Re-upsert with the final note (folds in an uploaded cover; idempotent for a
+  // plain body/preset edit) so the on-screen state matches what gets sealed.
   if (priorLoc) vaultData.upsert(next, priorLoc);
+
+  // We can write now — clear any stale low-balance toast left for this note.
+  for (const e of vaultData.getSnapshot().writeEvents) {
+    if (e.noteId === id && e.state.phase === 'low-balance') vaultData.dismissWriteEvent(e.id);
+  }
 
   const eventId = vaultData.beginWriteEvent({ noteId: id, noteTitle: title, state: { phase: 'encrypting' } });
   vaultData.updateWriteEvent(eventId, { phase: 'certifying' });
@@ -326,6 +357,7 @@ export async function forgetNotes(ids: string[]): Promise<ScrubEvent> {
   // a chain delete is needed — assert the wallet exec BEFORE any rewrite/remove,
   // so a missing exec creates no orphan and removes nothing (the note stays, retryable)
   if (!forgetExec) throw new Error('forgetNotes: wallet exec not wired');
+  const exec = forgetExec; // capture: forgetExec is a reassignable module `let`
 
   // 2) rewrite ONLY survivors whose LATEST indexed location is still in a doomed
   // quilt blob (covers have no survivors — don't let them enter the rewrite logic)
@@ -349,9 +381,25 @@ export async function forgetNotes(ids: string[]): Promise<ScrubEvent> {
     }
   }
 
-  // 4) ONE atomic wallet signature deletes every doomed quilt + cover blob
+  // 4) ONE atomic wallet signature deletes every doomed quilt + cover blob.
+  // The erasure tx IS the provenance — receipt links at its digest (alongside the
+  // chat scrub line, a different surface).
   const tx = await buildDeleteQuiltsTx(deps, blobsToDelete);
-  await forgetExec(tx);
+  await runWithReceipt(
+    {
+      key: 'forget',
+      title: removed.length === 1 ? removed[0].title : `${removed.length} memories`,
+      labels: {
+        pending: 'Forgetting',
+        success: removed.length === 1 ? 'Memory forgotten' : `${removed.length} memories forgotten`,
+      },
+    },
+    async () => {
+      const res = await exec(tx);
+      const digest = digestOf(res);
+      return { result: res, provenanceUrl: digest ? txProvenanceUrl(digest) : '' };
+    },
+  );
 
   // 5) on-chain erasure done → drop the forgotten notes from the live index
   for (const id of ids) vaultData.remove(id);
@@ -373,6 +421,7 @@ export async function forgetEverything(): Promise<void> {
   // assert the wallet exec up front: a missing exec must NOT clear the index
   // (a skipped delete + emptied index = a lying "wiped" that leaks every quilt)
   if (!forgetExec) throw new Error('forgetEverything: wallet exec not wired');
+  const exec = forgetExec; // capture: forgetExec is a reassignable module `let`
 
   wipeInProgress = true;
   try {
@@ -388,7 +437,14 @@ export async function forgetEverything(): Promise<void> {
     // point-in-time enumeration, then ONE atomic delete of every quilt
     const blobs = await listVaultQuilts(deps);
     const tx = await buildDeleteQuiltsTx(deps, blobs);
-    await forgetExec(tx);
+    await runWithReceipt(
+      { key: 'forget-all', title: 'Entire vault', labels: { pending: 'Forgetting everything', success: 'Everything forgotten' } },
+      async () => {
+        const res = await exec(tx);
+        const digest = digestOf(res);
+        return { result: res, provenanceUrl: digest ? txProvenanceUrl(digest) : '' };
+      },
+    );
 
     // clear the index in place — the Vault survives, so it stays re-onboardable
     vaultData.publish(VaultIndex.fromEntries([]));

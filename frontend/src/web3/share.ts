@@ -30,6 +30,7 @@ import { vaultData } from './vaultData';
 import { getQuiltDeps } from './session';
 import { runDestructiveTx } from '../hooks/useVault';
 import { randomShareId } from './collabOps';
+import { runWithReceipt, objectProvenanceUrl, txProvenanceUrl, digestOf } from './onchainToast';
 import { publishNote, unpublishNote, listPublished } from '../../../chain/core/src/index.js';
 import type { Note } from '../../../chain/core/src/index.js';
 
@@ -131,7 +132,20 @@ async function publishView(noteId: string, password: string | null): Promise<voi
   const priorBlob = findLink(noteId)?.blobObjectId;
   patchLink(noteId, { publishing: true, error: undefined });
   try {
-    const published = await publishNote(deps, note, password ? { password } : {});
+    // Publishing writes a world-readable `anima-pub` blob: surface the SAME
+    // provenance receipt a note save does (the dialog's `publishing` flag stays).
+    const published = await runWithReceipt(
+      {
+        key: `publish:${noteId}`,
+        title: note.title || 'Untitled',
+        labels: { pending: 'Publishing link', success: 'Link published' },
+      },
+      () =>
+        publishNote(deps, note, password ? { password } : {}).then((p) => ({
+          result: p,
+          provenanceUrl: objectProvenanceUrl(p.blobObjectId),
+        })),
+    );
     patchLink(noteId, {
       url: published.url,
       blobObjectId: published.blobObjectId,
@@ -156,7 +170,19 @@ async function unpublishView(noteId: string): Promise<void> {
   if (!blobObjectId) return;
   const deps = getQuiltDeps();
   if (!deps) return;
-  await runDestructiveTx(await unpublishNote(deps, blobObjectId));
+  // The revoke tx IS the provenance for a delete — link the receipt at its digest.
+  await runWithReceipt(
+    {
+      key: `unpublish:${noteId}`,
+      title: noteFor(noteId)?.title || 'Shared link',
+      labels: { pending: 'Revoking link', success: 'Link revoked' },
+    },
+    async () => {
+      const res = await runDestructiveTx(await unpublishNote(deps, blobObjectId));
+      const digest = digestOf(res);
+      return { result: res, provenanceUrl: digest ? txProvenanceUrl(digest) : '' };
+    },
+  );
   patchLink(noteId, { blobObjectId: undefined });
 }
 

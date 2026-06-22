@@ -14,6 +14,7 @@ import {
   refreshBalances,
   refreshMilestones,
   revokeKey,
+  topUp as topUpAgent,
   useSettings,
 } from '@/hooks/useSettings';
 import type { MilestoneKey } from '@/web3/milestones';
@@ -326,6 +327,7 @@ export function Settings() {
   const toastCounter = useRef(0);
   const [confirmWipe, setConfirmWipe] = useState(false);
   const [wiping, setWiping] = useState(false);
+  const [topping, setTopping] = useState(false);
 
   // useWalletExecTx returns a fresh execTx each render; keep the latest in a ref
   // so the settings layer always calls the current one (mirrors useVaultSession).
@@ -370,9 +372,18 @@ export function Settings() {
     }
   };
 
-  const topUp = () => {
-    dismissLowBalance();
-    pushToast('success', 'Top up requested');
+  const topUp = async () => {
+    setTopping(true);
+    pushToast('info', 'Topping up the agent', 'approve the transfer in your wallet');
+    try {
+      await topUpAgent();
+      dismissLowBalance();
+      pushToast('success', 'Agent topped up', 'you can save again');
+    } catch (e) {
+      pushToast('error', 'Top up failed', e instanceof Error ? e.message : 'try again');
+    } finally {
+      setTopping(false);
+    }
   };
 
   const exportVault = () => {
@@ -455,8 +466,8 @@ export function Settings() {
         </span>
         <span className="pgst-v">{settings.balances.wal.toFixed(2)} WAL</span>
         {walLow ? (
-          <button type="button" className="pgbtn primary" onClick={topUp}>
-            Top up
+          <button type="button" className="pgbtn primary" onClick={() => void topUp()} disabled={topping}>
+            {topping ? 'Topping up…' : 'Top up'}
           </button>
         ) : null}
       </div>

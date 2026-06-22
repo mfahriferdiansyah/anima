@@ -22,10 +22,11 @@ type Handler struct {
 }
 
 type chatRequest struct {
-	Model      string        `json:"model,omitempty"`
-	Persona    string        `json:"persona"`
-	Transcript []llm.Message `json:"transcript"`
-	Context    []ContextNote `json:"context"`
+	Model      string          `json:"model,omitempty"`
+	Persona    string          `json:"persona"`
+	Transcript []llm.Message   `json:"transcript"`
+	Context    []ContextNote   `json:"context"`
+	Calendar   []CalendarEvent `json:"calendar,omitempty"`
 }
 
 // HandleChat streams a persona completion as SSE: one unnamed event with
@@ -48,7 +49,7 @@ func (h *Handler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	msgs := make([]llm.Message, 0, len(req.Transcript)+1)
-	msgs = append(msgs, llm.Message{Role: "system", Content: chatSystemPrompt(req.Persona, req.Context)})
+	msgs = append(msgs, llm.Message{Role: "system", Content: chatSystemPrompt(req.Persona, req.Context, req.Calendar)})
 	msgs = append(msgs, req.Transcript...)
 
 	chunks, err := h.LLM.StreamChat(r.Context(), model, msgs)

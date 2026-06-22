@@ -17,6 +17,9 @@
     "mcp:smoke": "tsx chain/mcp/src/smoke.ts",
     "pair": "tsx scripts/pair.ts",
     "pair:smoke": "tsx scripts/pair-smoke.ts",
+    "balance": "tsx scripts/topup.ts",
+    "topup": "tsx scripts/topup.ts --refill",
+    "topup:rebalance": "tsx scripts/topup.ts --rebalance",
     "test:scripts": "vitest run --dir scripts"
   },
   "dependencies": {

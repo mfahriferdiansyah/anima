@@ -17,7 +17,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import { VaultIndex, type IndexedNote, type Note, type NoteLocation } from '../../../chain/core/src/index.js';
-import type { WriteState } from '../components/WriteStateCard';
+import type { WriteState, OnchainLabels } from '../components/WriteStateCard';
 
 /** A global write-event for the bottom-left toast stack (was mocks/writeStateStore). */
 export interface WriteEvent {
@@ -25,6 +25,8 @@ export interface WriteEvent {
   noteId: string;
   noteTitle: string;
   state: WriteState;
+  /** Copy overrides for a non-note receipt (publish/agent/forget/…); omitted → note-save copy. */
+  labels?: OnchainLabels;
 }
 
 /** The reactive snapshot the hooks read. New object on every mutation. */
@@ -58,7 +60,7 @@ export interface VaultDataStore {
    * even silent writes). When `silent` (e.g. the layout autosave) NO toast event
    * is pushed. Returns the event id for `updateWriteEvent`/`dismissWriteEvent`.
    */
-  beginWriteEvent(input: { noteId: string; noteTitle: string; state: WriteState; silent?: boolean }): string;
+  beginWriteEvent(input: { noteId: string; noteTitle: string; state: WriteState; silent?: boolean; labels?: OnchainLabels }): string;
   /** Advance a write lifecycle (updates the inline state + the toast if not silent). */
   updateWriteEvent(eventId: string, state: WriteState): void;
   /** Remove a toast (App.tsx). Leaves the inline write-state in place. */
@@ -119,12 +121,12 @@ export function createVaultData(): VaultDataStore {
       writeStates.set(noteId, state);
       emit();
     },
-    beginWriteEvent({ noteId, noteTitle, state, silent = false }) {
+    beginWriteEvent({ noteId, noteTitle, state, silent = false, labels }) {
       counter += 1;
       const id = `write-${counter}`;
       eventMeta.set(id, { noteId, silent });
       writeStates.set(noteId, state);
-      if (!silent) events.push({ id, noteId, noteTitle, state });
+      if (!silent) events.push({ id, noteId, noteTitle, state, labels });
       emit();
       return id;
     },

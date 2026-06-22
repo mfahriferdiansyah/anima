@@ -15,6 +15,7 @@ import {
 } from '../web3/canvasRegistry';
 import { getQuiltDeps } from '../web3/session';
 import { vaultData } from '../web3/vaultData';
+import { runWithReceipt, objectProvenanceUrl } from '../web3/onchainToast';
 import { runDestructiveTx } from './useVault';
 import { uploadCover, listVaultCovers, buildDeleteQuiltsTx, type VaultIndex } from '../../../chain/core/src/index.js';
 
@@ -48,8 +49,11 @@ export function useCanvases(): CanvasDoc[] {
   return useSyncExternalStore(canvasesLocal.subscribe, canvasesLocal.getSnapshot);
 }
 
+/** Where a new note/canvas lands by default: a real, editable folder (not a phantom "untitled"). */
+export const UNSORTED_FOLDER = 'unsorted';
+
 /** Create a canvas (optimistic local + durable registry write); returns its id. */
-export function createCanvas(folder = 'untitled', title = 'Untitled canvas'): string {
+export function createCanvas(folder = UNSORTED_FOLDER, title = 'Untitled canvas'): string {
   const canvasId = newCanvasId();
   persistCanvases(addCanvas(canvasesLocal.getSnapshot(), { canvasId, title, desc: '', folder }));
   return canvasId;
@@ -85,12 +89,21 @@ export function updateCanvas(
   if (cover?.kind === 'upload') {
     const deps = getQuiltDeps();
     if (!deps) return; // no live vault — drop the cover silently (mirrors persist())
+    const title = canvasesLocal.getSnapshot().find((c) => c.canvasId === canvasId)?.title || 'Canvas';
     void (async () => {
       try {
-        const { ref } = await uploadCover(deps, cover.bytes, { noteId: canvasId, public: true });
+        // The cover is a real Walrus blob → the SAME provenance receipt a note save gets.
+        const { ref } = await runWithReceipt(
+          { key: `canvas-cover:${canvasId}`, title, labels: { pending: 'Saving cover', success: 'Cover saved' } },
+          () =>
+            uploadCover(deps, cover.bytes, { noteId: canvasId, public: true }).then((u) => ({
+              result: u,
+              provenanceUrl: objectProvenanceUrl(u.blobObjectId),
+            })),
+        );
         persistCanvases(patchCanvas(canvasesLocal.getSnapshot(), canvasId, { image: ref }));
       } catch {
-        // upload failed — leave the prior cover untouched (no crash, no toast)
+        // upload failed — leave the prior cover untouched (the receipt self-dismissed)
       }
     })();
   }
@@ -145,15 +158,20 @@ export function getCanvasesForTest(): CanvasDoc[] {
 // stays its tags[0]. An optimistic local store backs the UI (instant reorder/add)
 // and reseeds from the durable note whenever the session republishes the index
 // (the rebuild). Single caller, so it lives here rather than a standalone module.
-const DEFAULT_FOLDERS = ['research', 'trips', 'work', 'reading', 'product'];
+const DEFAULT_FOLDERS = ['research', 'trips', 'work', 'reading', 'product', UNSORTED_FOLDER];
 const foldersLocal = createStore<string[]>(DEFAULT_FOLDERS);
 let lastIndexRef: VaultIndex | null = null;
+
+/** Always keep the unsorted inbox in the order so new items land in a REAL, editable folder. */
+function withUnsorted(folders: string[]): string[] {
+  return folders.includes(UNSORTED_FOLDER) ? folders : [...folders, UNSORTED_FOLDER];
+}
 
 function reseedFolders(): void {
   const idx = vaultData.getSnapshot().index;
   if (idx === lastIndexRef) return; // only the rebuild publish swaps the index ref
   lastIndexRef = idx;
-  foldersLocal.update(() => loadAppState(idx, 'folders', DEFAULT_FOLDERS));
+  foldersLocal.update(() => withUnsorted(loadAppState(idx, 'folders', DEFAULT_FOLDERS)));
 }
 vaultData.subscribe(reseedFolders);
 reseedFolders(); // seed if an index is already published (hot reload / tests)

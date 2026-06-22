@@ -18,7 +18,7 @@ export async function uploadCover(
   deps: QuiltDeps,
   bytes: Uint8Array,
   opts: { noteId: string; public?: boolean },
-): Promise<{ blobId: string; ref: string }> {
+): Promise<{ blobId: string; ref: string; blobObjectId: string }> {
   const isPublic = opts.public ?? false;
   const payload = isPublic ? bytes : await deps.seal.encryptNote(opts.noteId, bytes);
 
@@ -48,7 +48,7 @@ export async function uploadCover(
   await deps.suiClient.waitForTransaction({ digest: tRes.digest });
 
   const ref = `${isPublic ? 'blob' : 'seal'}:${result.blobId}`;
-  return { blobId: result.blobId, ref };
+  return { blobId: result.blobId, ref, blobObjectId };
 }
 
 /** Parse a cover ref string into its kind + value. */

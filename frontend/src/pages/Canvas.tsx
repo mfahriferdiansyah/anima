@@ -674,7 +674,31 @@ export function Canvas() {
     <div className="pged">
       <div className="pged-top">
         <span className="pgcrumb">
-          Canvas / <b>{boardTitle}</b>
+          Canvas /{' '}
+          <b
+            className="pgcrumb-title"
+            contentEditable
+            suppressContentEditableWarning
+            spellCheck={false}
+            title="Rename this board"
+            onBlur={(event) => {
+              const value = event.currentTarget.textContent?.trim() ?? '';
+              if (!canvasId) return;
+              if (value && value !== boardTitle) updateCanvas(canvasId, { title: value });
+              else event.currentTarget.textContent = boardTitle; // restore if emptied/unchanged
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                event.currentTarget.blur();
+              } else if (event.key === 'Escape') {
+                event.currentTarget.textContent = boardTitle;
+                event.currentTarget.blur();
+              }
+            }}
+          >
+            {boardTitle}
+          </b>
         </span>
         <span className="sp" />
         {isShared && connection !== 'live' ? (

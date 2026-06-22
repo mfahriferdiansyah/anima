@@ -27,6 +27,8 @@ import { createStore } from '../mocks/store';
 import { vaultData } from '../web3/vaultData';
 import { getQuiltDeps, sessionStore } from '../web3/session';
 import { ensureJwt } from '../web3/auth';
+import { getCalendarContext } from '../web3/calendar';
+import { runWithReceipt, objectProvenanceUrl } from '../web3/onchainToast';
 
 export type ChatRole = 'user' | 'agent' | 'event';
 
@@ -200,6 +202,12 @@ export interface DistillDeps {
   upsert: (note: Note, location: { quiltPatchId: string; quiltBlobId: string; blobObjectId: string }) => void;
   /** Surface the low-balance banner (skips the write) when preflight fails. */
   onLowBalance: () => void;
+  /**
+   * Wrap the seal write in a provenance-receipt toast (real impl = `runWithReceipt`,
+   * wired in `send`). Optional so the node tests skip the toast; when present it
+   * shows ONE "N memories sealed · View provenance" receipt per quilt batch.
+   */
+  sealReceipt?: <T extends { blobObjectId: string }>(count: number, run: () => Promise<T>) => Promise<T>;
 }
 
 export interface DistillWriteResult {
@@ -237,7 +245,8 @@ export async function runDistill(deps: DistillDeps, force: boolean): Promise<Dis
   const notes = candidates.map((c) =>
     deps.newNote({ title: c.title, body: c.body, tags: c.tags ?? [], links: c.links ?? [], author: 'anima' }),
   );
-  const w = await deps.writeTurn(chainDeps, notes);
+  const seal = () => deps.writeTurn(chainDeps, notes);
+  const w = deps.sealReceipt ? await deps.sealReceipt(notes.length, seal) : await seal();
   const createdNoteIds: string[] = [];
   notes.forEach((n, i) => {
     const per = w.perNote[i] ?? w.perNote[0];
@@ -338,7 +347,9 @@ export async function send(text: string): Promise<void> {
     const res = await fetch(`${backendUrl()}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
-      body: JSON.stringify({ persona: buildPersona(name), transcript, context }),
+      // calendar: live Google Calendar context (empty unless connected), so the
+      // agent can answer schedule questions — never cited as a vault note.
+      body: JSON.stringify({ persona: buildPersona(name), transcript, context, calendar: getCalendarContext() }),
     });
     if (!res.ok || !res.body) throw new Error(`chat failed: HTTP ${res.status}`);
 
@@ -376,6 +387,17 @@ export async function send(text: string): Promise<void> {
         newNote,
         upsert: (note, location) => vaultData.upsert(note, location),
         onLowBalance: triggerLowBalance,
+        // Agent-sealed memories get the SAME provenance receipt a manual save does:
+        // one "N memories sealed · View provenance" toast per quilt batch.
+        sealReceipt: (count, run) =>
+          runWithReceipt(
+            {
+              key: 'distill',
+              title: count === 1 ? '1 new memory' : `${count} new memories`,
+              labels: { pending: 'Sealing memory', success: count === 1 ? 'Memory sealed' : `${count} memories sealed` },
+            },
+            () => run().then((r) => ({ result: r, provenanceUrl: objectProvenanceUrl(r.blobObjectId) })),
+          ),
       },
       intent === 'draft',
     );

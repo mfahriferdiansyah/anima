@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createNote, useVault } from '@/hooks/useVault';
+import { createNote, saveNote, useVault } from '@/hooks/useVault';
 import { useVaultSession } from '@/hooks/useVaultSession';
 import { useAgentTimeline, requestDraft, clearSuggestion } from '@/hooks/useAgentTimeline';
 import { acceptSuggestion } from '@/web3/suggest';
-import { useCalendar, connectCalendar, disconnectCalendar, type CalendarEvent } from '@/web3/calendar';
+import { useCalendar, connectCalendar, disconnectCalendar, listEvents, type CalendarEvent } from '@/web3/calendar';
 import './home.css';
 
 /* ---------- calendar types ---------- */
@@ -58,6 +58,17 @@ function CalIcon({ children }: { children: ReactNode }) {
   );
 }
 
+function RefreshIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 2v6h-6" />
+      <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+      <path d="M3 22v-6h6" />
+      <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+    </svg>
+  );
+}
+
 /** Convert a CalendarEvent to a timed CalEvent (s/e = fractional hours, local time). */
 function gcalToCalEvent(ev: CalendarEvent): CalEvent {
   const parseHour = (iso: string): number => {
@@ -104,6 +115,7 @@ function WeekCalendar() {
   const [view, setView] = useState<ViewMode>('month');
   const [cursor, setCursor] = useState(() => new Date());
   const [connecting, setConnecting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // A fresh view or a new week starts at the top of the list.
@@ -152,6 +164,18 @@ function WeekCalendar() {
     }
   };
 
+  // Re-fetch the next 14 days from Google. A dead token surfaces via listEvents'
+  // own 401 → status:'error' path (the indicator then shows Reconnect), so there
+  // is no separate error UI here — just the in-flight spinner.
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await listEvents();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   // Calendar sync status indicator (three states: connected / error / unconfigured / disconnected)
   const syncIndicator = (() => {
     if (calendar.status === 'connected' && calendar.lastSyncedAt) {
@@ -166,8 +190,18 @@ function WeekCalendar() {
           {relativeSyncLabel(calendar.lastSyncedAt)}
           <button
             type="button"
+            className={`pgcal-nav refresh${refreshing ? ' refreshing' : ''}`}
+            aria-label="Refresh calendar"
+            title="Refresh from Google Calendar"
+            onClick={() => void handleRefresh()}
+            disabled={refreshing}
+          >
+            <RefreshIcon />
+          </button>
+          <button
+            type="button"
             className="pgbtn"
-            style={{ marginLeft: 6, fontSize: 11 }}
+            style={{ marginLeft: 2, fontSize: 11 }}
             onClick={() => disconnectCalendar()}
           >
             Disconnect
@@ -340,9 +374,19 @@ function WeekCalendar() {
 
 function SuggestRail() {
   const navigate = useNavigate();
-  const { events, draftRequested, suggestion } = useAgentTimeline();
+  const { events, draftRequested, suggestion, prep } = useAgentTimeline();
   const { notes } = useVault();
   const [accepting, setAccepting] = useState(false);
+  // Local "ticked" state for the prep checklist (cleared on refresh — the item
+  // is handled). The preview is non-interactive, so this only fires in the app.
+  const [done, setDone] = useState<Record<string, boolean>>({});
+
+  // "Let Nova draft" → create a note seeded with the prep title and open it.
+  const draftPrep = (item: { id: string; title: string }) => {
+    const id = createNote();
+    saveNote(id, { title: item.title, body: `${item.title}\n\nNova's draft — shape it as you like.` });
+    navigate(`/app/notes/${id}`);
+  };
 
   // "Recent notes" rail: the live vault notes (already recency-sorted), newest
   // first, each row opens its source note. Real data, never fabricated.
@@ -362,9 +406,50 @@ function SuggestRail() {
   return (
     <aside className="pgh6-rail">
       <div className="pgh6-sugg">
-        <div className="railt">
-          <b>Nova suggests</b>
-          <span>What she thinks you should do next, drawn from your vault.</span>
+        {prep.length > 0 ? (
+          <>
+            <div className="railt">
+              <b>Nova suggests</b>
+              <span>Preparation she thinks you will thank yourself for. Tick it done, or let her draft it.</span>
+            </div>
+            {prep.map((p) => (
+              <div key={p.id} className={done[p.id] ? 'sg done' : 'sg'}>
+                <label className="sgc">
+                  <input
+                    type="checkbox"
+                    checked={!!done[p.id]}
+                    onChange={() => setDone((d) => ({ ...d, [p.id]: !d[p.id] }))}
+                  />
+                </label>
+                <div className="sgb">
+                  <b>{p.title}</b>
+                  <span>{p.meta}</span>
+                  {p.draft ? (
+                    <button type="button" className="pgbtn sgd" onClick={() => draftPrep(p)}>
+                      ✧ Let Nova draft
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </>
+        ) : (
+          <>
+        <div className="railt railt-hdr">
+          <div className="railt-txt">
+            <b>Nova suggests</b>
+            <span>What she thinks you should do next, drawn from your vault.</span>
+          </div>
+          <button
+            type="button"
+            className={`pgcal-nav refresh${draftRequested ? ' refreshing' : ''}`}
+            aria-label="Refresh Nova's suggestion"
+            title="Ask Nova for a fresh suggestion"
+            onClick={() => requestDraft()}
+            disabled={draftRequested}
+          >
+            <RefreshIcon />
+          </button>
         </div>
 
         {suggestion ? (
@@ -421,6 +506,8 @@ function SuggestRail() {
                 </div>
               </div>
             ))}
+          </>
+        )}
           </>
         )}
       </div>

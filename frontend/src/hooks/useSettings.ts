@@ -23,6 +23,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction } from '@mysten/sui/transactions';
 import {
   buildRegisterAgentTx,
   buildRevokeAgentTx,
@@ -31,6 +32,7 @@ import {
   type Preflight,
 } from '../../../chain/core/src/index.js';
 import { sessionStore, getQuiltDeps } from '@/web3/session';
+import { runWithReceipt, txProvenanceUrl, digestOf } from '../web3/onchainToast';
 import {
   deriveMilestones,
   gatherSyncSignals,
@@ -185,16 +187,53 @@ export function createSettings() {
       const deps = getQuiltDeps();
       const vid = vaultId();
       if (!deps || !vid || !execTx) throw new Error('Connect an external agent only with a ready vault.');
+      const exec = execTx;
       const kp = new Ed25519Keypair();
       const address = kp.toSuiAddress();
       const tx = buildRegisterAgentTx({ vaultId: vid, agent: address, fundAgentMist: FUND_AGENT_MIST });
-      await execTx(tx); // wallet signature
+      await runWithReceipt(
+        { key: `connect:${address}`, title: label.trim() || 'external agent', labels: { pending: 'Connecting agent', success: 'Agent connected' } },
+        async () => {
+          const res = await exec(tx); // wallet signature
+          const digest = digestOf(res);
+          return { result: res, provenanceUrl: digest ? txProvenanceUrl(digest) : '' };
+        },
+      );
       await ensureAgentWal(deps.suiClient, kp); // agent signature, no popup
       const entry: LocalExternal = { address, label: label.trim() || 'external agent', addedAt: new Date().toISOString() };
       localExternal.push(entry);
       emit();
       const key = snapshot.keys.find((k) => k.address === address)!;
       return { key, secret: kp.getSecretKey() };
+    },
+    /**
+     * Refill the device agent so it can seal again. The agent is a separate
+     * keypair from the owner wallet and pays for every write, so it depletes with
+     * use. One wallet popup transfers SUI owner → agent (using the gas the user
+     * already holds, not the rate-limited faucet); the agent then self-swaps some
+     * SUI → WAL (no popup) so both the gas and storage floors clear. Re-reads
+     * balances after, so the page reflects the refill.
+     */
+    async topUp(): Promise<void> {
+      const deps = getQuiltDeps();
+      if (!deps || !execTx) throw new Error('Top up needs a ready vault.');
+      const exec = execTx;
+      const agentAddr = deps.agentSigner.toSuiAddress();
+      const tx = new Transaction();
+      const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(FUND_AGENT_MIST)]);
+      tx.transferObjects([coin], agentAddr);
+      await runWithReceipt(
+        { key: 'topup', title: 'Agent wallet', labels: { pending: 'Topping up agent', success: 'Agent funded' } },
+        async () => {
+          const res = await exec(tx); // owner wallet signature: SUI → agent
+          const digest = digestOf(res);
+          return { result: res, provenanceUrl: digest ? txProvenanceUrl(digest) : '' };
+        },
+      );
+      await ensureAgentWal(deps.suiClient, deps.agentSigner); // agent self-swaps SUI → WAL (no popup)
+      const pf = await preflight(deps.suiClient, agentAddr);
+      balances = toBalances(pf);
+      emit();
     },
     /** Owner-signed `revoke_agent` (one popup), then drop the key locally. */
     async revokeKey(id: string): Promise<void> {
@@ -203,7 +242,15 @@ export function createSettings() {
       const entry = snapshot.keys.find((k) => k.id === id);
       if (!deps || !vid || !execTx || !entry) return;
       const tx = buildRevokeAgentTx({ vaultId: vid, agent: entry.address });
-      await execTx(tx); // wallet signature
+      const execRevoke = execTx;
+      await runWithReceipt(
+        { key: `revoke:${entry.address}`, title: entry.label || 'external agent', labels: { pending: 'Revoking key', success: 'Key revoked' } },
+        async () => {
+          const res = await execRevoke(tx); // wallet signature
+          const digest = digestOf(res);
+          return { result: res, provenanceUrl: digest ? txProvenanceUrl(digest) : '' };
+        },
+      );
       const i = localExternal.findIndex((e) => e.address === entry.address);
       if (i >= 0) localExternal.splice(i, 1);
       emit();
@@ -263,6 +310,11 @@ export function connectExternalAgent(label: string): Promise<{ key: KeyEntry; se
 /** Owner-signed revoke (one wallet tx), then drop the key locally. */
 export function revokeKey(id: string): Promise<void> {
   return settings.revokeKey(id);
+}
+
+/** Refill the device agent (owner → agent SUI transfer + agent SUI→WAL swap), then re-read balances. */
+export function topUp(): Promise<void> {
+  return settings.topUp();
 }
 
 /** A fixed on-chain agent address can't rotate a secret in place; returns null (revoke + reconnect instead). */

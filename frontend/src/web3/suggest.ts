@@ -30,6 +30,16 @@ export interface Suggestion {
   body: string;
 }
 
+/** A calendar-grounded preparation item in the "Nova suggests" checklist. */
+export interface PrepItem {
+  id: string;
+  title: string;
+  /** Grounding line, e.g. "Demo day · Jun 21 · 9 days out". */
+  meta: string;
+  /** Whether Nova can draft it for you ("Let Nova draft"). */
+  draft: boolean;
+}
+
 export interface TimelineState {
   /** Newest first. */
   events: AgentEvent[];
@@ -37,6 +47,9 @@ export interface TimelineState {
   draftRequested: boolean;
   /** The pending suggestion block Notes renders; never auto-applies. */
   suggestion: Suggestion | null;
+  /** Nova's prep checklist (tickable). Empty in the live app until the /suggest
+   *  flow populates it; the landing preview seeds it for the "Nova suggests" beat. */
+  prep: PrepItem[];
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -47,6 +60,7 @@ const store = createStore<TimelineState>({
   events: [],
   draftRequested: false,
   suggestion: null,
+  prep: [],
 });
 
 export const agentTimeline = {
@@ -149,9 +163,19 @@ export async function requestSuggestions(input: {
 }
 
 /**
- * Home quick-start: set draftRequested=true synchronously (Home can show a
- * "Nova is thinking" state), then fire the /suggest call. On result, the first
- * suggestion becomes the pending block; draftRequested is cleared.
+ * The checklist grounding line for a suggestion: the first sentence of the body
+ * (where Nova grounds the step in a date / note / balance), trimmed to one tidy
+ * line. Falls back to the 80-char summary if the body has no sentence break.
+ */
+function suggestionMeta(s: Suggestion): string {
+  const firstSentence = s.body.split(/(?<=[.!?])\s/)[0]?.trim() || s.summary;
+  return firstSentence.length > 88 ? `${firstSentence.slice(0, 87).trimEnd()}…` : firstSentence;
+}
+
+/**
+ * Home quick-start: set draftRequested=true synchronously (Home shows a "Nova is
+ * thinking" state), then fire the /suggest call. On result, map the suggestions
+ * into the "Nova suggests" prep checklist (`setPrep`) and clear draftRequested.
  */
 export function requestDraft(opts: {
   persona: string;
@@ -161,12 +185,20 @@ export function requestDraft(opts: {
   store.update((prev) => ({ ...prev, draftRequested: true }));
 
   void requestSuggestions({ ...opts, targetNoteId: null }).then((suggestions) => {
-    // On an empty/failed /suggest, leave suggestion null — the honest empty rail
-    // shows. NEVER fall back to a fixture: the owner could "Add to vault" and
-    // seal a fabricated note as a real signed memory.
-    const first = suggestions[0] ?? null;
-    store.update((prev) => ({ ...prev, draftRequested: false, suggestion: first }));
-    if (first) appendEvent('suggestion', first.summary, []);
+    // Map the live /suggest results into the prep checklist. On an empty/failed
+    // /suggest, prep stays empty — the honest "no suggestions yet" rail shows.
+    // NEVER fall back to a fixture: the owner could draft a fabricated suggestion
+    // into a real signed note.
+    const prep: PrepItem[] = suggestions.map((s) => ({
+      id: s.id,
+      title: s.title,
+      meta: suggestionMeta(s),
+      draft: true, // every suggestion is a next-step Nova can draft into a note
+    }));
+    store.update((prev) => ({ ...prev, draftRequested: false, prep }));
+    if (prep.length > 0) {
+      appendEvent('suggestion', `Nova suggested ${prep.length} next step${prep.length === 1 ? '' : 's'}`, []);
+    }
   });
 }
 
@@ -206,6 +238,15 @@ export function clearSuggestion(): void {
 }
 
 /**
+ * Publish Nova's prep checklist (the "Nova suggests" design). The live /suggest
+ * flow maps its results to PrepItem[] and calls this; SuggestRail then renders
+ * the checklist instead of the fallback single-suggestion block.
+ */
+export function setPrep(items: PrepItem[]): void {
+  store.update((prev) => ({ ...prev, prep: items }));
+}
+
+/**
  * Canvas hook for an agent-materialize activity beat. Real agent-on-canvas
  * activity (an external agent placing a note) is a plan-007 concern; until then
  * this is a no-op — it must NOT fabricate a "Nova added a note" event.
@@ -216,5 +257,5 @@ export function scheduleAgentNote(): void {
 
 export function resetAgentTimeline(): void {
   eventCounter = 0;
-  store.update(() => ({ events: [], draftRequested: false, suggestion: null }));
+  store.update(() => ({ events: [], draftRequested: false, suggestion: null, prep: [] }));
 }

@@ -17,22 +17,28 @@ type ContextNote struct {
 	Tags   []string `json:"tags,omitempty"`
 }
 
-// chatSystemPrompt assembles the system prompt from the persona block and the
-// retrieved context notes, instructing the model to cite notes with
-// [[noteId]] markers so the client can render citation chips.
-func chatSystemPrompt(persona string, notes []ContextNote) string {
+// chatSystemPrompt assembles the system prompt from the persona block, the
+// retrieved context notes (cited with [[noteId]] markers so the client can
+// render citation chips), and — when the owner has connected Google Calendar —
+// their upcoming events as read-only schedule context.
+func chatSystemPrompt(persona string, notes []ContextNote, calendar []CalendarEvent) string {
 	var b strings.Builder
 	b.WriteString(strings.TrimSpace(persona))
-	if len(notes) == 0 {
-		return b.String()
+	if len(notes) > 0 {
+		b.WriteString("\n\nYou have a long-term memory vault. These memories were retrieved as relevant to the current conversation:\n")
+		for _, n := range notes {
+			fmt.Fprintf(&b, "\n[[%s]] %s\n%s\n", n.NoteID, n.Title, strings.TrimSpace(n.Body))
+		}
+		b.WriteString("\nWhen a memory informs your reply, cite it inline with its marker, e.g. [[")
+		b.WriteString(notes[0].NoteID)
+		b.WriteString("]]. Only cite memories listed above; never invent markers.")
 	}
-	b.WriteString("\n\nYou have a long-term memory vault. These memories were retrieved as relevant to the current conversation:\n")
-	for _, n := range notes {
-		fmt.Fprintf(&b, "\n[[%s]] %s\n%s\n", n.NoteID, n.Title, strings.TrimSpace(n.Body))
+	if len(calendar) > 0 {
+		b.WriteString("\n\nThe owner connected their calendar; these are their upcoming events. Use them as schedule context when relevant (do NOT cite them with [[ ]] markers — they are not vault notes):\n")
+		for _, ev := range calendar {
+			fmt.Fprintf(&b, "- %s (%s – %s)\n", ev.Title, ev.Start, ev.End)
+		}
 	}
-	b.WriteString("\nWhen a memory informs your reply, cite it inline with its marker, e.g. [[")
-	b.WriteString(notes[0].NoteID)
-	b.WriteString("]]. Only cite memories listed above; never invent markers.")
 	return b.String()
 }
 

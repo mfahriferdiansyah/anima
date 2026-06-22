@@ -28,6 +28,7 @@ vi.mock('./auth', () => ({
 
 import {
   requestSuggestions,
+  requestDraft,
   configureSuggest,
   clearSuggestion,
   acceptSuggestion,
@@ -191,5 +192,41 @@ describe('AE5 lifecycle', () => {
     expect(snap.draftRequested).toBe(false);
     // The rail starts empty — no scripted fixture history.
     expect(snap.events).toEqual([]);
+    expect(snap.prep).toEqual([]);
+  });
+});
+
+// ── requestDraft → "Nova suggests" prep checklist ─────────────────────────────
+
+describe('requestDraft → prep checklist', () => {
+  it('maps /suggest results into prep items with a grounded meta line', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        suggestions: [
+          { title: 'Order oat milk', body: 'You have the Hackathon ending at noon on Jun 25. Stock up so you can make coffee.', tags: [], links: [] },
+        ],
+      }),
+    }));
+
+    requestDraft({ persona: 'You are Nova.', context: [{ noteId: 'n1', title: 'T', body: 'B', tags: [] }] });
+
+    // requestDraft is fire-and-forget; wait for the async /suggest to settle.
+    await vi.waitFor(() => expect(agentTimeline.getSnapshot().prep).toHaveLength(1));
+    const [item] = agentTimeline.getSnapshot().prep;
+    expect(item.title).toBe('Order oat milk');
+    // meta = the first sentence of the body (the grounding "why/when").
+    expect(item.meta).toBe('You have the Hackathon ending at noon on Jun 25.');
+    expect(item.draft).toBe(true);
+    expect(agentTimeline.getSnapshot().draftRequested).toBe(false);
+  });
+
+  it('leaves prep empty when /suggest returns nothing (honest empty rail)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ suggestions: [] }) }));
+
+    requestDraft({ persona: 'You are Nova.', context: [] });
+
+    await vi.waitFor(() => expect(agentTimeline.getSnapshot().draftRequested).toBe(false));
+    expect(agentTimeline.getSnapshot().prep).toEqual([]);
   });
 });

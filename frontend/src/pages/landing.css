@@ -607,6 +607,14 @@
     0 30px 80px rgba(22, 24, 29, 0.22),
     0 0 0 1px rgba(22, 24, 29, 0.06);
 }
+/* The embedded app shell is `height: 100vh` in the real app, but in the preview
+   it must fill the fixed 16:10 card (ScreenPreview's 1440x900 frame) — then the
+   Home calendar/rail flex-stretch to fit it COMPACTLY (like the reference)
+   instead of expanding to their tall natural height. Preview-only: the real
+   logged-in app is never inside .lp-page. */
+.lp-page .shell {
+  height: 100%;
+}
 .lp-page-boot {
   position: absolute;
   inset: 0;

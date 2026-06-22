@@ -24,8 +24,13 @@ export interface LibFolder {
   items: LibItem[];
 }
 
+/** New/untagged items live in a real, editable "unsorted" inbox; fold the legacy "untitled" key into it. */
+function normalizeFolder(folder: string | undefined): string {
+  return folder && folder !== 'untitled' ? folder : 'unsorted';
+}
+
 export function noteFolder(note: Note): string {
-  return note.tags[0] ?? 'untitled';
+  return normalizeFolder(note.tags[0]);
 }
 
 export function buildLibrary(notes: Note[], canvases: CanvasDoc[], order: string[]): LibFolder[] {
@@ -35,8 +40,9 @@ export function buildLibrary(notes: Note[], canvases: CanvasDoc[], order: string
   };
   for (const key of order) ensure(key);
   for (const canvas of canvases) {
-    ensure(canvas.folder);
-    byFolder.get(canvas.folder)!.push({ kind: 'canvas', id: canvas.canvasId, title: canvas.title || 'Untitled canvas', folder: canvas.folder, canvas });
+    const cf = normalizeFolder(canvas.folder);
+    ensure(cf);
+    byFolder.get(cf)!.push({ kind: 'canvas', id: canvas.canvasId, title: canvas.title || 'Untitled canvas', folder: cf, canvas });
   }
   for (const note of notes) {
     const key = noteFolder(note);

@@ -197,6 +197,22 @@ describe('chat: runDistill driver', () => {
     expect(res.createdNoteIds).toEqual(['note-1']);
   });
 
+  it('routes the seal write through sealReceipt (the provenance toast) when wired', async () => {
+    let seenCount = -1;
+    const sealReceipt = vi.fn(async <T,>(count: number, run: () => Promise<T>) => {
+      seenCount = count;
+      return run(); // pass through, so the write still lands
+    });
+    const { deps, writeTurn, upsert } = makeDeps({ sealReceipt: sealReceipt as never });
+    const res = await runDistill(deps, false);
+
+    expect(sealReceipt).toHaveBeenCalledOnce();
+    expect(seenCount).toBe(1); // one candidate → one note in the batch
+    expect(writeTurn).toHaveBeenCalledOnce(); // the wrapped write still ran
+    expect(upsert).toHaveBeenCalledOnce();
+    expect(res.createdNoteIds).toEqual(['note-1']);
+  });
+
   it('no live vault (getDeps null): no-op', async () => {
     const { deps, writeTurn } = makeDeps({ getDeps: (() => null) as never });
     const res = await runDistill(deps, true);

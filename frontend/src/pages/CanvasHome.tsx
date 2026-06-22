@@ -77,11 +77,14 @@ function CanvasCard({
   return (
     <div className="pglib-cardwrap">
       <button type="button" className="pglib-card canvas" onClick={onOpen}>
-        {hasCoverRef ? (
-          <span className="pglib-cover">{cover ? <img src={cover} alt="" /> : null}</span>
-        ) : null}
+        {/* The cover slot is ALWAYS rendered so every card keeps the same height
+            with or without a banner: a resolved cover shows its image; a card with
+            no cover ref shows the grid glyph; a still-resolving cover holds the
+            gray slot (no glyph flash). */}
+        <span className="pglib-cover">
+          {cover ? <img src={cover} alt="" /> : hasCoverRef ? null : <span className="pglib-ic">{GRID_GLYPH}</span>}
+        </span>
         <span className="pglib-body">
-          {!hasCoverRef ? <span className="pglib-ic">{GRID_GLYPH}</span> : null}
           <span className="pglib-t">{canvas.title || 'Untitled canvas'}</span>
           <span className="pglib-x">{canvas.desc || 'A blank canvas to draw on.'}</span>
         </span>

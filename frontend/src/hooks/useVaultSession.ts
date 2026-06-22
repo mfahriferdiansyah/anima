@@ -6,14 +6,28 @@
  * and kicks off discovery; on disconnect it tears down. The engine's `generation`
  * guard makes an account switch mid-rebuild drop the stale (wrong-account) index.
  */
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { createContext, useContext, useEffect, useRef, useSyncExternalStore } from 'react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useWalletExecTx } from '../web3/walletExecTx';
 import { agentAddress, getOrCreateAgentKey } from '../web3/agentKey';
 import { configureSession, disconnect, sessionStore, startSession } from '../web3/session';
 import type { SessionState } from '../web3/session';
 
+/**
+ * Landing-preview session override. The landing's scaled, non-interactive app
+ * previews (ScreenPreview) render the REAL Home/Notes/AppShell, which bail to
+ * `null` unless the session is `ready` — and the public landing has no wallet,
+ * so the live session is `disconnected`. ScreenPreview wraps the embedded app in
+ * this context with a synthetic ready session so the previews render; the real
+ * /app has no provider, so it always sees the live engine. A preview instance
+ * also SKIPS the wiring effect below: `account` is null there, and the effect
+ * would otherwise call `disconnect()` → `vaultData.reset()`, wiping the seeded
+ * landing index out from under the previews.
+ */
+export const PreviewSessionContext = createContext<SessionState | null>(null);
+
 export function useVaultSession(): SessionState {
+  const preview = useContext(PreviewSessionContext);
   const account = useCurrentAccount();
   const { execTx } = useWalletExecTx();
   const state = useSyncExternalStore(sessionStore.subscribe, sessionStore.getSnapshot);
@@ -25,6 +39,7 @@ export function useVaultSession(): SessionState {
   execRef.current = execTx;
 
   useEffect(() => {
+    if (preview) return; // preview instances are pure reads — never touch the global session/vaultData
     let cancelled = false;
     if (!account) {
       disconnect();
@@ -45,9 +60,9 @@ export function useVaultSession(): SessionState {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- execTx is read via execRef; rerun only on account change
-  }, [account?.address]);
+  }, [account?.address, !!preview]);
 
-  return state;
+  return preview ?? state;
 }
 
 export {

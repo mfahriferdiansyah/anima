@@ -13,7 +13,7 @@
  * consent popup is the only piece that requires a browser; all other logic is
  * unit-testable via GIS global stubs.
  */
-import { useSyncExternalStore } from 'react';
+import { createContext, useContext, useSyncExternalStore } from 'react';
 import { createStore } from '../mocks/store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -238,11 +238,21 @@ export function getCalendarContext(): { title: string; start: string; end: strin
 }
 
 /**
+ * Landing-preview override (mirrors useVaultSession's PreviewSessionContext).
+ * The landing's decorative previews supply a seeded, connected calendar so the
+ * Home preview shows events; the real app has no provider and always reads the
+ * live store. Writes nothing global, so the logged-in app is untouched.
+ */
+export const PreviewCalendarContext = createContext<CalendarState | null>(null);
+
+/**
  * React hook: subscribe to CalendarState via useSyncExternalStore.
  * Thin wiring over the module store — the testable logic is in the functions above.
  */
 export function useCalendar(): CalendarState {
-  return useSyncExternalStore(calendarStore.subscribe, calendarStore.getSnapshot);
+  const preview = useContext(PreviewCalendarContext);
+  const live = useSyncExternalStore(calendarStore.subscribe, calendarStore.getSnapshot);
+  return preview ?? live;
 }
 
 /** Test-only reset — mirrors the pattern in auth.ts. */

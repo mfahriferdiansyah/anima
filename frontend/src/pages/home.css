@@ -23,6 +23,22 @@
 .pghpaper .pgcal-h { padding: 2px 18px 10px; }
 .pghpaper .pgcal-h .srcchip { font-size: 12px; }
 
+/* Refresh buttons — reuse the .pgcal-nav icon-button chrome (24x24) for both the
+   calendar sync and the Nova-suggests header. The base svg is 9px (prev/next
+   chevrons); the refresh glyph wants a touch more. .refreshing spins it. */
+.pghpaper .pgcal-nav.refresh svg { width: 13px; height: 13px; }
+.pghpaper .pgcal-nav.refresh:disabled { cursor: default; }
+.pghpaper .pgcal-nav.refresh.refreshing svg { animation: anima-spin .8s linear infinite; }
+@keyframes anima-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pghpaper .pgcal-nav.refresh.refreshing svg { animation: none; } }
+
+/* Nova-suggests panel header: keep the .railt text block, but lay it out as a row
+   so the refresh button sits top-right. Scoped to .railt-hdr so the "Recent notes"
+   railt (text only) is untouched. */
+.pghpaper .railt-hdr { display: flex; align-items: flex-start; gap: 10px; }
+.pghpaper .railt-hdr .railt-txt { flex: 1; min-width: 0; }
+.pghpaper .railt-hdr .pgcal-nav.refresh { flex: none; margin-top: 1px; }
+
 /* The calendar card stretches to match the rail and the month grid fills it, so
    there is no empty space below the month: both columns read as equal height. */
 /* fill the column to the bottom: the scroll area and column become flex columns

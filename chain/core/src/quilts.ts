@@ -98,6 +98,45 @@ export async function listVaultQuilts(deps: Pick<QuiltDeps, 'suiClient' | 'walle
   return mine;
 }
 
+/**
+ * Route a walrus client's blob-byte reads through the Walrus AGGREGATOR (one HTTP
+ * GET, reconstruction done server-side) instead of the SDK's direct storage-node
+ * read. The browser cannot read slivers directly: the per-storage-node sliver
+ * endpoints are not CORS-enabled, so `getBlob().files()` fans a primary-sliver
+ * request out across the WHOLE committee, every one fails, and `readOneQuilt`'s
+ * retry loop re-runs it — hundreds of canceled requests per quilt. (Node has no
+ * CORS, so its targeted-sliver read works in ~3 requests; this is browser-only.)
+ *
+ * Two overrides, applied once to the shared browser client:
+ *  - `readBlob` → fetch `{aggregator}/v1/blobs/{blobId}` (the same Seal-encrypted,
+ *    erasure-reconstructed bytes the storage nodes would yield).
+ *  - `getBlob` → eagerly prime that full blob the moment it is opened, so the
+ *    quilt reader serves its index + every patch from cached bytes and never
+ *    attempts a (CORS-doomed) secondary-sliver or blob-metadata committee read.
+ *
+ * The SDK still parses the quilt index + tags and the caller still Seal-decrypts
+ * each patch client-side, so the resurrection gate (Walrus + Seal alone, no DB)
+ * is unchanged — only the byte-transport for an already-public blob moves to the
+ * aggregator. Pure (injected `fetchImpl`) so it is node-testable without the wasm.
+ */
+export function installAggregatorReads(
+  walrus: any,
+  aggregatorUrl: string,
+  fetchImpl: typeof globalThis.fetch = globalThis.fetch,
+): void {
+  walrus.readBlob = async ({ blobId }: { blobId: string }): Promise<Uint8Array> => {
+    const res = await fetchImpl(`${aggregatorUrl}/v1/blobs/${encodeURIComponent(blobId)}`);
+    if (!res.ok) throw new Error(`aggregator read failed (${res.status})`);
+    return new Uint8Array(await res.arrayBuffer());
+  };
+  const origGetBlob = walrus.getBlob.bind(walrus);
+  walrus.getBlob = async (args: { blobId: string }): Promise<any> => {
+    const blob = await origGetBlob(args);
+    await blob.asFile().bytes(); // -> readBlob -> aggregator; cached on the blob reader
+    return blob;
+  };
+}
+
 /** Read + decrypt every note in the given quilt blob objects. */
 export async function readAll(
   deps: Pick<QuiltDeps, 'suiClient' | 'seal'>,

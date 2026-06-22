@@ -21,7 +21,7 @@
   transition: box-shadow 150ms ease, transform 150ms ease;
 }
 .pglib-card:hover { box-shadow: inset 0 0 0 1px rgba(22, 24, 29, .16), var(--shadow-softer); transform: translateY(-1px); }
-.pglib-cover { display: block; flex: none; height: 84px; background: var(--gray-100); }
+.pglib-cover { display: flex; align-items: center; justify-content: center; flex: none; height: 84px; background: var(--gray-100); }
 .pglib-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pglib-body { display: flex; flex-direction: column; gap: 6px; flex: 1; padding: 13px 15px 15px; }
 .pglib-ic { width: 18px; height: 18px; display: flex; color: rgba(22, 24, 29, .4); }

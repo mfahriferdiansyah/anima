@@ -34,6 +34,7 @@ import {
 import { createStore } from '../mocks/store';
 import { getSuiClient } from './suiClient';
 import { vaultData } from './vaultData';
+import { runWithReceipt, objectProvenanceUrl, txProvenanceUrl, digestOf } from './onchainToast';
 import { loadIndexCache, saveIndexCache, clearIndexCache, enableIndexCache } from './indexCache';
 
 // 0.3 SUI: clears ensureAgentWal's 0.25 SUI swap floor AND leaves ≥0.1 SUI gas
@@ -304,8 +305,15 @@ export async function completeOnboarding(name: string): Promise<void> {
     let core = await discoverVault(suiClient, owner);
     if (!core) {
       const tx = buildOnboardingTx({ name: vaultName, firstAgent: agentAddress, fundAgentMist: FUND_AGENT_MIST });
-      const res = await execTx(tx); // wallet signature
-      const vaultId = vaultIdFromCreateResult(res);
+      // The created Vault object IS the provenance — receipt links to it on-chain.
+      const vaultId = await runWithReceipt(
+        { key: 'onboarding', title: vaultName, labels: { pending: 'Creating vault', success: 'Vault created' } },
+        async () => {
+          const res = await execTx(tx); // wallet signature
+          const id = vaultIdFromCreateResult(res);
+          return { result: id, provenanceUrl: objectProvenanceUrl(id) };
+        },
+      );
       core = (await discoverVault(suiClient, owner)) ?? { vaultId, owner, name: vaultName, agents: [agentAddress] };
     }
 
@@ -334,7 +342,15 @@ export async function pair(): Promise<void> {
   try {
     const suiClient = getSuiClient();
     const tx = buildRegisterAgentTx({ vaultId: vault.vaultId, agent: agentAddress, fundAgentMist: FUND_AGENT_MIST });
-    await execTx(tx); // wallet signature
+    // Registering this device on the vault allowlist — the tx is the provenance.
+    await runWithReceipt(
+      { key: 'pair', title: vault.name || COMPANION_DEFAULT, labels: { pending: 'Pairing device', success: 'Device paired' } },
+      async () => {
+        const res = await execTx(tx); // wallet signature
+        const digest = digestOf(res);
+        return { result: res, provenanceUrl: digest ? txProvenanceUrl(digest) : '' };
+      },
+    );
     await ensureAgentWal(suiClient, agentSigner);
     const refreshed = await discoverVault(suiClient, vault.owner);
     await rebuildAndReady(refreshed ? toVaultInfo(refreshed) : { ...vault, agents: [...vault.agents, agentAddress] });

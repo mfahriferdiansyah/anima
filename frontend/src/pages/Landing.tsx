@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ConnectModal, useCurrentAccount } from '@mysten/dapp-kit';
 import { BRAND_NAME } from '@/brand';
-import { useVaultSession } from '@/hooks/useVaultSession';
-import type { ReadySession } from '@/app/AppShell';
+import type { PreviewSeed } from './landingSeed';
 import './landing.css';
 
 // The real-app previews (AppShell + every app page) are the heaviest thing on
@@ -528,13 +528,13 @@ function CanvasMock() {
 
 /** One beat's visual — a live page preview, the canvas mock, the memory
  *  pipeline, or the agents hub. Shared by the pinned deck and the static list. */
-function BeatVisual({ b, ready }: { b: Beat; ready: ReadySession | null }) {
+function BeatVisual({ b, seed }: { b: Beat; seed: PreviewSeed | null }) {
   if (b.kind === 'page') {
     return (
       <div className="lp-page">
-        {ready ? (
+        {seed ? (
           <Suspense fallback={<div className="lp-page-boot" />}>
-            <ScreenPreview route={b.route} session={ready} />
+            <ScreenPreview route={b.route} seed={seed} />
           </Suspense>
         ) : (
           <div className="lp-page-boot" />
@@ -703,9 +703,10 @@ function StackSection({ staticMode }: { staticMode: boolean }) {
   // Seed the previews from the landing's OWN frozen seed only as the deck nears
   // view — so the initial load never mounts the real app (kept off the critical
   // path) and the app chunk + seed download lazily. Mobile uses light components
-  // and needs no session at all. The landing never touches the app seed, so it
-  // survives the seed changing or moving server-side.
-  const session = useVaultSession();
+  // and needs no session at all. The previews render the real app pages, which
+  // bail unless the session is ready, so the public landing (no wallet) drives
+  // them off a synthetic seeded session instead of the live, disconnected one.
+  const [seed, setSeed] = useState<PreviewSeed | null>(null);
   useEffect(() => {
     if (staticMode) return;
     const el = sectionRef.current;
@@ -718,10 +719,7 @@ function StackSection({ staticMode }: { staticMode: boolean }) {
         // actually fire once that overlap begins on scroll.
         if (entry.intersectionRatio <= 0) return;
         io.disconnect();
-        // Live preview seeding was a mock-session bypass (removed in the Tier-1
-        // session migration). The embedded preview now reflects the real session,
-        // which is disconnected on the public landing; restoring a seeded preview
-        // belongs to the separate Tier-2 landing track.
+        void import('./landingSeed').then(({ seedLandingVault }) => setSeed(seedLandingVault()));
       },
       // rootMargin 0 (a positive bottom margin intersects at the fold = mounts at
       // load); threshold 0.01 gives a fire point as soon as real overlap starts,
@@ -732,7 +730,6 @@ function StackSection({ staticMode }: { staticMode: boolean }) {
     io.observe(el);
     return () => io.disconnect();
   }, [staticMode]);
-  const ready: ReadySession | null = session.phase === 'ready' ? session : null;
 
   useEffect(() => {
     if (staticMode) return;
@@ -875,7 +872,7 @@ function StackSection({ staticMode }: { staticMode: boolean }) {
               }}
               style={{ zIndex: i + 1 } as CSSProperties}
             >
-              <BeatVisual b={b} ready={ready} />
+              <BeatVisual b={b} seed={seed} />
             </div>
           ))}
         </div>
@@ -908,7 +905,30 @@ export function Landing() {
   const navigate = useNavigate();
   const small = useMediaQuery('(max-width: 860px)');
   const reduced = useMediaQuery('(prefers-reduced-motion: reduce)');
-  const connect = () => navigate('/app');
+
+  // "Connect wallet" opens a real wallet picker, then enters the app. A wallet
+  // that's already connected (autoConnect reconnected it) skips the picker and
+  // enters straight away. `pendingEnter` bridges the async connect: the modal
+  // resolves by setting `account`, and only THEN do we navigate to /app — so a
+  // brand-new wallet on this browser actually gets in instead of bouncing.
+  const account = useCurrentAccount();
+  const [connectOpen, setConnectOpen] = useState(false);
+  const pendingEnter = useRef(false);
+  const connect = () => {
+    if (account) {
+      navigate('/app');
+      return;
+    }
+    pendingEnter.current = true;
+    setConnectOpen(true);
+  };
+  useEffect(() => {
+    if (account && pendingEnter.current) {
+      pendingEnter.current = false;
+      setConnectOpen(false);
+      navigate('/app');
+    }
+  }, [account, navigate]);
 
   // Fade the hero's bottom marquee out as the hero scrolls away, so it never
   // rises to the top edge and grazes the fixed navbar pill.
@@ -972,6 +992,15 @@ export function Landing() {
       <Pricing onConnect={connect} />
 
       <ClosingCTA onConnect={connect} />
+
+      {/* Controlled wallet picker. The trigger is hidden because the page's own
+          "Connect wallet" buttons drive `connectOpen`; this just supplies dapp-kit's
+          modal + connect flow. */}
+      <ConnectModal
+        open={connectOpen}
+        onOpenChange={setConnectOpen}
+        trigger={<span style={{ display: 'none' }} aria-hidden="true" />}
+      />
     </div>
   );
 }

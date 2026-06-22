@@ -6,7 +6,7 @@ export { chainConfig, createSuiClient, nodeFetchWithLongConnect } from './config
 export { SealVault, identityForOwner, NoAccessError } from './seal.js';
 export {
   writeTurn, readAll, listVaultQuilts, forgetNotes,
-  buildForgetPlan, buildDeleteQuiltsTx, type QuiltDeps,
+  buildForgetPlan, buildDeleteQuiltsTx, installAggregatorReads, type QuiltDeps,
 } from './quilts.js';
 export { VaultIndex, isReservedNote } from './vaultIndex.js';
 export * from './funding.js';

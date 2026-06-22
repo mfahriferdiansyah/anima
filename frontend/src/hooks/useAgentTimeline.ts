@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { createContext, useContext, useEffect, useSyncExternalStore } from 'react';
 import { useCurrentAccount, useSignPersonalMessage } from '@mysten/dapp-kit';
 import { createNote, saveNote } from './useVault';
 import { sessionStore } from '../web3/session';
@@ -14,8 +14,18 @@ import {
 import { vaultData } from '../web3/vaultData';
 import { getCalendarContext } from '../web3/calendar';
 
+/**
+ * Landing-preview override (mirrors useVaultSession's PreviewSessionContext).
+ * The landing's decorative previews supply a seeded timeline so the Home
+ * suggestion rail reads populated; the real app has no provider and reads the
+ * live store. The wiring effect below already no-ops on `!account` (the preview
+ * has none), so it needs no skip-guard.
+ */
+export const PreviewTimelineContext = createContext<TimelineState | null>(null);
+
 /** Real Nova suggestion activity: Home activity line, Notes suggestions, canvas materialize. */
 export function useAgentTimeline(): TimelineState {
+  const preview = useContext(PreviewTimelineContext);
   const account = useCurrentAccount();
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
 
@@ -29,7 +39,8 @@ export function useAgentTimeline(): TimelineState {
     });
   }, [account?.address, signPersonalMessage]);
 
-  return useSyncExternalStore(agentTimeline.subscribe, agentTimeline.getSnapshot);
+  const live = useSyncExternalStore(agentTimeline.subscribe, agentTimeline.getSnapshot);
+  return preview ?? live;
 }
 
 /** Home quick-start: ask Nova for a draft, using live vault notes + calendar as context. */

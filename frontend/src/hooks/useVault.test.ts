@@ -60,7 +60,7 @@ beforeEach(() => {
   vi.mocked(listVaultCovers).mockResolvedValue([]);
   vi.mocked(readAll).mockResolvedValue([]);
   vi.mocked(buildDeleteQuiltsTx).mockResolvedValue({ kind: 'delete-tx' } as never);
-  vi.mocked(uploadCover).mockResolvedValue({ blobId: 'cover-blob-1', ref: 'seal:cover-blob-1' });
+  vi.mocked(uploadCover).mockResolvedValue({ blobId: 'cover-blob-1', ref: 'seal:cover-blob-1', blobObjectId: 'cover-obj-1' });
   configureForgetExec(vi.fn().mockResolvedValue(undefined));
 });
 
@@ -95,15 +95,33 @@ describe('hooks/useVault saveNote', () => {
     expect(vaultData.getSnapshot().index?.get(n.noteId)?.location.blobObjectId).toBe('0xBLOB');
   });
 
-  it('low balance surfaces the banner with NO write-state, and never calls writeTurn', async () => {
+  it('low balance shows a visible low-balance toast (not a silent return) and never calls writeTurn', async () => {
     const n = seedNote();
     vi.mocked(preflight).mockResolvedValue({ sui: 0n, wal: 0n, ok: false, needsSui: false, needsWal: true });
 
     saveNote(n.noteId, { body: 'edited' });
     await flush();
 
+    // The chat banner still fires, AND a visible global toast now carries the
+    // reason + the top-up affordance, so the block is never silent.
     expect(vi.mocked(triggerLowBalance)).toHaveBeenCalledOnce();
-    expect(vaultData.getSnapshot().writeStates[n.noteId]).toBeUndefined();
+    expect(vaultData.getSnapshot().writeStates[n.noteId]).toEqual({ phase: 'low-balance', needsSui: false, needsWal: true });
+    const events = vaultData.getSnapshot().writeEvents;
+    expect(events).toHaveLength(1);
+    expect(events[0].state).toEqual({ phase: 'low-balance', needsSui: false, needsWal: true });
+    expect(vi.mocked(writeTurn)).not.toHaveBeenCalled();
+  });
+
+  it('a second blocked save does not stack a duplicate low-balance toast', async () => {
+    const n = seedNote();
+    vi.mocked(preflight).mockResolvedValue({ sui: 0n, wal: 0n, ok: false, needsSui: true, needsWal: true });
+
+    saveNote(n.noteId, { body: 'one' });
+    await flush();
+    saveNote(n.noteId, { body: 'two' });
+    await flush();
+
+    expect(vaultData.getSnapshot().writeEvents).toHaveLength(1);
     expect(vi.mocked(writeTurn)).not.toHaveBeenCalled();
   });
 
@@ -187,7 +205,7 @@ describe('hooks/useVault saveNote', () => {
       quiltBlobId: 'qb', blobObjectId: '0xCOVER', transferDigest: '0xd',
       perNote: [{ noteId: n.noteId, version: 2, quiltPatchId: 'p1' }],
     } as never);
-    vi.mocked(uploadCover).mockResolvedValue({ blobId: 'cover-blob-x', ref: 'seal:cover-blob-x' });
+    vi.mocked(uploadCover).mockResolvedValue({ blobId: 'cover-blob-x', ref: 'seal:cover-blob-x', blobObjectId: 'cover-obj-x' });
 
     // valid small data URL (3 bytes → well under 2MB)
     saveNote(n.noteId, { image: 'data:image/png;base64,AAAA' });

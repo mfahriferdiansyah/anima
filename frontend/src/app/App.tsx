@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, useNavigate } from 'react-router-dom';
 import { WriteStateCard } from '@/components/WriteStateCard';
 import { dismissWriteEvent, retryWrite, useWriteEvents } from '@/hooks/useVault';
 import type { WriteEvent } from '@/hooks/useVault';
@@ -7,10 +7,13 @@ import { AppRoutes } from './routes';
 import './shell.css';
 
 const VISIBLE_TOASTS = 3;
-const CERTIFIED_DISMISS_MS = 4000;
+// Long enough to read the sealed-blob id and click "View provenance" before it
+// auto-dismisses — even when a couple of saves land back-to-back.
+const CERTIFIED_DISMISS_MS = 8000;
 
 function WriteEventToast({ event }: { event: WriteEvent }) {
-  const { id, noteId, noteTitle, state } = event;
+  const { id, noteId, noteTitle, state, labels } = event;
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Certified receipts auto-dismiss (kit 4s spec); in-flight states stay
@@ -25,7 +28,24 @@ function WriteEventToast({ event }: { event: WriteEvent }) {
     retryWrite(noteId);
   };
 
-  return <WriteStateCard state={state} noteTitle={noteTitle} onRetry={retry} />;
+  // Low-balance toast → dismiss it and take the user to Settings → Balances,
+  // where the (now real) Top up button refills the agent.
+  const topUp = () => {
+    dismissWriteEvent(id);
+    navigate('/settings');
+  };
+
+  // Non-note receipts (labels set) own their failure handling, so they offer no
+  // retry/top-up affordance — those belong to the note-save lifecycle.
+  return (
+    <WriteStateCard
+      state={state}
+      noteTitle={noteTitle}
+      labels={labels}
+      onRetry={labels ? undefined : retry}
+      onTopUp={labels ? undefined : topUp}
+    />
+  );
 }
 
 /** Global write-state stack, bottom-left so saves are visible from any surface (R12). */

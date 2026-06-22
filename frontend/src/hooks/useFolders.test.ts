@@ -20,7 +20,8 @@ import { addFolder, moveFolder, deleteFolder, getFoldersForTest, resetFoldersFor
 
 const DEPS = { suiClient: {}, seal: {}, agentSigner: { toSuiAddress: () => '0xa' }, walletAddress: '0xo', vaultId: '0xv' } as never;
 const RES = { perNote: [{ noteId: 'x', quiltPatchId: 'p', quiltBlobId: 'qb', blobObjectId: 'bo' }], quiltBlobId: 'qb', blobObjectId: 'bo' };
-const DEFAULT = ['research', 'trips', 'work', 'reading', 'product'];
+// 'unsorted' is the always-present inbox where new notes/canvases land (appended if absent).
+const DEFAULT = ['research', 'trips', 'work', 'reading', 'product', 'unsorted'];
 const flush = () => new Promise((r) => setTimeout(r, 0));
 /** The folders array written to the latest persisted reserved note. */
 const lastPersisted = (): string[] => JSON.parse(vi.mocked(writeTurn).mock.calls.at(-1)![1][0].body);
@@ -55,16 +56,16 @@ it('rejects a reserved-prefix folder name and deduplicates existing names', () =
 
 it('moveFolder reorders and persists', async () => {
   moveFolder('trips', -1); // trips moves above research
-  expect(getFoldersForTest()).toEqual(['trips', 'research', 'work', 'reading', 'product']);
+  expect(getFoldersForTest()).toEqual(['trips', 'research', 'work', 'reading', 'product', 'unsorted']);
   await flush();
-  expect(lastPersisted()).toEqual(['trips', 'research', 'work', 'reading', 'product']);
+  expect(lastPersisted()).toEqual(['trips', 'research', 'work', 'reading', 'product', 'unsorted']);
 });
 
 it('deleteFolder removes a folder from the order', async () => {
   deleteFolder('reading');
-  expect(getFoldersForTest()).toEqual(['research', 'trips', 'work', 'product']);
+  expect(getFoldersForTest()).toEqual(['research', 'trips', 'work', 'product', 'unsorted']);
   await flush();
-  expect(lastPersisted()).toEqual(['research', 'trips', 'work', 'product']);
+  expect(lastPersisted()).toEqual(['research', 'trips', 'work', 'product', 'unsorted']);
 });
 
 it('an empty folder added then "reloaded" (rebuild → fresh index) survives', () => {
@@ -72,5 +73,5 @@ it('an empty folder added then "reloaded" (rebuild → fresh index) survives', (
   const note = newNote({ title: 'app:folders', body: JSON.stringify(['research', 'someday']), author: 'anima', tags: [appStateTag('folders')] });
   const rebuilt = VaultIndex.fromEntries([{ note, location: { quiltPatchId: '', quiltBlobId: '', blobObjectId: 'bo' } }]);
   vaultData.publish(rebuilt); // index ref swaps → folders reseed from the durable note
-  expect(getFoldersForTest()).toEqual(['research', 'someday']);
+  expect(getFoldersForTest()).toEqual(['research', 'someday', 'unsorted']); // inbox appended
 });
