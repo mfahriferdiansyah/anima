@@ -5,10 +5,36 @@
    the board chrome (.pgcv, .pgcv-tools, cards); this file only adds drawings.
    ========================================================================== */
 
-/* inline-editable board title in the crumb (canvas auto-saves, so there is no Save button) */
-.pgcrumb-title { outline: none; cursor: text; border-radius: 5px; padding: 1px 5px; margin: 0 -5px; transition: background 120ms ease; }
+/* Prominent, obviously-editable board title (canvas auto-saves, so there is no Save
+   button). "Canvas /" is a muted prefix; the title itself reads as a real field with
+   a hover/focus background and a rename pencil that appears on hover. */
+.pgcrumb-canvas { display: inline-flex; align-items: center; gap: 2px; }
+.pgcrumb-pre { color: rgba(22, 24, 29, .42); font-weight: 500; margin-right: 4px; }
+.pgcrumb-title {
+  outline: none;
+  cursor: text;
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--ink-900, #16181d);
+  border-radius: 6px;
+  padding: 2px 7px;
+  margin: 0 -3px;
+  border: 1px solid transparent;
+  transition: background 120ms ease, border-color 120ms ease;
+}
 .pgcrumb-title:hover { background: rgba(22, 24, 29, .05); }
-.pgcrumb-title:focus { background: rgba(22, 24, 29, .08); }
+.pgcrumb-title:focus { background: #fff; border-color: rgba(47, 107, 255, .55); box-shadow: 0 0 0 3px rgba(47, 107, 255, .12); }
+.pgcrumb-title:empty::before { content: 'Untitled canvas'; color: rgba(22, 24, 29, .35); }
+/* the rename affordance: faint until the title row is hovered, so it reads as editable */
+.pgcrumb-edit {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0; border: none; border-radius: 6px;
+  background: transparent; color: rgba(22, 24, 29, .4); cursor: pointer;
+  opacity: 0; transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+}
+.pgcrumb-edit svg { width: 14px; height: 14px; }
+.pgcrumb-canvas:hover .pgcrumb-edit { opacity: 1; }
+.pgcrumb-edit:hover { background: rgba(22, 24, 29, .06); color: var(--ink-900, #16181d); }
 
 /* cover picker on the board top bar; the chosen cover shows on the gallery card */
 .pgcv-cover-wrap { position: relative; }

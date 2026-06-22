@@ -248,6 +248,8 @@ export function Canvas() {
 
   // Infinite-canvas camera: the world layer is translated by this offset.
   const viewportRef = useRef<HTMLDivElement>(null);
+  // The editable board-title field (focused by the rename affordance).
+  const titleRef = useRef<HTMLElement>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const panRef = useRef<PanState | null>(null);
   const [panning, setPanning] = useState(false);
@@ -673,13 +675,16 @@ export function Canvas() {
   return (
     <div className="pged">
       <div className="pged-top">
-        <span className="pgcrumb">
-          Canvas /{' '}
+        <span className="pgcrumb pgcrumb-canvas">
+          <span className="pgcrumb-pre">Canvas /</span>
           <b
+            ref={titleRef}
             className="pgcrumb-title"
             contentEditable
             suppressContentEditableWarning
             spellCheck={false}
+            role="textbox"
+            aria-label="Canvas title"
             title="Rename this board"
             onBlur={(event) => {
               const value = event.currentTarget.textContent?.trim() ?? '';
@@ -699,6 +704,29 @@ export function Canvas() {
           >
             {boardTitle}
           </b>
+          <button
+            type="button"
+            className="pgcrumb-edit"
+            aria-label="Rename board"
+            title="Rename this board"
+            onClick={() => {
+              const el = titleRef.current;
+              if (!el) return;
+              el.focus();
+              // place the caret at the end of the title
+              const range = document.createRange();
+              range.selectNodeContents(el);
+              range.collapse(false);
+              const sel = window.getSelection();
+              sel?.removeAllRanges();
+              sel?.addRange(range);
+            }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            </svg>
+          </button>
         </span>
         <span className="sp" />
         {isShared && connection !== 'live' ? (
