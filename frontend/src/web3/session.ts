@@ -180,23 +180,56 @@ async function rebuildAndReady(vault: VaultInfo): Promise<void> {
   const total = blobIds.length;
   store.update(() => ({ phase: 'rebuilding', done: 0, total, error: null }));
 
-  const entries = [];
-  let done = 0;
-  for (const blobId of blobIds) {
+  // Warm the Seal key cache once before reading. Every note shares the vault
+  // identity, so this single fetchKeys lets all quilts below decrypt from cache
+  // instead of each racing a key-server round-trip (which rate-limits). It also
+  // surfaces a not-allowlisted device as one clear error instead of N decrypt
+  // failures.
+  // Skip when the vault is empty (a fresh onboard): there is nothing to decrypt,
+  // so don't gate "ready" on a key fetch that the just-allowlisted device's node
+  // may not have indexed yet.
+  if (total > 0) {
     try {
-      const part = await readAll({ suiClient, seal }, [blobId]);
-      if (gen !== generation) return;
-      entries.push(...part);
-      done += 1;
-      store.update(() => ({ phase: 'rebuilding', done, total, error: null }));
+      await seal.prewarmKeys();
     } catch {
       if (gen !== generation) return;
-      store.update(() => ({ phase: 'rebuilding', done, total, error: `Could not decrypt quilt ${done + 1} of ${total}. Retry when the connection settles.` }));
+      store.update(() => ({ phase: 'rebuilding', done: 0, total, error: 'Could not unlock the vault keys. Retry when the connection settles.' }));
       return;
     }
+    if (gen !== generation) return;
   }
 
-  const index = VaultIndex.fromEntries(entries);
+  // Read the quilts with a bounded concurrency: 25 sequential Walrus reads is
+  // the slow part of resurrection, and the decrypts are local now that keys are
+  // warmed. Results are kept in blob order; the first failure stops the batch.
+  const CONCURRENCY = 6;
+  const results: Awaited<ReturnType<typeof readAll>>[] = new Array(blobIds.length);
+  let done = 0;
+  let failed = false;
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    while (!failed && gen === generation) {
+      const i = cursor++;
+      if (i >= blobIds.length) return;
+      try {
+        results[i] = await readAll({ suiClient, seal }, [blobIds[i]]);
+        if (failed || gen !== generation) return;
+        done += 1;
+        store.update(() => ({ phase: 'rebuilding', done, total, error: null }));
+      } catch {
+        failed = true;
+        return;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, blobIds.length) }, worker));
+  if (gen !== generation) return;
+  if (failed) {
+    store.update(() => ({ phase: 'rebuilding', done, total, error: `Could not decrypt a quilt (${done} of ${total} done). Retry when the connection settles.` }));
+    return;
+  }
+
+  const index = VaultIndex.fromEntries(results.flat());
   if (gen !== generation) return;
   vaultData.publish(index);
   saveIndexCache(vault.vaultId, index);
