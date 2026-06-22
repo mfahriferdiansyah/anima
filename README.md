@@ -24,14 +24,27 @@ The notes and work your AI agents accumulate are valuable, and on a normal SaaS 
 
 ```
 frontend/   React + Vite + TS: wallet, chat, notes, canvas
-backend/    Go: chat API, LLM orchestration (OpenRouter default, modular providers)
+backend/    Go: stateless chat API + LLM orchestration (OpenRouter default, modular providers)
 chain/      TS workspace
   core/       shared Walrus (quilts) + Seal + vault logic
-  service/    HTTP chain-service
   mcp/        anima-mcp, stdio MCP server, runs user-side (npx)
 contract/   Move: Seal access policy (the only on-chain code)
-docs/       requirements, plans, demo script, positioning
+docs-site/  public documentation (Fumadocs)
+scripts/    pairing, funding, and ops helpers
 ```
+
+## Run it
+
+Prereqs: Node + [pnpm](https://pnpm.io); Go 1.25+ for the chat backend.
+
+```sh
+pnpm install
+pnpm dev          # frontend on http://localhost:5173
+pnpm build        # production build
+pnpm test:frontend && pnpm test:chain   # tests
+```
+
+The backend is a stateless Go proxy — see [`backend/README.md`](backend/README.md) for env vars and `go run ./cmd/api`. Full setup, self-hosting, and the MCP/agent quickstart live in [`docs-site/`](docs-site/).
 
 ## Status
 

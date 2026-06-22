@@ -34,3 +34,6 @@ contract/Published.toml
 frontend/.shots/
 .shots/
 frontend/src/pages/01-home-light.png
+
+# compiled go binary (build artifact, do not commit)
+backend/api
