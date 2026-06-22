@@ -6,7 +6,7 @@
  * guard against dapp-kit's default rawEffects-only result.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { makeExecuteOverride } from './walletExecTx';
+import { makeExecuteOverride, txFailure } from './walletExecTx';
 import { vaultIdFromCreateResult } from '../../../chain/core/src/index.js';
 
 describe('web3/walletExecTx makeExecuteOverride', () => {
@@ -49,5 +49,33 @@ describe('web3/walletExecTx makeExecuteOverride', () => {
     const override = makeExecuteOverride({ executeTransactionBlock });
 
     await expect(override({ bytes: 'b64', signature: 'sig' })).rejects.toThrow('rpc boom');
+  });
+});
+
+describe('web3/walletExecTx txFailure', () => {
+  it('returns null for a successful tx', () => {
+    expect(txFailure({ digest: '0xd', effects: { status: { status: 'success' } } })).toBeNull();
+  });
+
+  it('returns digest + on-chain reason for a committed-but-failed tx', () => {
+    expect(txFailure({ digest: '0xfail', effects: { status: { status: 'failure', error: 'MoveAbort(x, 3)' } } })).toEqual({
+      digest: '0xfail',
+      reason: 'MoveAbort(x, 3)',
+    });
+  });
+
+  it('falls back to a generic reason when the failure carries no error string', () => {
+    expect(txFailure({ digest: '0xd', effects: { status: { status: 'failure' } } })).toEqual({
+      digest: '0xd',
+      reason: 'Transaction failed on-chain',
+    });
+  });
+
+  it('fails OPEN (null) when status is missing/unreadable — never fabricates a failure', () => {
+    expect(txFailure({ digest: '0xd' })).toBeNull();
+    expect(txFailure({ digest: '0xd', effects: {} })).toBeNull();
+    expect(txFailure(null)).toBeNull();
+    expect(txFailure(undefined)).toBeNull();
+    expect(txFailure('nope')).toBeNull();
   });
 });

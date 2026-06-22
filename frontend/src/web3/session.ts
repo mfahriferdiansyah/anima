@@ -28,7 +28,9 @@ import {
   vaultIdFromCreateResult,
   ensureAgentWal,
   preflight,
+  suiBalance,
   syncNewQuilts,
+  NoAccessError,
   type QuiltDeps,
 } from '../../../chain/core/src/index.js';
 import { createStore } from '../mocks/store';
@@ -41,6 +43,35 @@ import { loadIndexCache, saveIndexCache, clearIndexCache, enableIndexCache } fro
 // after the swap, so a freshly-onboarded agent has WAL and can write (the 0.2
 // default would leave it with 0 WAL and a "ready" that can't persist).
 const FUND_AGENT_MIST = 300_000_000n;
+
+// The pairing/onboarding tx splits FUND_AGENT_MIST out of the OWNER wallet to
+// fund the device agent AND pays its own gas, so the wallet must hold the
+// funding PLUS a gas reserve — otherwise the wallet approval bounces with a
+// cryptic gas error and the user is left blind. We gate on funding + reserve.
+const FUND_GAS_RESERVE_MIST = 50_000_000n; // ~0.05 SUI headroom for the funding tx's gas
+const MIN_OWNER_FUND_MIST = FUND_AGENT_MIST + FUND_GAS_RESERVE_MIST; // 0.35 SUI
+
+/** MIST → SUI, trimmed for display (300_000_000n → "0.3"). */
+function formatSui(mist: bigint): string {
+  return (Number(mist) / 1e9).toLocaleString('en-US', { maximumFractionDigits: 3 });
+}
+
+/**
+ * PURE affordability check for the pairing/onboarding approval (node-testable,
+ * mirrors `deriveStartPhase`). The owner wallet must hold the agent funding plus
+ * a gas reserve or the wallet signature fails; returns a ready-to-show top-up
+ * message naming what it costs, what the wallet holds, and what to do.
+ */
+export function pairingAffordability(balanceMist: bigint): { ok: boolean; message: string | null } {
+  if (balanceMist >= MIN_OWNER_FUND_MIST) return { ok: true, message: null };
+  return {
+    ok: false,
+    message:
+      `Pairing funds this device with ${formatSui(FUND_AGENT_MIST)} SUI and needs a little gas on top — ` +
+      `about ${formatSui(MIN_OWNER_FUND_MIST)} SUI total. Your wallet holds ${formatSui(balanceMist)} SUI. ` +
+      `Add SUI to this wallet, then retry.`,
+  };
+}
 
 export type OnboardingStep = 'creating' | 'preparing' | 'done';
 
@@ -134,6 +165,19 @@ export function deriveStartPhase(
 const isDeclined = (e: unknown): boolean => {
   const m = (e instanceof Error ? e.message : String(e)).toLowerCase();
   return m.includes('reject') || m.includes('declin') || m.includes('denied') || m.includes('cancel');
+};
+
+/** Best-effort label for a wallet/tx failure that is really an out-of-SUI gas error. */
+const isInsufficientFunds = (e: unknown): boolean => {
+  const m = (e instanceof Error ? e.message : String(e)).toLowerCase();
+  return (
+    m.includes('insufficient') ||
+    m.includes('gas balance') ||
+    m.includes('no valid gas') ||
+    m.includes('balance too low') ||
+    m.includes('can not find gas') ||
+    m.includes('gas budget')
+  );
 };
 
 /**
@@ -250,8 +294,27 @@ async function backgroundSync(vault: VaultInfo, index: VaultIndex, gen: number):
     if (gen !== generation) return;
     if (added.length > 0) vaultData.publish(index);
     saveIndexCache(vault.vaultId, index);
-  } catch {
-    // offline / flaky key servers — keep the cached view, try again next load
+  } catch (e) {
+    if (gen !== generation) return;
+    // A TERMINAL NoAccessError is the one error we must NOT swallow: a quilt the
+    // device can no longer decrypt means this agent lost access (the owner revoked
+    // it, or it was never allowlisted on a quorum of key servers). Silently keeping
+    // the cached view would show stale, now-unauthorized notes as if live. Drop the
+    // cache (also stops the auto-cache subscription) and send the device back to
+    // pairing — pair() re-runs seal_approve, so re-authorization is the recovery.
+    // Every OTHER error (offline, one flaky key server, transient indexing lag —
+    // which is tolerated below the throw and short-circuits when nothing is new)
+    // keeps the cached view and retries next load, which is the whole point of the cache.
+    if (e instanceof NoAccessError && wired) {
+      clearIndexCache();
+      store.update(() => ({
+        phase: 'needs-pairing',
+        vault,
+        agent: { name: vault.name || COMPANION_DEFAULT, address: wired.agentAddress },
+        error: 'This device’s access to the vault was revoked. Pair again to restore it.',
+      }));
+    }
+    // else: offline / flaky key servers — keep the cached view, try again next load
   }
 }
 
@@ -337,10 +400,27 @@ export async function completeOnboarding(name: string): Promise<void> {
     const suiClient = getSuiClient();
     let core = await discoverVault(suiClient, owner);
     if (!core) {
+      // Same fund-from-wallet gate as pairing: creating the vault funds the first
+      // agent with 0.3 SUI and pays gas, so a low wallet fails the create
+      // signature with a cryptic gas error. Preflight and prompt instead of
+      // letting the popup bounce. A balance-read blip is non-fatal.
+      try {
+        const balance = await suiBalance(suiClient, owner);
+        if (!pairingAffordability(balance).ok) {
+          setError(
+            `Creating ${vaultName} funds it with ${formatSui(FUND_AGENT_MIST)} SUI and needs a little gas — ` +
+              `about ${formatSui(MIN_OWNER_FUND_MIST)} SUI total. Your wallet holds ${formatSui(balance)} SUI. ` +
+              `Add SUI to this wallet, then retry.`,
+          );
+          return;
+        }
+      } catch {
+        /* balance read failed — don't block; the create tx is the judge */
+      }
       const tx = buildOnboardingTx({ name: vaultName, firstAgent: agentAddress, fundAgentMist: FUND_AGENT_MIST });
       // The created Vault object IS the provenance — receipt links to it on-chain.
       const vaultId = await runWithReceipt(
-        { key: 'onboarding', title: vaultName, labels: { pending: 'Creating vault', success: 'Vault created' } },
+        { key: 'onboarding', title: vaultName, labels: { pending: 'Creating vault', success: 'Vault created', fail: 'Vault not created' } },
         async () => {
           const res = await execTx(tx); // wallet signature
           const id = vaultIdFromCreateResult(res);
@@ -362,7 +442,13 @@ export async function completeOnboarding(name: string): Promise<void> {
     setStep('done');
     await rebuildAndReady(toVaultInfo(core));
   } catch (e) {
-    setError(isDeclined(e) ? 'Signature request was declined. Nothing was created, sign again when you are ready.' : `Onboarding failed: ${e instanceof Error ? e.message : String(e)}. Retry when ready.`);
+    setError(
+      isDeclined(e)
+        ? 'Signature request was declined. Nothing was created, sign again when you are ready.'
+        : isInsufficientFunds(e)
+          ? `The transaction ran out of SUI. Add a little more to this wallet (about ${formatSui(MIN_OWNER_FUND_MIST)} SUI covers the vault funding + gas), then retry. (${e instanceof Error ? e.message : String(e)})`
+          : `Onboarding failed: ${e instanceof Error ? e.message : String(e)}. Retry when ready.`,
+    );
   }
 }
 
@@ -372,12 +458,35 @@ export async function pair(): Promise<void> {
   if (state.phase !== 'needs-pairing' || !wired) return;
   const { agentAddress, agentSigner, execTx } = wired;
   const vault = state.vault;
+  const setError = (error: string) =>
+    store.update(() => ({
+      phase: 'needs-pairing',
+      vault,
+      agent: { name: vault.name || COMPANION_DEFAULT, address: agentAddress },
+      error,
+    }));
+  const suiClient = getSuiClient();
+
+  // Preflight the OWNER wallet BEFORE the approval popup: the pairing tx splits
+  // 0.3 SUI out of the wallet to fund this device's agent and pays gas on top, so
+  // a wallet under ~0.35 SUI makes the signature fail with a cryptic gas error.
+  // Show a clear top-up prompt instead of a doomed popup. A balance-read blip is
+  // non-fatal — fall through and let the tx itself be the judge.
   try {
-    const suiClient = getSuiClient();
+    const afford = pairingAffordability(await suiBalance(suiClient, vault.owner));
+    if (!afford.ok) {
+      setError(afford.message!);
+      return;
+    }
+  } catch {
+    /* couldn't read balance — don't block; the approval below still runs */
+  }
+
+  try {
     const tx = buildRegisterAgentTx({ vaultId: vault.vaultId, agent: agentAddress, fundAgentMist: FUND_AGENT_MIST });
     // Registering this device on the vault allowlist — the tx is the provenance.
     await runWithReceipt(
-      { key: 'pair', title: vault.name || COMPANION_DEFAULT, labels: { pending: 'Pairing device', success: 'Device paired' } },
+      { key: 'pair', title: vault.name || COMPANION_DEFAULT, labels: { pending: 'Pairing device', success: 'Device paired', fail: 'Pairing failed' } },
       async () => {
         const res = await execTx(tx); // wallet signature
         const digest = digestOf(res);
@@ -388,12 +497,13 @@ export async function pair(): Promise<void> {
     const refreshed = await discoverVault(suiClient, vault.owner);
     await rebuildAndReady(refreshed ? toVaultInfo(refreshed) : { ...vault, agents: [...vault.agents, agentAddress] });
   } catch (e) {
-    store.update(() => ({
-      phase: 'needs-pairing',
-      vault,
-      agent: { name: vault.name || COMPANION_DEFAULT, address: agentAddress },
-      error: isDeclined(e) ? 'Pairing signature was declined. This device stays unpaired until you approve it.' : `Pairing failed: ${e instanceof Error ? e.message : String(e)}.`,
-    }));
+    setError(
+      isDeclined(e)
+        ? 'Pairing signature was declined. This device stays unpaired until you approve it.'
+        : isInsufficientFunds(e)
+          ? `The pairing transaction ran out of SUI. Add a little more to this wallet (about ${formatSui(MIN_OWNER_FUND_MIST)} SUI covers the device funding + gas), then retry. (${e instanceof Error ? e.message : String(e)})`
+          : `Pairing failed: ${e instanceof Error ? e.message : String(e)}.`,
+    );
   }
 }
 

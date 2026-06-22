@@ -20,6 +20,24 @@ import type { OnchainLabels } from '../components/WriteStateCard';
 
 const SUISCAN = 'https://suiscan.xyz/testnet';
 
+/**
+ * Thrown when a wallet-signed tx EXECUTES but its on-chain effects report failure
+ * (a Move abort, a runtime error) — as opposed to never reaching the chain (a
+ * declined popup, a network drop). It carries the `digest` so the receipt can
+ * still link the failed tx's provenance: honest, not a silent success.
+ * `walletExecTx`'s `execTx` is the single throw site; `runWithReceipt` below is
+ * the catch site that turns it into a `tx-failed` receipt. (Lives here, not in
+ * walletExecTx, so onchainToast stays dapp-kit-free for its node tests.)
+ */
+export class TxExecutionError extends Error {
+  readonly digest?: string;
+  constructor(message: string, digest?: string) {
+    super(message);
+    this.name = 'TxExecutionError';
+    this.digest = digest;
+  }
+}
+
 /** Provenance link for a created/owned object (a blob object, a Vault, …). */
 export function objectProvenanceUrl(objectId: string): string {
   return `${SUISCAN}/object/${objectId}`;
@@ -53,10 +71,14 @@ export interface ReceiptOpts {
  * receipt with `opts.labels`, and on success resolves it to `certified` carrying
  * the `provenanceUrl` the `run` callback returns → the "View provenance" link.
  *
- * On failure the in-flight receipt is DISMISSED and the error re-thrown, so the
- * caller's own error path (a dialog message, a chat retry, a thrown settings
- * error) stays the single source of truth for failures — no duplicate error
- * toast. Returns whatever `run` resolves as its `result`.
+ * A tx that EXECUTED but failed on-chain (a `TxExecutionError` carrying a digest)
+ * is real provenance: the receipt terminalizes to an honest `tx-failed` pill that
+ * KEEPS its "View provenance" link (App.tsx auto-dismisses it like a success).
+ * Every OTHER failure (a declined popup, a network drop, no digest) keeps the
+ * original behavior: the in-flight receipt is DISMISSED so the caller's own error
+ * path (a dialog message, a chat retry, a thrown settings error) stays the single
+ * source of truth — no duplicate error toast. Either way the error re-throws, so
+ * the caller halts. Returns whatever `run` resolves as its `result`.
  */
 export async function runWithReceipt<T>(
   opts: ReceiptOpts,
@@ -73,14 +95,21 @@ export async function runWithReceipt<T>(
     vaultData.updateWriteEvent(id, { phase: 'certified', blobObjectId: '', provenanceUrl });
     return result;
   } catch (e) {
-    // Terminalize the inline write-state to a NON-blocking 'failed' BEFORE dropping
-    // the card. `dismissWriteEvent` only removes the toast event — it never clears
+    if (e instanceof TxExecutionError && e.digest) {
+      // Committed-but-failed: keep an honest, linkable receipt instead of a green
+      // success. 'tx-failed' is terminal (not encrypting|certifying), so the
+      // forgetEverything quiesce loop never strands on it.
+      vaultData.updateWriteEvent(id, { phase: 'tx-failed', provenanceUrl: txProvenanceUrl(e.digest) });
+      throw e;
+    }
+    // Never reached the chain (declined / network / no digest): terminalize the
+    // inline write-state to a NON-blocking 'failed' BEFORE dropping the card.
+    // `dismissWriteEvent` only removes the toast event — it never clears
     // `writeStates` — so a bare dismiss would strand this key at 'certifying', and
     // `forgetEverything`'s quiesce loop (which scans every writeState for an
-    // in-flight write) would then spin forever. A declined wallet popup is an
-    // expected path here, so this must not poison a later wipe. Both mutations run
-    // synchronously in this catch, so React coalesces them — the card never flashes
-    // 'failed', it just disappears (the op owns its own error surface).
+    // in-flight write) would then spin forever. Both mutations run synchronously,
+    // so React coalesces them — the card never flashes 'failed', it just
+    // disappears (the op owns its own error surface).
     vaultData.updateWriteEvent(id, { phase: 'failed' });
     vaultData.dismissWriteEvent(id);
     throw e;

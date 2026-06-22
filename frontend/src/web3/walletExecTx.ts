@@ -13,6 +13,7 @@
  * No Tier-0 consumer yet; it's a Tier-1 primitive onboarding/pairing will use.
  */
 import { useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { TxExecutionError } from './onchainToast';
 
 /** The slice of the client `makeExecuteOverride` needs — typed loosely so the real `SuiClient` satisfies it. */
 interface ExecuteCapableClient {
@@ -39,11 +40,32 @@ export function makeExecuteOverride(client: ExecuteCapableClient) {
 }
 
 /**
+ * PURE (node-testable): reads the on-chain effects status off an `execTx` result.
+ * dapp-kit's default result carries rawEffects only, but `makeExecuteOverride`
+ * forces `showEffects`, so a real wallet tx's result carries `effects.status`.
+ * Returns a failure descriptor (digest + reason) when the tx EXECUTED but failed
+ * (a Move abort); null when it succeeded OR the status is unreadable — fail-open,
+ * so a shape we can't parse degrades to today's behavior, never a fabricated
+ * failure. The on-chain failure path was the gap: without reading status a failed
+ * tx resolved as success and the provenance receipt lied.
+ */
+export function txFailure(res: unknown): { digest?: string; reason: string } | null {
+  if (!res || typeof res !== 'object') return null;
+  const r = res as { digest?: unknown; effects?: { status?: { status?: unknown; error?: unknown } } };
+  const status = r.effects?.status?.status;
+  if (typeof status !== 'string' || status === 'success') return null;
+  const digest = typeof r.digest === 'string' && r.digest ? r.digest : undefined;
+  const error = r.effects?.status?.error;
+  return { digest, reason: typeof error === 'string' && error ? error : 'Transaction failed on-chain' };
+}
+
+/**
  * THIN React hook: wires the dapp-kit client + `useSignAndExecuteTransaction`
  * with the override above, exposing `execTx(transaction)` that resolves to a
  * result carrying `objectChanges`. Mirrors chain/core's `execTx`: awaits
- * `waitForTransaction({ digest })` before returning. Not unit-tested (hooks
- * need a DOM); the override factory is the node-tested seam.
+ * `waitForTransaction({ digest })`, then THROWS a `TxExecutionError` on a
+ * non-success on-chain status before returning. Not unit-tested (hooks need a
+ * DOM); the override factory and `txFailure` are the node-tested seams.
  */
 export function useWalletExecTx() {
   const client = useSuiClient();
@@ -61,6 +83,11 @@ export function useWalletExecTx() {
   async function execTx(transaction: unknown): Promise<unknown> {
     const res = await signAndExecute({ transaction: transaction as never });
     await client.waitForTransaction({ digest: res.digest });
+    // A tx can COMMIT yet FAIL (Move abort): read the status so a failed tx
+    // throws (carrying its digest for provenance) instead of resolving as a
+    // success the receipt would then certify as sealed.
+    const fail = txFailure(res);
+    if (fail) throw new TxExecutionError(fail.reason, fail.digest ?? res.digest);
     return res;
   }
 

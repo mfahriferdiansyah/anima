@@ -144,7 +144,7 @@ function Ceremony({ session }: { session: FirstRunSession }) {
               This single signature creates the vault and funds {companion}. It is the only one
               onboarding asks for.
             </p>
-            <InkPanel label="Mock wallet" tone="orange">
+            <InkPanel label="Wallet" tone="orange">
               <div className="inner">create vault · fund {companion} · 1 signature</div>
             </InkPanel>
             <div className="cere-wait" role="status">
@@ -217,7 +217,7 @@ function Pairing({ session }: { session: PairingSession }) {
         {session.error ? <p className="pair-error">{session.error}</p> : null}
         {signing ? (
           <>
-            <InkPanel label="Mock wallet" tone="orange">
+            <InkPanel label="Wallet" tone="orange">
               <div className="inner">register device key · vault {shortId(session.vault.vaultId)}</div>
             </InkPanel>
             <div className="wallet-actions">

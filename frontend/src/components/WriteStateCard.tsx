@@ -8,6 +8,10 @@ export type WriteState =
   | { phase: 'certifying' }
   | { phase: 'certified'; blobObjectId: string; provenanceUrl: string }
   | { phase: 'failed' }
+  // A non-note on-chain tx that COMMITTED but FAILED (Move abort): an honest ✕
+  // receipt that still links the failed tx's provenance, instead of a green
+  // success. Distinct from `failed` (note-save Seal failure) so it carries a url.
+  | { phase: 'tx-failed'; provenanceUrl: string }
   // The funding preflight blocked the write: the agent is out of gas (SUI) and/or
   // storage (WAL). Distinct from `failed` so the toast can say what's wrong and
   // offer a top-up instead of a generic retry.
@@ -16,15 +20,18 @@ export type WriteState =
 /**
  * Copy overrides for a NON-note on-chain receipt (publish, agent register, forget,
  * …). Note saves pass none and keep the default "Encrypting/Certifying/Memory
- * sealed" copy. Only the in-flight + success labels are configurable: failures on
- * these ops surface through each op's own error path (the receipt is dismissed),
- * so no fail copy is needed here.
+ * sealed" copy. A failure that never reaches the chain (declined popup, network)
+ * still surfaces through the op's own error path — the receipt is dropped — so
+ * `fail` only labels the COMMITTED-but-failed case, where the receipt stays as an
+ * honest ✕ with its "View provenance" link.
  */
 export interface OnchainLabels {
   /** Replaces "Certifying" while the tx is in flight (e.g. "Publishing"). */
   pending: string;
   /** Replaces "Memory sealed" on success (e.g. "Link published"). */
   success: string;
+  /** Replaces "Transaction failed" on a committed-but-failed tx (e.g. "Pairing failed"). */
+  fail?: string;
 }
 
 export interface WriteStateCardProps {
@@ -83,6 +90,19 @@ export function WriteStateCard({ state, noteTitle, labels, onRetry, onTopUp }: W
             <button className="tact" type="button" onClick={onRetry}>
               Retry
             </button>
+          ) : null}
+        </div>
+      );
+    case 'tx-failed':
+      return (
+        <div className="toast error" role="status">
+          <span className="ti" aria-hidden="true">✕</span>
+          <span className="tt">{labels?.fail ?? 'Transaction failed'}</span>
+          <span className="td">{noteTitle}</span>
+          {state.provenanceUrl ? (
+            <a className="tact" href={state.provenanceUrl} target="_blank" rel="noreferrer">
+              View provenance
+            </a>
           ) : null}
         </div>
       );

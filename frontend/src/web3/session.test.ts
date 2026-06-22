@@ -9,6 +9,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   deriveStartPhase,
   disconnect,
+  pairingAffordability,
   renameCompanion,
   resetSessionStore,
   sessionStore,
@@ -37,6 +38,25 @@ describe('web3/session deriveStartPhase', () => {
   it('vault exists and this device agent is allowlisted → rebuild', () => {
     expect(deriveStartPhase(vault([AGENT]), AGENT)).toBe('rebuild');
     expect(deriveStartPhase(vault(['0xother', AGENT]), AGENT)).toBe('rebuild');
+  });
+});
+
+describe('web3/session pairingAffordability', () => {
+  it('a wallet at or above the 0.35 SUI floor can pair', () => {
+    expect(pairingAffordability(350_000_000n).ok).toBe(true);
+    expect(pairingAffordability(1_000_000_000n).ok).toBe(true);
+  });
+
+  it('exactly the 0.3 funding is NOT enough — no gas headroom would be left', () => {
+    expect(pairingAffordability(300_000_000n).ok).toBe(false);
+  });
+
+  it('a short wallet returns a top-up message naming the cost, the floor, and the balance', () => {
+    const { ok, message } = pairingAffordability(120_000_000n);
+    expect(ok).toBe(false);
+    expect(message).toContain('0.3'); // the funding amount
+    expect(message).toContain('0.35'); // the total floor (funding + gas)
+    expect(message).toContain('0.12'); // the wallet's current balance
   });
 });
 

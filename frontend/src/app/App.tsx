@@ -16,9 +16,11 @@ function WriteEventToast({ event }: { event: WriteEvent }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Certified receipts auto-dismiss (kit 4s spec); in-flight states stay
-    // until they resolve and failures persist until retried or replaced.
-    if (state.phase !== 'certified') return;
+    // Certified receipts auto-dismiss (kit 4s spec); a committed-but-failed tx
+    // receipt (tx-failed) dwells the same so its "View provenance" link is
+    // clickable, then clears. In-flight states stay until they resolve and
+    // note-save failures persist until retried or replaced.
+    if (state.phase !== 'certified' && state.phase !== 'tx-failed') return;
     const timer = setTimeout(() => dismissWriteEvent(id), CERTIFIED_DISMISS_MS);
     return () => clearTimeout(timer);
   }, [id, state.phase]);

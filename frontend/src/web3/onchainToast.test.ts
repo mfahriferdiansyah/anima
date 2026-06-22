@@ -5,7 +5,7 @@
  * real `vaultData` singleton (the toast store App.tsx renders).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { runWithReceipt, objectProvenanceUrl, txProvenanceUrl, digestOf } from './onchainToast';
+import { runWithReceipt, TxExecutionError, objectProvenanceUrl, txProvenanceUrl, digestOf } from './onchainToast';
 import { vaultData, resetVaultData } from './vaultData';
 
 beforeEach(() => resetVaultData());
@@ -60,6 +60,37 @@ describe('runWithReceipt', () => {
       (ws) => ws.phase === 'encrypting' || ws.phase === 'certifying',
     );
     expect(inFlight).toBe(false); // terminalized to 'failed', not stuck mid-write
+  });
+
+  it('a committed-but-failed tx (TxExecutionError w/ digest) keeps an honest tx-failed receipt WITH provenance', async () => {
+    await expect(
+      runWithReceipt(
+        { key: 'pair', title: 'Nova', labels: { pending: 'Pairing device', success: 'Device paired', fail: 'Pairing failed' } },
+        () => Promise.reject(new TxExecutionError('MoveAbort(...)', '0xfaileddigest')),
+      ),
+    ).rejects.toThrow('MoveAbort');
+
+    const events = vaultData.getSnapshot().writeEvents;
+    expect(events).toHaveLength(1); // the receipt is RETAINED, not dropped
+    expect(events[0].state).toEqual({
+      phase: 'tx-failed',
+      provenanceUrl: 'https://suiscan.xyz/testnet/tx/0xfaileddigest',
+    });
+    // terminal phase → forgetEverything's quiesce loop never strands on it
+    const inFlight = Object.values(vaultData.getSnapshot().writeStates).some(
+      (ws) => ws.phase === 'encrypting' || ws.phase === 'certifying',
+    );
+    expect(inFlight).toBe(false);
+  });
+
+  it('a TxExecutionError WITHOUT a digest (never reached chain) drops the toast like any failure', async () => {
+    await expect(
+      runWithReceipt(
+        { key: 'k', title: 't', labels: { pending: 'p', success: 's' } },
+        () => Promise.reject(new TxExecutionError('declined before submit')),
+      ),
+    ).rejects.toThrow('declined');
+    expect(vaultData.getSnapshot().writeEvents).toHaveLength(0);
   });
 });
 
