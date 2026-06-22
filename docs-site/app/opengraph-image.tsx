@@ -74,7 +74,7 @@ export default function Image() {
             fontSize: 26,
           }}
         >
-          <div style={{ color: '#2F6BFF', fontWeight: 700 }}>docs.anima.app</div>
+          <div style={{ color: '#2F6BFF', fontWeight: 700 }}>docs-anima.kadzu.dev</div>
           <div style={{ color: '#5A6170' }}>sealed to storage you own</div>
         </div>
       </div>

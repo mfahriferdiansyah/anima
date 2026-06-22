@@ -5,7 +5,7 @@ import type { Metadata } from 'next';
 import { inter, spaceGrotesk, jetbrainsMono } from '@/lib/fonts';
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://docs.anima.app'),
+  metadataBase: new URL('https://docs-anima.kadzu.dev'),
   title: {
     template: '%s — Anima docs',
     default: 'Anima docs',
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     siteName: 'Anima docs',
-    url: 'https://docs.anima.app',
+    url: 'https://docs-anima.kadzu.dev',
     title: 'Anima docs',
     description:
       'Notes on a shared canvas. Your own ai tools read and write them too.',

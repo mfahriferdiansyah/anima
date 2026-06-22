@@ -46,7 +46,7 @@ Deploy this directory as a **static site** behind Coolify.
 | Install command | `pnpm install --frozen-lockfile` |
 | Build command | `pnpm build` |
 | Watch Paths | `docs-site/**` |
-| Domain | `docs.anima.app` (Traefik terminates SSL / Let's Encrypt) |
+| Domain | `docs-anima.kadzu.dev` (Traefik terminates SSL / Let's Encrypt) |
 
 Because the build is static, there is no port to expose and no server process to
 keep alive. Coolify serves `out/` directly through its static (Traefik) path.

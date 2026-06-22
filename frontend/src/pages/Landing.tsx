@@ -1043,7 +1043,7 @@ function IslandNav({ onConnect }: { onConnect: () => void }) {
         <button type="button" className={active === 'pricing' ? 'on' : undefined} onClick={goTo('pricing')}>
           Pricing
         </button>
-        <a href="https://github.com/mfahriferdiansyah/anima/tree/main/docs" target="_blank" rel="noreferrer">
+        <a href="https://docs-anima.kadzu.dev" target="_blank" rel="noreferrer">
           Docs
         </a>
       </div>
