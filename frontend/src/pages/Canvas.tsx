@@ -461,16 +461,19 @@ export function Canvas() {
 
   // Manual seal of the scene to Walrus (owner-signed), mirroring the note Save.
   const save = () => {
+    // Optimistic: flip the button to Saved at once and validate in the background;
+    // only re-dirty if the seal actually fails (so the button never blocks).
+    setDirty(false);
     void (async () => {
       const deps = getQuiltDeps();
       const index = vaultData.getSnapshot().index;
       if (!deps || !index) return;
-      // Fast funding check first: surface the banner and skip a doomed seal rather
-      // than blocking the Save on a write that will fail. Keep the board dirty so a
-      // retry after top-up re-seals.
+      // Fast funding check: surface the banner and skip a doomed seal rather than
+      // attempting a write that will fail. Re-dirty so a retry after top-up re-seals.
       try {
         const pf = await preflight(deps.suiClient, deps.agentSigner.toSuiAddress());
         if (!pf.ok) {
+          setDirty(true);
           triggerLowBalance();
           return;
         }
@@ -478,7 +481,6 @@ export function Canvas() {
       } catch {
         /* RPC blip — fall through and let the write surface the real outcome */
       }
-      setDirty(false);
       // Persist a pending title edit (registry) as part of the manual save.
       if (pendingTitleRef.current && pendingTitleRef.current !== boardTitle) {
         updateCanvas(canvasId, { title: pendingTitleRef.current });
