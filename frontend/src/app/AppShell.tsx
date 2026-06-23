@@ -254,6 +254,12 @@ function MemoryTree() {
                     <div
                       key={item.id}
                       className={isOpen ? 'pgrow on' : 'pgrow'}
+                      draggable
+                      title="Drag onto a canvas to place it"
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData('text/noteid', note.noteId);
+                        event.dataTransfer.effectAllowed = 'copy';
+                      }}
                       onClick={() => navigate(`/app/notes/${note.noteId}`)}
                     >
                       <span className="pgtype doc" aria-hidden="true">{NOTE_GLYPH}</span>
