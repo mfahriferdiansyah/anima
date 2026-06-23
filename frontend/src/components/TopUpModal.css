@@ -48,83 +48,85 @@
   50% { box-shadow: 0 7px 22px rgba(255, 92, 26, 0.48), 0 0 0 6px rgba(255, 92, 26, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.45); }
 }
 
-/* Non-custody trust callout — the headline reassurance, teal (the kit's safety
-   accent), high in the modal so the agent-key ownership reads as a feature. */
-.topup-keys {
+/* Agent balance — light context above the amount (smaller, quieter than the
+   input below it, which is the primary element). One line, no card. */
+.topup-balance {
   margin-top: 18px;
   display: flex;
-  align-items: flex-start;
-  gap: 11px;
-  background: var(--teal-100);
-  border-radius: 12px;
-  padding: 12px 14px;
-}
-.topup-keys-i {
-  width: 18px;
-  height: 18px;
-  flex: none;
-  margin-top: 1px;
-  color: var(--teal-500);
-  stroke-width: 1.9;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.topup-keys-tx {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.topup-keys-tx b {
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--ink-900);
-}
-.topup-keys-tx span {
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--gray-600);
-}
-
-/* Agent balance — one clean stat row (value + unit), no nested tiles. */
-.topup-balance {
-  margin-top: 16px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
 }
 .topup-balance-l {
-  display: block;
   font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--gray-600);
-  margin-bottom: 8px;
 }
-.topup-balance-row {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  background: var(--gray-100);
-  border-radius: 12px;
-  padding: 13px 16px;
-}
-.topup-stat {
+.topup-balance-v {
   display: inline-flex;
   align-items: baseline;
-  gap: 6px;
-  font-size: 12px;
+  gap: 5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--gray-600);
-}
-.topup-stat b {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 21px;
-  font-weight: 700;
-  color: var(--ink-900);
   font-variant-numeric: tabular-nums;
 }
-.topup-stat-sep {
-  width: 1px;
-  height: 22px;
-  background: var(--gray-200);
+.topup-balance-v b {
+  color: var(--ink-900);
+  font-weight: 700;
+}
+.topup-balance-dot {
+  font-style: normal;
+  color: rgba(22, 24, 29, 0.25);
+  margin: 0 3px;
+}
+
+/* Conversion helper, directly under the amount field. */
+.topup-convert {
+  margin: 9px 2px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--gray-600);
+}
+.topup-convert-i {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin-top: 1px;
+  color: rgba(22, 24, 29, 0.4);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Non-custody reassurance — gray, plain, sitting quietly below the amount. */
+.topup-keys {
+  margin-top: 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--gray-100);
+  border-radius: 12px;
+  padding: 11px 13px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--gray-600);
+}
+.topup-keys-i {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 1px;
+  color: rgba(22, 24, 29, 0.45);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* Editable amount: the SUI sent from the owner wallet to the agent. */

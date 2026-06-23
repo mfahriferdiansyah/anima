@@ -9,10 +9,10 @@ import './TopUpModal.css';
  * A focused top-up modal opened from the shared FundsBanner. The device agent
  * signs and pays for every seal, so it depletes and saves stop sealing. Topping
  * up sends a chosen amount of SUI from the OWNER's connected wallet to the agent
- * (one wallet approval); the agent then swaps a slice to WAL itself, no second
- * popup. The agent key is non-custodial (it lives in this browser), stated up
- * front as the trust callout so funding your OWN agent makes sense. Refreshes the
- * agent balance on open; on success the global receipt toast confirms.
+ * (one wallet approval); the agent then converts a slice to WAL itself, no second
+ * popup. Hierarchy: the amount field is the primary element; the balance is light
+ * context above it, and the non-custody reassurance sits quietly below. Refreshes
+ * the agent balance on open; on success the global receipt toast confirms.
  */
 export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { balances } = useSettings();
@@ -45,7 +45,7 @@ export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => vo
     setTopping(true);
     setError(null);
     try {
-      await topUp(amount); // owner wallet popup → SUI to agent, then agent self-swaps to WAL
+      await topUp(amount); // owner wallet popup → SUI to agent, then agent self-converts to WAL
       await refreshBalances();
       dismissLowBalance();
       onClose();
@@ -67,28 +67,13 @@ export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => vo
           </div>
         </div>
 
-        <div className="topup-keys">
-          <svg className="topup-keys-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
-            <rect x="5" y="11" width="14" height="9" rx="2" />
-            <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-          </svg>
-          <div className="topup-keys-tx">
-            <b>You hold the keys</b>
-            <span>This agent&apos;s key lives in this browser, on your device. Anima never holds it.</span>
-          </div>
-        </div>
-
         <div className="topup-balance">
           <span className="topup-balance-l">Agent balance</span>
-          <div className="topup-balance-row">
-            <span className="topup-stat">
-              <b>{balances.sui.toFixed(2)}</b> SUI
-            </span>
-            <span className="topup-stat-sep" aria-hidden="true" />
-            <span className="topup-stat">
-              <b>{balances.wal.toFixed(2)}</b> WAL
-            </span>
-          </div>
+          <span className="topup-balance-v">
+            <b>{balances.sui.toFixed(2)}</b> SUI
+            <i className="topup-balance-dot" aria-hidden="true">·</i>
+            <b>{balances.wal.toFixed(2)}</b> WAL
+          </span>
         </div>
 
         <div className="topup-amt">
@@ -108,6 +93,20 @@ export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => vo
             />
             <span className="topup-amt-suffix">SUI</span>
           </div>
+          <p className="topup-convert">
+            <svg className="topup-convert-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+              <path d="M7 10h12l-3-3M17 14H5l3 3" />
+            </svg>
+            The agent keeps some as SUI to pay fees and converts a little to WAL for storage. One wallet approval.
+          </p>
+        </div>
+
+        <div className="topup-keys">
+          <svg className="topup-keys-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+            <rect x="5" y="11" width="14" height="9" rx="2" />
+            <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+          </svg>
+          <span>This agent stays on your device, so only you can use it. Anima never touches your funds.</span>
         </div>
 
         {error ? (
