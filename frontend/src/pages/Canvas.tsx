@@ -20,7 +20,9 @@ import {
   newElementId,
   newVersionNonce,
   isLinear,
+  isBindable,
   normalizeLinear,
+  commonBounds,
   NOTE_W,
   NOTE_H,
 } from '../../../chain/core/src/index.js';
@@ -28,6 +30,8 @@ import { getQuiltDeps } from '@/web3/session';
 import { vaultData } from '@/web3/vaultData';
 import { hitTopElement, marqueeSelect } from '@/canvas/hittest';
 import { addElement, moveElements, deleteElements, duplicateElements, reorder } from '@/canvas/ops';
+import { resizeElement, rotateElement, resizeMultiple, type ResizeHandle } from '@/canvas/transform';
+import { moveEndpoint, endpointWorld, bindEndpoint, breakBinding, type BindableLinear } from '@/canvas/linear';
 import { createSealScheduler, type SealScheduler } from '@/canvas/sealOnSettle';
 import './canvas.css';
 
@@ -93,6 +97,23 @@ const TOOLS: Array<{ id: string; label: string; icon: ReactNode }> = [
   { id: 'shape', label: 'Rectangle', icon: <ToolIcon><rect x="3" y="3" width="18" height="18" rx="2" /></ToolIcon> },
   { id: 'text', label: 'Text', icon: <ToolIcon><polyline points="4 7 4 4 20 4 20 7" /><line x1="9" y1="20" x2="15" y2="20" /><line x1="12" y1="4" x2="12" y2="20" /></ToolIcon> },
 ];
+
+/** Resize-handle placement as a fraction of the selection bbox + its cursor. */
+const HANDLE_DEFS: Array<{ id: ResizeHandle; fx: number; fy: number; cursor: string }> = [
+  { id: 'nw', fx: 0, fy: 0, cursor: 'nwse-resize' },
+  { id: 'n', fx: 0.5, fy: 0, cursor: 'ns-resize' },
+  { id: 'ne', fx: 1, fy: 0, cursor: 'nesw-resize' },
+  { id: 'e', fx: 1, fy: 0.5, cursor: 'ew-resize' },
+  { id: 'se', fx: 1, fy: 1, cursor: 'nwse-resize' },
+  { id: 's', fx: 0.5, fy: 1, cursor: 'ns-resize' },
+  { id: 'sw', fx: 0, fy: 1, cursor: 'nesw-resize' },
+  { id: 'w', fx: 0, fy: 0.5, cursor: 'ew-resize' },
+];
+
+/** Whether an element kind has user-editable endpoints/midpoints (arrows + lines). */
+function isBindableLinear(el: CanvasElement): el is BindableLinear {
+  return el.type === 'arrow' || el.type === 'line';
+}
 
 function PeerCursor({ peer }: { peer: Peer }) {
   const style = { transform: `translate(${peer.x}px, ${peer.y}px)` };
@@ -188,6 +209,10 @@ export function Canvas() {
   const marqueeRef = useRef<{ x: number; y: number } | null>(null);
   const marqueeRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const lastSeededCanvasRef = useRef<string | null>(null);
+  // A resize/rotate drag of the current selection (U7).
+  const transformRef = useRef<{ kind: 'resize' | 'rotate'; handle?: ResizeHandle; startX: number; startY: number; origin: CanvasElement[] } | null>(null);
+  // A linear-element endpoint/midpoint drag (U8).
+  const linearRef = useRef<{ id: string; which: 'start' | 'end'; origin: BindableLinear } | null>(null);
   const textPendingRef = useRef<{ x: number; y: number } | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const elementsRef = useRef<CanvasElement[]>([]);
@@ -400,6 +425,24 @@ export function Canvas() {
     placeNoteElement(createNote(), wx, wy);
   };
 
+  // Resize/rotate a selection (U7). The viewport captures the pointer so the
+  // subsequent move/up route through the board handlers (which read transformRef).
+  const onHandleDown = (event: ReactPointerEvent<HTMLDivElement>, kind: 'resize' | 'rotate', handle?: ResizeHandle) => {
+    event.stopPropagation();
+    const wp = toWorld(event.clientX, event.clientY);
+    viewportRef.current?.setPointerCapture(event.pointerId);
+    pushHistory();
+    transformRef.current = { kind, handle, startX: wp.x, startY: wp.y, origin: elementsRef.current.filter((e) => selectedSet.has(e.id)) };
+  };
+
+  // Drag an arrow/line endpoint (U8); binds to a bindable element under the tip.
+  const onEndpointDown = (event: ReactPointerEvent<HTMLDivElement>, el: BindableLinear, which: 'start' | 'end') => {
+    event.stopPropagation();
+    viewportRef.current?.setPointerCapture(event.pointerId);
+    pushHistory();
+    linearRef.current = { id: el.id, which, origin: el };
+  };
+
   // ── Board pointer dispatch (the viewport captures everything; rendered
   // elements are pointer-events:none, so hit-testing is done in world space). ──
   const onCanvasPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -453,6 +496,38 @@ export function Canvas() {
       const wp = toWorld(event.clientX, event.clientY);
       moveCursor(wp.x, wp.y);
     }
+    const tr = transformRef.current;
+    if (tr) {
+      const wp = toWorld(event.clientX, event.clientY);
+      const dx = wp.x - tr.startX;
+      const dy = wp.y - tr.startY;
+      if (tr.kind === 'rotate') {
+        const el = tr.origin[0];
+        if (el) {
+          const cx = el.x + el.w / 2;
+          const cy = el.y + el.h / 2;
+          const angle = Math.atan2(wp.y - cy, wp.x - cx) + Math.PI / 2;
+          const rotated = rotateElement(el, angle, event.shiftKey);
+          setElements((prev) => prev.map((e) => (e.id === rotated.id ? rotated : e)));
+        }
+      } else if (tr.handle) {
+        const next = tr.origin.length === 1
+          ? [resizeElement(tr.origin[0], tr.handle, dx, dy, event.shiftKey)]
+          : resizeMultiple(tr.origin, tr.handle, dx, dy, event.shiftKey);
+        const byId = new Map(next.map((e) => [e.id, e]));
+        setElements((prev) => prev.map((e) => byId.get(e.id) ?? e));
+      }
+      return;
+    }
+    const ln = linearRef.current;
+    if (ln) {
+      const wp = toWorld(event.clientX, event.clientY);
+      const target = hitTopElement(wp, elementsRef.current.filter((e) => e.id !== ln.id && isBindable(e)));
+      let moved = moveEndpoint(ln.origin, ln.which, wp);
+      moved = target ? bindEndpoint(moved, ln.which, target) : breakBinding(moved, ln.which);
+      setElements((prev) => prev.map((e) => (e.id === moved.id ? moved : e)));
+      return;
+    }
     const d = draftRef.current;
     if (d) {
       const wp = toWorld(event.clientX, event.clientY);
@@ -493,6 +568,14 @@ export function Canvas() {
   };
 
   const onCanvasPointerUp = () => {
+    if (transformRef.current) {
+      transformRef.current = null;
+      return;
+    }
+    if (linearRef.current) {
+      linearRef.current = null;
+      return;
+    }
     if (textPendingRef.current) {
       const { x, y } = textPendingRef.current;
       textPendingRef.current = null;
@@ -604,6 +687,9 @@ export function Canvas() {
   const ordered = [...elements].sort((a, b) => a.index - b.index);
   const vectorEls = ordered.filter((e) => e.type === 'rect' || e.type === 'ellipse' || e.type === 'arrow' || e.type === 'line' || e.type === 'draw');
   const htmlEls = ordered.filter((e) => e.type === 'note' || e.type === 'text' || e.type === 'image');
+  const selectedEls = ordered.filter((e) => selectedSet.has(e.id));
+  const selBox = selectedEls.length > 0 ? commonBounds(selectedEls) : null;
+  const singleLinear = selectedEls.length === 1 && isBindableLinear(selectedEls[0]) ? selectedEls[0] : null;
 
   const renderVector = (s: CanvasElement, isDraft: boolean) => {
     const sel = !isDraft && selectedSet.has(s.id);
@@ -837,6 +923,33 @@ export function Canvas() {
               </div>
             );
           })}
+
+          {/* Selection transform handles (U7) / linear endpoint handles (U8). */}
+          {singleLinear ? (
+            (['start', 'end'] as const).map((which) => {
+              const p = endpointWorld(singleLinear, which);
+              return (
+                <div
+                  key={`ep-${which}`}
+                  className="pgcv-handle round"
+                  style={{ left: p.x - 5, top: p.y - 5, cursor: 'crosshair' }}
+                  onPointerDown={(e) => onEndpointDown(e, singleLinear, which)}
+                />
+              );
+            })
+          ) : selBox && !draft && editingId === null ? (
+            <>
+              {HANDLE_DEFS.map((h) => (
+                <div
+                  key={h.id}
+                  className="pgcv-handle"
+                  style={{ left: selBox.x + h.fx * selBox.w - 4, top: selBox.y + h.fy * selBox.h - 4, cursor: h.cursor }}
+                  onPointerDown={(e) => onHandleDown(e, 'resize', h.id)}
+                />
+              ))}
+              <div className="pgcv-rotate" style={{ left: selBox.x + selBox.w / 2 - 6, top: selBox.y - 26, cursor: 'grab' }} onPointerDown={(e) => onHandleDown(e, 'rotate')} />
+            </>
+          ) : null}
 
           {isShared && peers.map((peer) => <PeerCursor key={peer.id} peer={peer} />)}
         </div>
