@@ -83,6 +83,32 @@ function elementsForSave(elements: CanvasElement[]): CanvasElement[] {
   return elements.filter((el) => !(el.type === 'image' && el.ref.startsWith('data:')));
 }
 
+/**
+ * Measure a text element's rendered box so its hit area and selection box land on
+ * the glyphs — a text element stored with w/h = 0 (legacy/migrated, or freshly
+ * typed) is otherwise nearly unclickable. Mirrors the `.cv-text` CSS (Inter 15/1.4,
+ * wrapping at 340px) via one reused offscreen node. Browser-only: returns a small
+ * fallback box where there is no layout engine (jsdom/tests).
+ */
+let textMeasureEl: HTMLDivElement | null = null;
+function measureTextSize(text: string): { w: number; h: number } {
+  if (typeof document === 'undefined') return { w: 8, h: 21 };
+  if (!textMeasureEl) {
+    textMeasureEl = document.createElement('div');
+    textMeasureEl.setAttribute('aria-hidden', 'true');
+    textMeasureEl.style.cssText =
+      'position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none;' +
+      'display:inline-block;max-width:340px;white-space:pre-wrap;word-break:break-word;' +
+      "font-family:'Inter',sans-serif;font-size:15px;line-height:1.4;padding:0;margin:0;";
+    document.body.appendChild(textMeasureEl);
+  }
+  // A trailing newline needs a width-holding char so the empty last line is counted.
+  textMeasureEl.textContent = text.length ? (text.endsWith('\n') ? `${text} ` : text) : ' ';
+  const w = Math.max(8, Math.ceil(textMeasureEl.offsetWidth) + 1);
+  const h = Math.max(21, Math.ceil(textMeasureEl.offsetHeight));
+  return { w, h };
+}
+
 function ToolIcon({ children }: { children: ReactNode }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -301,7 +327,11 @@ export function Canvas() {
     if (!canvasChanged && elementsRef.current.length > 0) return;
     lastSeededCanvasRef.current = canvasId;
     const content = liveIndex ? loadCanvasContent(liveIndex, canvasId) : { elements: [] as CanvasElement[] };
-    const seeded = content.elements ?? [];
+    // Measure each text element up front so its hit box + selection box match the
+    // glyphs (migrated/legacy text carries w/h = 0). Done BEFORE seededRef is set so
+    // the SAME array seeds both the ref and state — the dirty guard is reference
+    // equality, so opening a board must not look like an edit.
+    const seeded = (content.elements ?? []).map((el) => (el.type === 'text' ? { ...el, ...measureTextSize(el.text) } : el));
     seededRef.current = seeded;
     seedArmedRef.current = false;
     historyRef.current = [];
@@ -427,6 +457,14 @@ export function Canvas() {
         event.preventDefault();
         pushHistory();
         setElements((prev) => reorder(prev, sel, event.shiftKey ? 'back' : 'backward'));
+      } else if (event.key === 'Enter' && sel.length === 1) {
+        // Enter edits a single selected text or shape in place (the focused-editor
+        // guard above means this never fires while already typing).
+        const el = elementsRef.current.find((e) => e.id === sel[0]);
+        if (el && (el.type === 'text' || el.type === 'rect' || el.type === 'ellipse')) {
+          event.preventDefault();
+          setEditingId(el.id);
+        }
       }
     };
     window.addEventListener('keydown', onKey);
@@ -716,14 +754,21 @@ export function Canvas() {
     if (hit && hit.type === 'text') setEditingId(hit.id);
   };
 
-  const commitText = (id: string, value: string) => {
+  // Commit an in-place edit. A text element re-measures to fit (so its box + hit
+  // area track the glyphs); emptying it removes the element.
+  const commitEdit = (id: string, value: string) => {
     setEditingId(null);
+    const el = elementsRef.current.find((e) => e.id === id);
+    if (!el || el.type !== 'text') return;
     const text = value.trim();
-    if (!text) setElements((prev) => prev.filter((s) => s.id !== id));
-    else {
-      pushHistory();
-      setElements((prev) => prev.map((s) => (s.id === id && s.type === 'text' ? { ...s, text } : s)));
+    pushHistory();
+    if (!text) {
+      setElements((prev) => prev.filter((s) => s.id !== id));
+      setSelectedIds((prev) => prev.filter((s) => s !== id));
+      return;
     }
+    const size = measureTextSize(text);
+    setElements((prev) => prev.map((s) => (s.id === id && s.type === 'text' ? { ...s, text, ...size } : s)));
   };
 
   // Drag a note from the sidebar onto the board.
@@ -788,6 +833,10 @@ export function Canvas() {
   const selectedEls = ordered.filter((e) => selectedSet.has(e.id));
   const selBox = selectedEls.length > 0 ? commonBounds(selectedEls) : null;
   const singleLinear = selectedEls.length === 1 && isBindableLinear(selectedEls[0]) ? selectedEls[0] : null;
+  // Resize/rotate handles only when the selection has a sizeable element. A
+  // text-only selection is content-sized (the box ignores w/h), so handles would
+  // drift off the glyphs — text gets just the selection outline, move and edit.
+  const showTransform = selBox !== null && selectedEls.some((e) => e.type !== 'text');
 
   const renderVector = (s: CanvasElement, isDraft: boolean) => {
     const sel = !isDraft && selectedSet.has(s.id);
@@ -1003,8 +1052,12 @@ export function Canvas() {
                     t.style.height = 'auto';
                     t.style.height = `${t.scrollHeight}px`;
                   }}
+                  onFocus={(e) => {
+                    const len = e.currentTarget.value.length;
+                    e.currentTarget.setSelectionRange(len, len);
+                  }}
                   onPointerDown={(e) => e.stopPropagation()}
-                  onBlur={(e) => commitText(el.id, e.target.value)}
+                  onBlur={(e) => commitEdit(el.id, e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') e.currentTarget.blur();
                   }}
@@ -1031,7 +1084,7 @@ export function Canvas() {
                 />
               );
             })
-          ) : selBox && !draft && editingId === null ? (
+          ) : showTransform && !draft && editingId === null ? (
             <>
               {HANDLE_DEFS.map((h) => (
                 <div
