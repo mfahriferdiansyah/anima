@@ -24,6 +24,7 @@ import {
   normalizeLinear,
   commonBounds,
   uploadCover,
+  preflight,
   NOTE_W,
   NOTE_H,
 } from '../../../chain/core/src/index.js';
@@ -229,6 +230,8 @@ export function Canvas() {
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLElement>(null);
+  // An edited-but-not-yet-saved board title (persisted by Save, like the scene).
+  const pendingTitleRef = useRef<string | null>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const panRef = useRef<PanState | null>(null);
   const [panning, setPanning] = useState(false);
@@ -308,6 +311,7 @@ export function Canvas() {
     setEditingId(null);
     setMarquee(null);
     setDirty(false);
+    pendingTitleRef.current = null;
     draftRef.current = null;
     moveRef.current = null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -335,6 +339,28 @@ export function Canvas() {
     if (!seedArmedRef.current) return;
     setDirty(true);
   }, [elements, canvasId]);
+
+  // Proactively surface the low-funds banner: check the agent's balance in the
+  // background on board open, so the warning shows without waiting for a Save click.
+  useEffect(() => {
+    if (session.phase !== 'ready') return;
+    let cancelled = false;
+    void (async () => {
+      const deps = getQuiltDeps();
+      if (!deps) return;
+      try {
+        const pf = await preflight(deps.suiClient, deps.agentSigner.toSuiAddress());
+        if (cancelled) return;
+        if (!pf.ok) triggerLowBalance();
+        else dismissLowBalance();
+      } catch {
+        /* RPC blip — leave the banner as-is */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [canvasId, session.phase]);
 
   // Wheel/trackpad pans the plane (native non-passive so the horizontal axis
   // can't trigger browser back/forward overscroll).
@@ -435,11 +461,29 @@ export function Canvas() {
 
   // Manual seal of the scene to Walrus (owner-signed), mirroring the note Save.
   const save = () => {
-    setDirty(false);
     void (async () => {
       const deps = getQuiltDeps();
       const index = vaultData.getSnapshot().index;
       if (!deps || !index) return;
+      // Fast funding check first: surface the banner and skip a doomed seal rather
+      // than blocking the Save on a write that will fail. Keep the board dirty so a
+      // retry after top-up re-seals.
+      try {
+        const pf = await preflight(deps.suiClient, deps.agentSigner.toSuiAddress());
+        if (!pf.ok) {
+          triggerLowBalance();
+          return;
+        }
+        dismissLowBalance();
+      } catch {
+        /* RPC blip — fall through and let the write surface the real outcome */
+      }
+      setDirty(false);
+      // Persist a pending title edit (registry) as part of the manual save.
+      if (pendingTitleRef.current && pendingTitleRef.current !== boardTitle) {
+        updateCanvas(canvasId, { title: pendingTitleRef.current });
+        pendingTitleRef.current = null;
+      }
       // Silent write-event so the bulk-forget quiesce awaits an in-flight canvas
       // seal, the same as note/layout saves.
       const eventId = vaultData.beginWriteEvent({ noteId: canvasContentTag(canvasId), noteTitle: 'Canvas', state: { phase: 'certifying' }, silent: true });
@@ -785,9 +829,15 @@ export function Canvas() {
             title="Rename this board"
             onBlur={(event) => {
               const value = event.currentTarget.textContent?.trim() ?? '';
-              if (!canvasId) return;
-              if (value && value !== boardTitle) updateCanvas(canvasId, { title: value });
-              else event.currentTarget.textContent = boardTitle;
+              if (!value) {
+                event.currentTarget.textContent = boardTitle; // restore if emptied
+                return;
+              }
+              if (value !== boardTitle) {
+                // Mark dirty + stage the title; persisted on Save (manual, like the scene).
+                pendingTitleRef.current = value;
+                setDirty(true);
+              }
             }}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
