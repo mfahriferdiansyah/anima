@@ -753,24 +753,35 @@ export function Canvas() {
   const onCanvasDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
     const wp = toWorld(event.clientX, event.clientY);
     const hit = hitTopElement(wp, elements);
-    if (hit && hit.type === 'text') setEditingId(hit.id);
+    if (hit && (hit.type === 'text' || hit.type === 'rect' || hit.type === 'ellipse')) setEditingId(hit.id);
   };
 
   // Commit an in-place edit. A text element re-measures to fit (so its box + hit
-  // area track the glyphs); emptying it removes the element.
+  // area track the glyphs); emptying a standalone text removes it. A shape's label
+  // is just a field — emptying it clears the label but keeps the shape.
   const commitEdit = (id: string, value: string) => {
     setEditingId(null);
     const el = elementsRef.current.find((e) => e.id === id);
-    if (!el || el.type !== 'text') return;
+    if (!el) return;
     const text = value.trim();
-    pushHistory();
-    if (!text) {
-      setElements((prev) => prev.filter((s) => s.id !== id));
-      setSelectedIds((prev) => prev.filter((s) => s !== id));
+    if (el.type === 'text') {
+      pushHistory();
+      if (!text) {
+        setElements((prev) => prev.filter((s) => s.id !== id));
+        setSelectedIds((prev) => prev.filter((s) => s !== id));
+        return;
+      }
+      const size = measureTextSize(text);
+      setElements((prev) => prev.map((s) => (s.id === id && s.type === 'text' ? { ...s, text, ...size } : s)));
       return;
     }
-    const size = measureTextSize(text);
-    setElements((prev) => prev.map((s) => (s.id === id && s.type === 'text' ? { ...s, text, ...size } : s)));
+    if (el.type === 'rect' || el.type === 'ellipse') {
+      if ((el.label ?? '') === text) return; // no change → no history entry
+      pushHistory();
+      setElements((prev) =>
+        prev.map((s) => (s.id === id && (s.type === 'rect' || s.type === 'ellipse') ? { ...s, label: text || undefined } : s)),
+      );
+    }
   };
 
   // Drag a note from the sidebar onto the board.
@@ -1081,6 +1092,57 @@ export function Canvas() {
             return (
               <div key={el.id} className={selectedSet.has(el.id) ? 'cv-text sel' : 'cv-text'} style={{ left: el.x, top: el.y, pointerEvents: 'none' }}>
                 {el.text}
+              </div>
+            );
+          })}
+
+          {/* Shape labels: centred text inside a rect/ellipse (double-click to edit).
+              The static label is click-through so the shape under it stays selectable;
+              the editor is a flex-centred contentEditable that follows the shape box. */}
+          {vectorEls.map((s) => {
+            if (s.type !== 'rect' && s.type !== 'ellipse') return null;
+            const editing = editingId === s.id;
+            const label = s.label ?? '';
+            if (!editing && !label) return null;
+            const box = { left: s.x, top: s.y, width: s.w, height: s.h };
+            if (editing) {
+              return (
+                <div
+                  key={`lbl-${s.id}`}
+                  className="cv-label editing"
+                  style={box}
+                  contentEditable
+                  suppressContentEditableWarning
+                  spellCheck={false}
+                  role="textbox"
+                  aria-label="Shape label"
+                  ref={(node) => {
+                    if (node && document.activeElement !== node) {
+                      node.focus();
+                      const r = document.createRange();
+                      r.selectNodeContents(node);
+                      r.collapse(false);
+                      const selr = window.getSelection();
+                      selr?.removeAllRanges();
+                      selr?.addRange(r);
+                    }
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onBlur={(e) => commitEdit(s.id, e.currentTarget.innerText)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape' || (e.key === 'Enter' && !e.shiftKey)) {
+                      e.preventDefault();
+                      e.currentTarget.blur();
+                    }
+                  }}
+                >
+                  {label}
+                </div>
+              );
+            }
+            return (
+              <div key={`lbl-${s.id}`} className="cv-label" style={{ ...box, pointerEvents: 'none' }}>
+                {label}
               </div>
             );
           })}

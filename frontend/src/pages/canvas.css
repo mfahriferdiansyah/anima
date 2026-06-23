@@ -75,6 +75,19 @@
   min-width: 60px; font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.4; color: var(--ink-900);
 }
 
+/* a centred text label inside a shape (rect/ellipse), double-click to edit. It sits
+   over the shape box and follows its move/resize for free (the label is a field on
+   the element). The static label is click-through so the shape stays selectable. */
+.cv-label {
+  position: absolute; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
+  padding: 6px 8px; text-align: center; font-family: 'Inter', sans-serif; font-size: 14px; line-height: 1.35;
+  color: var(--ink-900, #16181d); white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word; overflow: hidden;
+}
+.cv-label.editing {
+  outline: none; cursor: text; overflow: visible;
+  background: rgba(255, 255, 255, .82); border-radius: 4px;
+}
+
 /* per-selection style panel: a small screen-fixed island (top-left, clear of the
    bottom-centre toolbar) shown while a single shape or text element is selected */
 .cv-stylepanel {
