@@ -721,6 +721,9 @@ export function Canvas() {
         pushHistory();
         const committed = isLinear(d) ? normalizeLinear(d as LinearElement) : d;
         setElements((prev) => addElement(prev, committed));
+        // Select the just-drawn element so its handles + style panel appear at once
+        // (otherwise styling a new rect is hidden behind a second click).
+        setSelectedIds([committed.id]);
       }
       setTool('select');
       return;
