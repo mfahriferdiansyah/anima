@@ -14,6 +14,7 @@ import { useVaultSession } from '@/hooks/useVaultSession';
 import {
   loadCanvasContent,
   saveCanvasContent,
+  canvasContentTag,
   type CanvasElement,
   type LinearElement,
   newElementId,
@@ -185,6 +186,8 @@ export function Canvas() {
   const startRef = useRef({ x: 0, y: 0 });
   const moveRef = useRef<MoveState | null>(null);
   const marqueeRef = useRef<{ x: number; y: number } | null>(null);
+  const marqueeRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  const lastSeededCanvasRef = useRef<string | null>(null);
   const textPendingRef = useRef<{ x: number; y: number } | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const elementsRef = useRef<CanvasElement[]>([]);
@@ -218,6 +221,16 @@ export function Canvas() {
   const liveIndex = vaultData.getSnapshot().index;
   useEffect(() => {
     if (!canvasId) return;
+    // (Re)seed ONLY on a board switch, or while the board is still empty. `liveIndex`
+    // swaps reference on a full rebuild publish (initial load, an agent write, a
+    // background sync) — NOT on routine local upserts. Reseeding on every such swap
+    // would clobber unsaved local placements mid-edit ("the note jumped back"). The
+    // empty-board case still re-seeds so a hard reload (mount before the rebuild
+    // publishes → empty seed) fills in once the rebuilt index lands. Live merge of a
+    // concurrent remote edit is U16 (relay) territory, deliberately not done here.
+    const canvasChanged = lastSeededCanvasRef.current !== canvasId;
+    if (!canvasChanged && elementsRef.current.length > 0) return;
+    lastSeededCanvasRef.current = canvasId;
     const content = liveIndex ? loadCanvasContent(liveIndex, canvasId) : { elements: [] as CanvasElement[] };
     const seeded = content.elements ?? [];
     seededRef.current = seeded;
@@ -245,11 +258,22 @@ export function Canvas() {
         const index = vaultData.getSnapshot().index;
         if (!deps || !index) return;
         setSaveState('saving');
+        // Register a SILENT write-event (no toast — the inline indicator owns
+        // visibility) so the bulk-forget quiesce awaits an in-flight canvas seal
+        // before a vault wipe, the same as note/layout saves.
+        const eventId = vaultData.beginWriteEvent({
+          noteId: canvasContentTag(canvasId),
+          noteTitle: 'Canvas',
+          state: { phase: 'certifying' },
+          silent: true,
+        });
         try {
           const res = await saveCanvasContent(deps, index, canvasId, { elements: elementsForSave(elementsRef.current) });
+          vaultData.updateWriteEvent(eventId, { phase: 'certified', blobObjectId: '', provenanceUrl: '' });
           if (res.migrationTx) void runDestructiveTx(res.migrationTx).catch(() => {});
           setSaveState('saved');
         } catch (e) {
+          vaultData.updateWriteEvent(eventId, { phase: 'failed' });
           setSaveState('failed');
           throw e;
         }
@@ -419,6 +443,7 @@ export function Canvas() {
     } else {
       if (!event.shiftKey) setSelectedIds([]);
       marqueeRef.current = { x: wp.x, y: wp.y };
+      marqueeRectRef.current = { x: wp.x, y: wp.y, w: 0, h: 0 };
       setMarquee({ x: wp.x, y: wp.y, w: 0, h: 0 });
     }
   };
@@ -458,7 +483,9 @@ export function Canvas() {
     const mq = marqueeRef.current;
     if (mq) {
       const wp = toWorld(event.clientX, event.clientY);
-      setMarquee({ x: mq.x, y: mq.y, w: wp.x - mq.x, h: wp.y - mq.y });
+      const rect = { x: mq.x, y: mq.y, w: wp.x - mq.x, h: wp.y - mq.y };
+      marqueeRectRef.current = rect;
+      setMarquee(rect);
       return;
     }
     const p = panRef.current;
@@ -504,13 +531,11 @@ export function Canvas() {
       return;
     }
     if (marqueeRef.current) {
-      const rect = marquee;
+      const rect = marqueeRectRef.current;
       marqueeRef.current = null;
+      marqueeRectRef.current = null;
       setMarquee(null);
-      if (rect) {
-        const picked = marqueeSelect(rect, elements).map((e) => e.id);
-        if (picked.length) setSelectedIds((prev) => Array.from(new Set([...(rect ? [] : prev), ...picked])));
-      }
+      if (rect) setSelectedIds(marqueeSelect(rect, elements).map((e) => e.id));
       return;
     }
     if (panRef.current) {
