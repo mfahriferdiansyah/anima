@@ -217,6 +217,95 @@
   to { transform: rotate(360deg); }
 }
 
+/* Success view — an in-place swap after a successful top-up (no auto-close). The
+   form is replaced by this centered "moment": a teal check that pops + draws once,
+   the refreshed balance, the honest transfer line, and a single Done button. */
+.topup-done {
+  text-align: center;
+  padding: 6px 4px 0;
+}
+/* The wrapper itself stays static (the form's `.topup > *` cascade would otherwise
+   fade the whole block); its children own the staggered entrance. */
+.topup > .topup-done {
+  animation: none;
+}
+.topup-done > *:nth-child(2) { animation: topupin 0.42s var(--motion-easing-enter) 95ms both; }
+.topup-done > *:nth-child(3) { animation: topupin 0.42s var(--motion-easing-enter) 135ms both; }
+.topup-done > *:nth-child(4) { animation: topupin 0.42s var(--motion-easing-enter) 170ms both; }
+.topup-done > *:nth-child(5) { animation: topupin 0.42s var(--motion-easing-enter) 200ms both; }
+.topup-done > *:nth-child(6) { animation: topupin 0.42s var(--motion-easing-enter) 225ms both; }
+
+.topup-done-mark {
+  width: 56px;
+  height: 56px;
+  margin: 6px auto 2px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--teal-100);
+  animation: pop 0.42s var(--motion-easing-enter) 40ms both;
+}
+.topup-done-tick-svg {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+.topup-done-tick {
+  fill: none;
+  stroke: var(--teal-500);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: checkdraw 0.32s ease-out 0.22s forwards;
+}
+@keyframes checkdraw {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+.topup-done-title {
+  margin-top: 6px;
+}
+.topup-done-sub {
+  margin-top: 3px;
+}
+.topup-done-bal {
+  margin: 16px auto 0;
+  max-width: 280px;
+  background: var(--gray-100);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+.topup-done-bal .topup-balance-l {
+  display: block;
+  margin-bottom: 6px;
+}
+.topup-done-bal-v {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--gray-600);
+  font-variant-numeric: tabular-nums;
+}
+.topup-done-bal-v b {
+  color: var(--ink-900);
+  font-weight: 700;
+}
+.topup-done-sent {
+  margin: 12px auto 0;
+  max-width: 320px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--gray-600);
+}
+.topup-done-actions {
+  margin-top: 20px;
+}
+.topup-done-actions .topup-act {
+  width: 100%;
+}
+
 /* Mobile: roomier taps, full-width stacked actions (primary at the bottom). */
 @media (max-width: 560px) {
   .topup {
@@ -241,7 +330,16 @@
 @media (prefers-reduced-motion: reduce) {
   .topup > *,
   .topup-orb,
-  .topup-spin {
+  .topup-spin,
+  .topup-done > *,
+  .topup-done-mark {
     animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  /* render the check already drawn, not stuck at offset 100 (invisible). */
+  .topup-done-tick {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
   }
 }
