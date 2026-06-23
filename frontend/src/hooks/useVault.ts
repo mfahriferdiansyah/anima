@@ -30,7 +30,7 @@ import { runWithReceipt, txProvenanceUrl, digestOf } from '../web3/onchainToast'
 import { getQuiltDeps } from '../web3/session';
 // low-balance banner lives in the chat layer; import via useChat so this survives
 // U6 deleting the chatStore mock (useChat keeps re-exporting triggerLowBalance).
-import { triggerLowBalance } from './useChat';
+import { triggerLowBalance, dismissLowBalance } from './useChat';
 import { OWNER_AUTHOR, type Note } from '../mocks/fixture';
 
 export interface NotePatch {
@@ -217,6 +217,8 @@ async function persist(id: string, patch: NotePatch): Promise<void> {
     triggerLowBalance();
     return;
   }
+  // Funds passed preflight — clear any stale low-funds banner.
+  if (pf?.ok) dismissLowBalance();
 
   // 4) Upload a data-URL cover (sealed) after the funding check.
   if (coverIntent?.kind === 'upload') {

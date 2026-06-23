@@ -21,7 +21,7 @@ vi.mock('../../../chain/core/src/index.js', async (importOriginal) => ({
   buildDeleteQuiltsTx: vi.fn(),
 }));
 vi.mock('../web3/session', () => ({ getQuiltDeps: vi.fn() }));
-vi.mock('./useChat', () => ({ triggerLowBalance: vi.fn() }));
+vi.mock('./useChat', () => ({ triggerLowBalance: vi.fn(), dismissLowBalance: vi.fn() }));
 
 import {
   VaultIndex,

@@ -36,9 +36,6 @@
 .pgcrumb-canvas:hover .pgcrumb-edit { opacity: 1; }
 .pgcrumb-edit:hover { background: rgba(22, 24, 29, .06); color: var(--ink-900, #16181d); }
 
-/* canvas scene save state (seal-on-settle indicator; failure is surfaced, not silent) */
-.pgcv-save.state-failed, .pgcv-save-fail { color: #B4231F; }
-.pgcv-save.state-saved { color: rgba(22, 24, 29, .4); }
 /* a placed note element selected on the board */
 .pgcv-note.sel { box-shadow: 0 0 0 1.5px var(--blue-600, #2F6BFF); }
 

@@ -1,0 +1,62 @@
+/* Shared low-funds banner (notes + canvas). A slim warm strip with a pulsing dot
+   and a Top up action; warns persistently while the agent can't seal saves. */
+.fundsbanner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 16px;
+  background: #fff4e5;
+  border-bottom: 1px solid rgba(180, 35, 31, 0.16);
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: #7a3b12;
+}
+.fundsbanner-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: #e8590c;
+  animation: fundspulse 1.6s ease-in-out infinite;
+}
+.fundsbanner-txt {
+  flex: 1;
+  min-width: 0;
+}
+.fundsbanner-act {
+  flex: none;
+  border: none;
+  border-radius: 7px;
+  padding: 4px 12px;
+  background: #e8590c;
+  color: #fff;
+  font-weight: 650;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.fundsbanner-act:hover {
+  background: #d24e08;
+}
+.fundsbanner-x {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: rgba(122, 59, 18, 0.55);
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+.fundsbanner-x:hover {
+  color: #7a3b12;
+}
+@keyframes fundspulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}

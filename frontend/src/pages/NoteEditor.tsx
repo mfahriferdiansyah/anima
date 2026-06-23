@@ -3,6 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent
 import { useBlocker } from 'react-router-dom';
 import { Button } from '@/components/Button';
 import { Modal } from '@/components/Modal';
+import { FundsBanner } from '@/components/FundsBanner';
 import { ToastStack } from '@/components/ToastStack';
 import type { ToastItem } from '@/components/ToastStack';
 import { createNote, saveNote, useVault } from '@/hooks/useVault';
@@ -393,6 +394,7 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
           </button>
         )}
       </div>
+      <FundsBanner />
       <div className="pged-scroll">
         {(note.cover || note.image) ? (
           <div className="pgbanner-wrap">

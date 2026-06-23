@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { createNote, runDestructiveTx, useVault } from '@/hooks/useVault';
 import type { Note } from '@/hooks/useVault';
 import { SHARED_CANVAS_ID, updateCanvas, useCanvases } from '@/hooks/useCanvases';
@@ -34,16 +34,15 @@ import { hitTopElement, marqueeSelect } from '@/canvas/hittest';
 import { addElement, moveElements, deleteElements, duplicateElements, reorder } from '@/canvas/ops';
 import { resizeElement, rotateElement, resizeMultiple, type ResizeHandle } from '@/canvas/transform';
 import { moveEndpoint, endpointWorld, bindEndpoint, breakBinding, type BindableLinear } from '@/canvas/linear';
-import { createSealScheduler, type SealScheduler } from '@/canvas/sealOnSettle';
+import { Modal } from '@/components/Modal';
+import { Button } from '@/components/Button';
+import { FundsBanner } from '@/components/FundsBanner';
+import { triggerLowBalance, dismissLowBalance } from '@/hooks/useChat';
 import './canvas.css';
 
 const DRAG_THRESHOLD_PX = 4;
 const INK = '#16181D';
 const SEL = '#2F6BFF';
-const SETTLE_MS = 1200;
-const SAFETY_MS = 120000; // a snapshot at least every 2 min during a long burst
-const TICK_MS = 300;
-
 /** Tools that draw a new element (vs select/pan). */
 const DRAW_TOOLS = new Set(['draw', 'arrow', 'shape', 'text']);
 
@@ -265,9 +264,10 @@ export function Canvas() {
   const seededRef = useRef<CanvasElement[] | null>(null);
   const seedArmedRef = useRef(false);
 
-  // Seal-on-settle: the scheduler + the surfaced save state.
-  const schedulerRef = useRef<SealScheduler | null>(null);
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+  // Manual save (consistent with notes): `dirty` drives the Save/Saved button, the
+  // navigation guard and the beforeunload warning.
+  const [dirty, setDirty] = useState(false);
+  const blocker = useBlocker(dirty);
 
   useEffect(() => {
     elementsRef.current = elements;
@@ -307,58 +307,25 @@ export function Canvas() {
     setSelectedIds([]);
     setEditingId(null);
     setMarquee(null);
+    setDirty(false);
     draftRef.current = null;
     moveRef.current = null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasId, liveIndex]);
 
-  // Build the seal scheduler per board. The save reads the latest elements via a
-  // ref and surfaces saving/saved/failed (U12, non-silent). Flushes on leave.
+  // Warn on tab close while there are unsaved edits (mirrors the note editor).
   useEffect(() => {
-    if (!canvasId) return;
-    const scheduler = createSealScheduler({
-      settleMs: SETTLE_MS,
-      safetyMs: SAFETY_MS,
-      save: async () => {
-        const deps = getQuiltDeps();
-        const index = vaultData.getSnapshot().index;
-        if (!deps || !index) return;
-        setSaveState('saving');
-        // Register a SILENT write-event (no toast — the inline indicator owns
-        // visibility) so the bulk-forget quiesce awaits an in-flight canvas seal
-        // before a vault wipe, the same as note/layout saves.
-        const eventId = vaultData.beginWriteEvent({
-          noteId: canvasContentTag(canvasId),
-          noteTitle: 'Canvas',
-          state: { phase: 'certifying' },
-          silent: true,
-        });
-        try {
-          const res = await saveCanvasContent(deps, index, canvasId, { elements: elementsForSave(elementsRef.current) });
-          vaultData.updateWriteEvent(eventId, { phase: 'certified', blobObjectId: '', provenanceUrl: '' });
-          if (res.migrationTx) void runDestructiveTx(res.migrationTx).catch(() => {});
-          setSaveState('saved');
-        } catch (e) {
-          vaultData.updateWriteEvent(eventId, { phase: 'failed' });
-          setSaveState('failed');
-          throw e;
-        }
-      },
-    });
-    schedulerRef.current = scheduler;
-    const tick = setInterval(() => scheduler.flushIfDue(performance.now()), TICK_MS);
-    const onBeforeUnload = () => scheduler.flushNow(performance.now());
-    window.addEventListener('beforeunload', onBeforeUnload);
-    return () => {
-      clearInterval(tick);
-      window.removeEventListener('beforeunload', onBeforeUnload);
-      scheduler.flushNow(performance.now()); // seal on board-switch / unmount
-      schedulerRef.current = null;
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
     };
-  }, [canvasId]);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
 
-  // Mark a real edit (post-arm) so the scheduler seals on settle. The seed itself
-  // arms but never edits.
+  // Mark the board dirty on a real edit (post-arm). The seed itself arms but never
+  // dirties, so opening a board never shows unsaved changes.
   useEffect(() => {
     if (!canvasId) return;
     if (elements === seededRef.current) {
@@ -366,7 +333,7 @@ export function Canvas() {
       return;
     }
     if (!seedArmedRef.current) return;
-    schedulerRef.current?.edit(performance.now());
+    setDirty(true);
   }, [elements, canvasId]);
 
   // Wheel/trackpad pans the plane (native non-passive so the horizontal axis
@@ -464,6 +431,29 @@ export function Canvas() {
     const wx = (rect ? rect.width / 2 : 320) - pan.x;
     const wy = (rect ? rect.height / 2 : 220) - pan.y;
     placeNoteElement(createNote(), wx, wy);
+  };
+
+  // Manual seal of the scene to Walrus (owner-signed), mirroring the note Save.
+  const save = () => {
+    setDirty(false);
+    void (async () => {
+      const deps = getQuiltDeps();
+      const index = vaultData.getSnapshot().index;
+      if (!deps || !index) return;
+      // Silent write-event so the bulk-forget quiesce awaits an in-flight canvas
+      // seal, the same as note/layout saves.
+      const eventId = vaultData.beginWriteEvent({ noteId: canvasContentTag(canvasId), noteTitle: 'Canvas', state: { phase: 'certifying' }, silent: true });
+      try {
+        const res = await saveCanvasContent(deps, index, canvasId, { elements: elementsForSave(elementsRef.current) });
+        vaultData.updateWriteEvent(eventId, { phase: 'certified', blobObjectId: '', provenanceUrl: '' });
+        if (res.migrationTx) void runDestructiveTx(res.migrationTx).catch(() => {});
+        dismissLowBalance();
+      } catch {
+        vaultData.updateWriteEvent(eventId, { phase: 'failed' });
+        setDirty(true);
+        triggerLowBalance();
+      }
+    })();
   };
 
   // Resize/rotate a selection (U7). The viewport captures the pointer so the
@@ -848,17 +838,6 @@ export function Canvas() {
             {connection === 'full' ? 'This board is full — try again later.' : 'Connection lost — presence is offline.'}
           </span>
         ) : null}
-        <span className={`pgcv-save state-${saveState}`} role="status">
-          {saveState === 'saving' ? (
-            <>
-              <span className="spin" aria-hidden="true">✦</span> sealing…
-            </>
-          ) : saveState === 'failed' ? (
-            <span className="pgcv-save-fail">✕ not sealed — agent may need funds</span>
-          ) : saveState === 'saved' ? (
-            <>✦ sealed</>
-          ) : null}
-        </span>
         <span className="pgcv-cover-wrap">
           <button type="button" className="pgbtn" onClick={() => setCoverOpen((o) => !o)}>
             {boardCover ? 'Change cover' : 'Add cover'}
@@ -868,7 +847,17 @@ export function Canvas() {
         <button type="button" className="pgbtn" onClick={() => setSharing(true)}>
           Share
         </button>
+        {dirty ? (
+          <button type="button" className="pgbtn primary" onClick={save}>
+            Save
+          </button>
+        ) : (
+          <button type="button" className="pgbtn" disabled aria-label="All changes saved">
+            Saved
+          </button>
+        )}
       </div>
+      <FundsBanner />
       <ShareDialog open={sharing} onClose={() => setSharing(false)} noteId={canvasId} title={boardTitle} kind="canvas" />
       <div
         className="pgcv"
@@ -1050,6 +1039,34 @@ export function Canvas() {
           ) : null}
         </div>
       </div>
+
+      <Modal open={blocker.state === 'blocked'} onClose={() => blocker.reset?.()}>
+        <div className="dh">
+          <div className="dt">Save your changes?</div>
+          <div className="dd2">
+            This board has edits that aren&apos;t sealed yet. Save to seal them to your vault, or discard to leave it as it was.
+          </div>
+        </div>
+        <div className="db">
+          <div className="wallet-actions">
+            <Button variant="quiet" onClick={() => blocker.reset?.()}>
+              Keep editing
+            </Button>
+            <Button variant="danger" onClick={() => blocker.proceed?.()}>
+              Discard
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                save();
+                blocker.proceed?.();
+              }}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
