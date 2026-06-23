@@ -7,34 +7,38 @@ import { SHARED_CANVAS_ID, updateCanvas, useCanvases } from '@/hooks/useCanvases
 import { CoverPicker } from '@/components/CoverPicker';
 import { CanvasHome } from './CanvasHome';
 import { ShareDialog } from './ShareDialog';
-import { moveCursor, moveNote, startPresence, stopPresence, usePresence } from '@/hooks/usePresence';
+import { moveCursor, startPresence, stopPresence, usePresence } from '@/hooks/usePresence';
 import type { Peer } from '@/hooks/usePresence';
 import { scheduleAgentNote } from '@/hooks/useAgentTimeline';
 import { useVaultSession } from '@/hooks/useVaultSession';
 import {
   loadCanvasContent,
   saveCanvasContent,
-  canvasContentTag,
-  type Shape as DurableShape,
+  type CanvasElement,
+  type LinearElement,
+  newElementId,
+  newVersionNonce,
+  isLinear,
+  normalizeLinear,
+  NOTE_W,
+  NOTE_H,
 } from '../../../chain/core/src/index.js';
 import { getQuiltDeps } from '@/web3/session';
 import { vaultData } from '@/web3/vaultData';
+import { hitTopElement, marqueeSelect } from '@/canvas/hittest';
+import { addElement, moveElements, deleteElements, duplicateElements, reorder } from '@/canvas/ops';
+import { createSealScheduler, type SealScheduler } from '@/canvas/sealOnSettle';
 import './canvas.css';
 
-const CARD_WIDTH = 190;
-/** Edge endpoints aim at the card's visual middle (title + two excerpt lines). */
-const CARD_CENTER_Y = 44;
 const DRAG_THRESHOLD_PX = 4;
 const INK = '#16181D';
 const SEL = '#2F6BFF';
+const SETTLE_MS = 1200;
+const SAFETY_MS = 120000; // a snapshot at least every 2 min during a long burst
+const TICK_MS = 300;
 
-/** A drawn element on the board, in world coordinates (so it pans with cards). */
-type Shape =
-  | { id: string; kind: 'draw'; pts: number[] }
-  | { id: string; kind: 'rect'; x: number; y: number; w: number; h: number }
-  | { id: string; kind: 'arrow'; x1: number; y1: number; x2: number; y2: number }
-  | { id: string; kind: 'text'; x: number; y: number; text: string }
-  | { id: string; kind: 'image'; x: number; y: number; w: number; h: number; src: string };
+/** Tools that draw a new element (vs select/pan). */
+const DRAW_TOOLS = new Set(['draw', 'arrow', 'shape', 'text']);
 
 /** Kit .aged format. */
 function shortAge(iso: string): string {
@@ -56,61 +60,21 @@ function excerptOf(note: Note, titles: Map<string, string>): string {
     .join(' ');
 }
 
-function pointsAttr(pts: number[]): string {
+/** Absolute polyline points (world coords) for a linear element. */
+function linearPointsAttr(el: LinearElement): string {
   let out = '';
-  for (let i = 0; i < pts.length; i += 2) out += `${pts[i]},${pts[i + 1]} `;
+  for (let i = 0; i < el.points.length; i += 2) out += `${el.x + el.points[i]},${el.y + el.points[i + 1]} `;
   return out.trim();
 }
 
-/** Move every coordinate of a shape by (dx, dy). */
-function translateShape(s: Shape, dx: number, dy: number): Shape {
-  switch (s.kind) {
-    case 'draw':
-      return { ...s, pts: s.pts.map((v, i) => v + (i % 2 === 0 ? dx : dy)) };
-    case 'rect':
-      return { ...s, x: s.x + dx, y: s.y + dy };
-    case 'arrow':
-      return { ...s, x1: s.x1 + dx, y1: s.y1 + dy, x2: s.x2 + dx, y2: s.y2 + dy };
-    case 'text':
-      return { ...s, x: s.x + dx, y: s.y + dy };
-    case 'image':
-      return { ...s, x: s.x + dx, y: s.y + dy };
-  }
+function makeBase(): Pick<CanvasElement, 'id' | 'angle' | 'index' | 'version' | 'versionNonce'> {
+  return { id: newElementId(), angle: 0, index: 0, version: 1, versionNonce: newVersionNonce() };
 }
 
-/**
- * Map the durable (serializable) drawings from the content note to the local
- * working `Shape` union used for rendering. Image shapes are DROPPED for now:
- * persisting their base64 `src` would blow the quilt-size bound, so a clean
- * blob-ref round-trip (load = resolve `ref` → object URL) is deferred.
- * TODO(007): persist image-shape blobs (upload src via uploadCover, resolve ref
- * back to an object URL on load).
- */
-function durableToLocal(drawings: DurableShape[]): Shape[] {
-  const out: Shape[] = [];
-  for (const d of drawings) {
-    if (d.kind === 'image') continue; // see TODO above
-    out.push(d);
-  }
-  return out;
+/** Image elements with a local data: ref are NOT yet persistable (U13 uploads them). */
+function elementsForSave(elements: CanvasElement[]): CanvasElement[] {
+  return elements.filter((el) => !(el.type === 'image' && el.ref.startsWith('data:')));
 }
-
-/**
- * Map the local working shapes to their durable (serializable) form for the
- * content note. Image shapes are DROPPED (their base64 `src` is not persistable
- * inline). Non-image drawings round-trip exactly. TODO(007): persist image-shape
- * blobs (upload each image `src` via uploadCover, store the `blob:` ref).
- */
-function localToDurable(shapes: Shape[]): DurableShape[] {
-  const out: DurableShape[] = [];
-  for (const s of shapes) {
-    if (s.kind === 'image') continue; // see TODO above
-    out.push(s);
-  }
-  return out;
-}
-
-const DRAW_TOOLS = new Set(['draw', 'arrow', 'shape', 'text']);
 
 function ToolIcon({ children }: { children: ReactNode }) {
   return (
@@ -152,16 +116,6 @@ function PeerCursor({ peer }: { peer: Peer }) {
   );
 }
 
-interface DragState {
-  noteId: string;
-  startClientX: number;
-  startClientY: number;
-  originX: number;
-  originY: number;
-  moved: boolean;
-}
-
-/** A pan drag of the whole board (empty-canvas drag or the hand tool). */
 interface PanState {
   startClientX: number;
   startClientY: number;
@@ -169,67 +123,34 @@ interface PanState {
   originY: number;
 }
 
-const DRAWINGS_SAVE_DEBOUNCE_MS = 800;
-
-/**
- * Debounced, per-canvas durable save of the board's drawings (plan 007 U2).
- * Mirrors the layout autosave in presenceStore: a SILENT write-event (no toast)
- * keyed on the canvas's content tag, so the bulk-forget quiesce (U7) covers
- * per-canvas drawings writes too. `saveCanvasContent` does a read-modify-write so
- * a drawings-only save never clobbers a concurrent layout change (KTD2). On the
- * first shared write it may return a `migrationTx` (deleting the legacy layout
- * blob) — run best-effort through the destructive wallet seam (decision 5).
- *
- * Module-level + per-canvas debounce timer so switching boards cancels a stale
- * pending save. Pure-ish (reads the singletons like the other web3 savers).
- */
-let drawingsSaveTimer: ReturnType<typeof setTimeout> | null = null;
-
-function scheduleDrawingsSave(canvasId: string, drawings: DurableShape[]): void {
-  if (drawingsSaveTimer) clearTimeout(drawingsSaveTimer);
-  drawingsSaveTimer = setTimeout(() => {
-    drawingsSaveTimer = null;
-    const deps = getQuiltDeps();
-    const index = vaultData.getSnapshot().index;
-    if (!deps || !index) return;
-    const eventId = vaultData.beginWriteEvent({
-      noteId: canvasContentTag(canvasId),
-      noteTitle: 'Canvas drawings',
-      state: { phase: 'certifying' },
-      silent: true,
-    });
-    void saveCanvasContent(deps, index, canvasId, { drawings })
-      .then((res) => {
-        vaultData.updateWriteEvent(eventId, { phase: 'certified', blobObjectId: '', provenanceUrl: '' });
-        // best-effort: delete the legacy shared layout blob if U1 handed one back
-        if (res.migrationTx) void runDestructiveTx(res.migrationTx).catch(() => {});
-      })
-      .catch(() => {
-        vaultData.updateWriteEvent(eventId, { phase: 'failed' });
-      });
-  }, DRAWINGS_SAVE_DEBOUNCE_MS);
+/** A drag of the current selection: the pre-drag snapshot + the start world point. */
+interface MoveState {
+  ids: string[];
+  origin: CanvasElement[];
+  startX: number;
+  startY: number;
+  moved: boolean;
+  /** The element actually grabbed (for click-to-open detection on a note). */
+  hitId: string;
 }
 
 /**
- * The shared sky (spec #page-canvas): memory cards on constellation paper,
- * faint link edges, live human + agent cursors, and a working Excalidraw-style
- * toolbar — pen, arrow, rectangle and text create real elements you can select,
- * move and delete; the + adds a note card and Recall summons the agent. Card
- * layout writes go through moveNote (debounced mock save + pill pulse).
+ * The canvas board (plan 2026-06-22): one unified Excalidraw-style element model.
+ * Notes, vector shapes, text and images are all `CanvasElement`s in a single list
+ * — selected, dragged and deleted the same way; a note element opens its note on
+ * a plain click. The scene seals to Walrus on settle (owner-signed, no save
+ * button). Live presence (human + agent cursors, the avatars row, Recall) is
+ * preserved on the shared board; only the old auto-vault projection + link edges
+ * were removed (every board is place-only now).
  *
- * The board is an infinite plane: the wheel/trackpad and empty-canvas drags pan
- * a translated world layer, and the dotted grid scrolls with it. Cards, edges,
- * drawings and cursors live in that layer; the avatars and toolbar stay pinned.
- * Drawings are DURABLE (plan 007 U2): seeded per board from the content note and
- * debounce-persisted as the user draws, so a board resurrects with its shapes.
+ * Live element sync over the relay is NOT wired yet (U16) — this is the
+ * single-user surface; presence still broadcasts cursors.
  */
 export function Canvas() {
   const session = useVaultSession();
   const navigate = useNavigate();
   const { canvasId } = useParams();
   const canvases = useCanvases();
-  // No id -> the canvas home (gallery); only the seed canvas shows the shared
-  // note constellation, every other board is blank.
   const isShared = canvasId === SHARED_CANVAS_ID;
   const boardDoc = canvases.find((c) => c.canvasId === canvasId);
   const boardTitle = boardDoc?.title ?? 'Untitled canvas';
@@ -241,47 +162,49 @@ export function Canvas() {
     setCoverOpen(false);
   };
   const { notes } = useVault();
-  const { peers, layout, savingLayout, materializedNoteId, connection } = usePresence();
-  const dragRef = useRef<DragState | null>(null);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const { peers, connection } = usePresence();
   const [tool, setTool] = useState('select');
 
-  // Infinite-canvas camera: the world layer is translated by this offset.
   const viewportRef = useRef<HTMLDivElement>(null);
-  // The editable board-title field (focused by the rename affordance).
   const titleRef = useRef<HTMLElement>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const panRef = useRef<PanState | null>(null);
   const [panning, setPanning] = useState(false);
   const [sharing, setSharing] = useState(false);
 
-  // Drawings: committed shapes, the one being drawn, and the current selection.
-  const [shapes, setShapes] = useState<Shape[]>([]);
-  const [draft, setDraft] = useState<Shape | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // The unified element list, the in-progress draw, the selection, and the text
+  // element being edited in place.
+  const [elements, setElements] = useState<CanvasElement[]>([]);
+  const [draft, setDraft] = useState<CanvasElement | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const draftRef = useRef<Shape | null>(null);
+  const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+
+  // Interaction refs (mutable, not render state).
+  const draftRef = useRef<CanvasElement | null>(null);
   const startRef = useRef({ x: 0, y: 0 });
-  const shapeDragRef = useRef<{ id: string; startClientX: number; startClientY: number; origin: Shape } | null>(null);
+  const moveRef = useRef<MoveState | null>(null);
+  const marqueeRef = useRef<{ x: number; y: number } | null>(null);
   const textPendingRef = useRef<{ x: number; y: number } | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const idSeq = useRef(0);
-  const nextId = () => `sh${++idSeq.current}`;
-  // The exact `shapes` array the current board was seeded with, plus an "armed"
-  // flag. Together they guard the autosave so the seed itself never fires a write:
-  // the seed disarms, the persist effect re-arms only once it sees the seed
-  // reflected in `shapes` (reference-equal), and any render BEFORE that (the stale
-  // pre-seed [] on mount, or a stale board's shapes mid-switch) is skipped without
-  // scheduling — and without clearing a sibling board's pending timer. Only a real
-  // user edit (a fresh array, post-arm) writes. Without this, opening a board would
-  // editedNote-bump its content note, and opening `shared` would trigger the
-  // destructive U1 migration before any user action.
-  const seededShapesRef = useRef<Shape[] | null>(null);
+  const elementsRef = useRef<CanvasElement[]>([]);
+  const historyRef = useRef<CanvasElement[][]>([]);
+
+  // Seed-guard (mirrors the prior drawings guard): the seed never counts as an
+  // edit, so opening a board fires zero seals. The persist effect arms only once
+  // it sees the seeded array reflected in `elements`.
+  const seededRef = useRef<CanvasElement[] | null>(null);
   const seedArmedRef = useRef(false);
 
-  // Presence + the live constellation belong to the shared board only, and only
-  // once the vault is ready (the relay room is keyed on the vault id, and the
-  // durable layout seed reads the live index).
+  // Seal-on-settle: the scheduler + the surfaced save state.
+  const schedulerRef = useRef<SealScheduler | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+
+  useEffect(() => {
+    elementsRef.current = elements;
+  }, [elements]);
+
+  // Presence (cursors + avatars + Recall) belongs to the shared board, once ready.
   const readyVaultId = session.phase === 'ready' ? session.vault.vaultId : null;
   useEffect(() => {
     if (!isShared || !readyVaultId || !canvasId) return;
@@ -289,46 +212,75 @@ export function Canvas() {
     return () => stopPresence();
   }, [isShared, readyVaultId, canvasId]);
 
-  // Seed this board's drawings from its durable content note (resurrects shapes),
-  // and reset the transient draw state. Image shapes are dropped on the map until
-  // their blob persistence lands (TODO(007) in durableToLocal). The seeded array
-  // is captured by reference + the autosave is DISARMED so the seed never writes.
-  // Keyed on the published index too: a hard reload straight into a board mounts
-  // before the rebuild publishes (index null → empty seed), so re-seed when the
-  // rebuilt index lands (the ref swaps only on publish, never on routine upserts).
+  // Seed this board's elements from its durable content note. Disarms the seal
+  // guard until the seed lands in `elements`. Re-seeds when the rebuilt index
+  // publishes (hard reload straight into a board mounts before the rebuild).
   const liveIndex = vaultData.getSnapshot().index;
   useEffect(() => {
     if (!canvasId) return;
-    const content = liveIndex ? loadCanvasContent(liveIndex, canvasId) : { layout: {}, drawings: [] };
-    const seeded = durableToLocal(content.drawings);
-    seededShapesRef.current = seeded;
-    seedArmedRef.current = false; // disarm until this seed is reflected in `shapes`
-    setShapes(seeded);
+    const content = liveIndex ? loadCanvasContent(liveIndex, canvasId) : { elements: [] as CanvasElement[] };
+    const seeded = content.elements ?? [];
+    seededRef.current = seeded;
+    seedArmedRef.current = false;
+    historyRef.current = [];
+    setElements(seeded);
     setDraft(null);
-    setSelectedId(null);
+    setSelectedIds([]);
     setEditingId(null);
+    setMarquee(null);
     draftRef.current = null;
+    moveRef.current = null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasId, liveIndex]);
 
-  // Debounce-persist drawings whenever they change. The seed itself is skipped:
-  // when `shapes` is reference-equal to the seeded array the seed has landed, so
-  // we ARM and return (no write). Any render before that (the pre-seed [] on mount,
-  // or a stale board's shapes mid-switch) is disarmed → skipped, so it neither
-  // writes nor clears a sibling board's pending timer. Non-image shapes round-trip
-  // durably (image shapes dropped — see localToDurable TODO); the save is silent +
-  // read-modify-write (KTD2). Only a real user edit (post-arm) triggers a write.
+  // Build the seal scheduler per board. The save reads the latest elements via a
+  // ref and surfaces saving/saved/failed (U12, non-silent). Flushes on leave.
   useEffect(() => {
     if (!canvasId) return;
-    if (shapes === seededShapesRef.current) {
-      seedArmedRef.current = true; // seed landed → arm subsequent (real) edits
+    const scheduler = createSealScheduler({
+      settleMs: SETTLE_MS,
+      safetyMs: SAFETY_MS,
+      save: async () => {
+        const deps = getQuiltDeps();
+        const index = vaultData.getSnapshot().index;
+        if (!deps || !index) return;
+        setSaveState('saving');
+        try {
+          const res = await saveCanvasContent(deps, index, canvasId, { elements: elementsForSave(elementsRef.current) });
+          if (res.migrationTx) void runDestructiveTx(res.migrationTx).catch(() => {});
+          setSaveState('saved');
+        } catch (e) {
+          setSaveState('failed');
+          throw e;
+        }
+      },
+    });
+    schedulerRef.current = scheduler;
+    const tick = setInterval(() => scheduler.flushIfDue(performance.now()), TICK_MS);
+    const onBeforeUnload = () => scheduler.flushNow(performance.now());
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      clearInterval(tick);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      scheduler.flushNow(performance.now()); // seal on board-switch / unmount
+      schedulerRef.current = null;
+    };
+  }, [canvasId]);
+
+  // Mark a real edit (post-arm) so the scheduler seals on settle. The seed itself
+  // arms but never edits.
+  useEffect(() => {
+    if (!canvasId) return;
+    if (elements === seededRef.current) {
+      seedArmedRef.current = true;
       return;
     }
-    if (!seedArmedRef.current) return; // pre-seed / stale-board render → skip
-    scheduleDrawingsSave(canvasId, localToDurable(shapes));
-  }, [shapes, canvasId]);
+    if (!seedArmedRef.current) return;
+    schedulerRef.current?.edit(performance.now());
+  }, [elements, canvasId]);
 
-  // Wheel/trackpad pans the plane. A native non-passive listener so the
-  // horizontal axis can't trigger browser back/forward overscroll.
+  // Wheel/trackpad pans the plane (native non-passive so the horizontal axis
+  // can't trigger browser back/forward overscroll).
   useEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
@@ -340,178 +292,138 @@ export function Canvas() {
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
-  // Backspace/Delete removes the selected drawing; Cmd/Ctrl+Z drops the last
-  // one. Ignored while typing into the text box or any field.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const active = document.activeElement as HTMLElement | null;
-      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
-      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedId) {
-        event.preventDefault();
-        setShapes((prev) => prev.filter((s) => s.id !== selectedId));
-        setSelectedId(null);
-      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
-        event.preventDefault();
-        setShapes((prev) => prev.slice(0, -1));
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [selectedId]);
-
   const titles = useMemo(() => {
     const map = new Map<string, string>();
     for (const note of notes) map.set(note.noteId, note.title || 'Untitled note');
     return map;
   }, [notes]);
+  const notesById = useMemo(() => new Map(notes.map((n) => [n.noteId, n])), [notes]);
 
-  // Notes without a stored position (e.g. chat drafts) cascade near the top-left.
-  // The plane is infinite, so authored coordinates are used as-is — the viewer
-  // pans to reach cards rather than the board scaling to fit them.
-  const positions = useMemo(() => {
-    const map = new Map<string, { x: number; y: number }>();
-    let cascade = 0;
-    for (const note of notes) {
-      const stored = layout[note.noteId];
-      if (stored) {
-        map.set(note.noteId, stored);
-      } else {
-        map.set(note.noteId, { x: 60 + cascade * 32, y: 60 + cascade * 32 });
-        cascade += 1;
+  /** Push the current elements onto the undo stack (call before a mutating op). */
+  const pushHistory = () => {
+    historyRef.current.push(elementsRef.current);
+    if (historyRef.current.length > 50) historyRef.current.shift();
+  };
+
+  // Keyboard: delete / undo / duplicate / nudge / z-order. Ignored while typing.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const active = document.activeElement as HTMLElement | null;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+      const meta = event.metaKey || event.ctrlKey;
+      const sel = selectedIds;
+      if ((event.key === 'Delete' || event.key === 'Backspace') && sel.length) {
+        event.preventDefault();
+        pushHistory();
+        setElements((prev) => deleteElements(prev, sel));
+        setSelectedIds([]);
+      } else if (meta && event.key.toLowerCase() === 'z') {
+        event.preventDefault();
+        const prev = historyRef.current.pop();
+        if (prev) {
+          setElements(prev);
+          setSelectedIds([]);
+        }
+      } else if (meta && event.key.toLowerCase() === 'd' && sel.length) {
+        event.preventDefault();
+        pushHistory();
+        const { elements: next, newIds } = duplicateElements(elementsRef.current, sel);
+        setElements(next);
+        setSelectedIds(newIds);
+      } else if (sel.length && (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+        event.preventDefault();
+        const step = event.shiftKey ? 5 : 1;
+        const dx = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0;
+        const dy = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0;
+        setElements((prev) => moveElements(prev, sel, dx, dy));
+      } else if (meta && event.key === ']' && sel.length) {
+        event.preventDefault();
+        pushHistory();
+        setElements((prev) => reorder(prev, sel, event.shiftKey ? 'front' : 'forward'));
+      } else if (meta && event.key === '[' && sel.length) {
+        event.preventDefault();
+        pushHistory();
+        setElements((prev) => reorder(prev, sel, event.shiftKey ? 'back' : 'backward'));
       }
-    }
-    return map;
-  }, [notes, layout]);
-
-  const edges = useMemo(() => {
-    const seen = new Set<string>();
-    const pairs: Array<{ from: string; to: string }> = [];
-    for (const note of notes) {
-      for (const target of note.links) {
-        if (!titles.has(target)) continue;
-        const key = [note.noteId, target].sort().join('~');
-        if (seen.has(key)) continue;
-        seen.add(key);
-        pairs.push({ from: note.noteId, to: target });
-      }
-    }
-    return pairs;
-  }, [notes, titles]);
-
-  // Placed notes for a NON-shared board: the notes whose ids appear in this
-  // canvas's durable layout, rendered read-only at their stored positions. (The
-  // layout WRITE path — canvas-aware place_note — is U3; in U2 this is empty in
-  // the running app until an agent places a note, which is correct.) The shared
-  // board ignores this and keeps its usePresence/moveNote constellation.
-  const placedNotes = useMemo(() => {
-    if (isShared || !canvasId) return [] as Array<{ note: Note; x: number; y: number }>;
-    const index = vaultData.getSnapshot().index;
-    if (!index) return [];
-    const { layout: placed } = loadCanvasContent(index, canvasId);
-    const byId = new Map(notes.map((n) => [n.noteId, n]));
-    const out: Array<{ note: Note; x: number; y: number }> = [];
-    for (const [noteId, pos] of Object.entries(placed)) {
-      const note = byId.get(noteId);
-      if (note) out.push({ note, x: pos.x, y: pos.y });
-    }
-    return out;
-  }, [isShared, canvasId, notes]);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedIds]);
 
   if (session.phase !== 'ready') return null;
-  // The Canvas nav (no id) lands on the gallery; a board opens at /app/canvas/:id.
   if (!canvasId) return <CanvasHome />;
   const name = session.agent.name;
-
-  const newNote = () => navigate(`/app/notes/${createNote()}`);
+  const selectedSet = new Set(selectedIds);
 
   /** Client point -> world coordinate (undo the viewport offset and the pan). */
   const toWorld = (clientX: number, clientY: number) => {
     const rect = viewportRef.current?.getBoundingClientRect();
-    const left = rect?.left ?? 0;
-    const top = rect?.top ?? 0;
-    return { x: clientX - left - pan.x, y: clientY - top - pan.y };
+    return { x: clientX - (rect?.left ?? 0) - pan.x, y: clientY - (rect?.top ?? 0) - pan.y };
   };
 
-  const onCardPointerDown = (event: React.PointerEvent<HTMLDivElement>, noteId: string) => {
-    if (DRAW_TOOLS.has(tool)) return; // a drawing tool draws over the board, not drags cards
-    const origin = positions.get(noteId);
-    if (!origin) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    dragRef.current = {
-      noteId,
-      startClientX: event.clientX,
-      startClientY: event.clientY,
-      originX: origin.x,
-      originY: origin.y,
-      moved: false,
-    };
+  /** Place a note element at a world point (drag-from-sidebar / +note). */
+  const placeNoteElement = (noteId: string, wx: number, wy: number) => {
+    pushHistory();
+    const el: CanvasElement = { ...makeBase(), type: 'note', noteId, x: wx - NOTE_W / 2, y: wy - NOTE_H / 2, w: NOTE_W, h: NOTE_H };
+    setElements((prev) => addElement(prev, el));
+    setSelectedIds([el.id]);
   };
 
-  const onCardPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current;
-    if (!drag) return;
-    const dx = event.clientX - drag.startClientX;
-    const dy = event.clientY - drag.startClientY;
-    if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
-    drag.moved = true;
-    setDraggingId(drag.noteId);
-    moveNote(drag.noteId, Math.max(0, drag.originX + dx), Math.max(0, drag.originY + dy));
+  const newNoteAndPlace = () => {
+    const rect = viewportRef.current?.getBoundingClientRect();
+    const wx = (rect ? rect.width / 2 : 320) - pan.x;
+    const wy = (rect ? rect.height / 2 : 220) - pan.y;
+    placeNoteElement(createNote(), wx, wy);
   };
 
-  const onCardPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current;
-    if (!drag) return;
-    dragRef.current = null;
-    setDraggingId(null);
-    if (drag.moved) {
-      moveNote(
-        drag.noteId,
-        Math.max(0, drag.originX + (event.clientX - drag.startClientX)),
-        Math.max(0, drag.originY + (event.clientY - drag.startClientY)),
-      );
-    } else {
-      navigate(`/app/notes/${drag.noteId}`);
-    }
-  };
-
-  // The board pointer dispatch branches on the active tool: drawing tools create
-  // an element, hand/select on empty canvas pans the plane.
+  // ── Board pointer dispatch (the viewport captures everything; rendered
+  // elements are pointer-events:none, so hit-testing is done in world space). ──
   const onCanvasPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest('.pgcv-note, .pgcv-tools, .pgcv-avs')) return;
-    setSelectedId(null);
+    if ((event.target as HTMLElement).closest('.pgcv-tools, .pgcv-avs')) return;
     const wp = toWorld(event.clientX, event.clientY);
+    event.currentTarget.setPointerCapture(event.pointerId);
 
     if (tool === 'text') {
-      // Defer creation to pointer-up: mounting the textarea on pointerdown lets
-      // the browser's focus-on-mousedown blur (and self-delete) it immediately.
-      event.currentTarget.setPointerCapture(event.pointerId);
       textPendingRef.current = wp;
       return;
     }
-
     if (DRAW_TOOLS.has(tool)) {
-      event.currentTarget.setPointerCapture(event.pointerId);
       startRef.current = wp;
-      const draftShape: Shape =
+      const b = makeBase();
+      const d: CanvasElement =
         tool === 'draw'
-          ? { id: nextId(), kind: 'draw', pts: [wp.x, wp.y] }
+          ? { ...b, type: 'draw', x: wp.x, y: wp.y, w: 0, h: 0, points: [0, 0] }
           : tool === 'arrow'
-            ? { id: nextId(), kind: 'arrow', x1: wp.x, y1: wp.y, x2: wp.x, y2: wp.y }
-            : { id: nextId(), kind: 'rect', x: wp.x, y: wp.y, w: 0, h: 0 };
-      draftRef.current = draftShape;
-      setDraft(draftShape);
+            ? { ...b, type: 'arrow', x: wp.x, y: wp.y, w: 0, h: 0, points: [0, 0, 0, 0] }
+            : { ...b, type: 'rect', x: wp.x, y: wp.y, w: 0, h: 0 };
+      draftRef.current = d;
+      setDraft(d);
       return;
     }
-
-    // hand, or select on empty canvas: pan the plane
-    event.currentTarget.setPointerCapture(event.pointerId);
-    panRef.current = { startClientX: event.clientX, startClientY: event.clientY, originX: pan.x, originY: pan.y };
-    setPanning(true);
+    if (tool === 'hand') {
+      panRef.current = { startClientX: event.clientX, startClientY: event.clientY, originX: pan.x, originY: pan.y };
+      setPanning(true);
+      return;
+    }
+    // select tool: hit-test the top element; else marquee.
+    const hit = hitTopElement(wp, elements);
+    if (hit) {
+      const ids = selectedSet.has(hit.id)
+        ? selectedIds
+        : event.shiftKey
+          ? [...selectedIds, hit.id]
+          : [hit.id];
+      setSelectedIds(ids);
+      pushHistory();
+      moveRef.current = { ids, origin: elementsRef.current, startX: wp.x, startY: wp.y, moved: false, hitId: hit.id };
+    } else {
+      if (!event.shiftKey) setSelectedIds([]);
+      marqueeRef.current = { x: wp.x, y: wp.y };
+      setMarquee({ x: wp.x, y: wp.y, w: 0, h: 0 });
+    }
   };
 
   const onCanvasPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    // Broadcast the local cursor (world coords, so peers render it where it
-    // lives on the shared plane). Throttled inside moveCursor; no-op off-board.
     if (isShared) {
       const wp = toWorld(event.clientX, event.clientY);
       moveCursor(wp.x, wp.y);
@@ -519,10 +431,10 @@ export function Canvas() {
     const d = draftRef.current;
     if (d) {
       const wp = toWorld(event.clientX, event.clientY);
-      let next: Shape;
-      if (d.kind === 'draw') next = { ...d, pts: [...d.pts, wp.x, wp.y] };
-      else if (d.kind === 'arrow') next = { ...d, x2: wp.x, y2: wp.y };
-      else if (d.kind === 'rect')
+      let next: CanvasElement;
+      if (d.type === 'draw') next = { ...d, points: [...d.points, wp.x - d.x, wp.y - d.y] };
+      else if (d.type === 'arrow') next = { ...d, points: [0, 0, wp.x - d.x, wp.y - d.y] };
+      else
         next = {
           ...d,
           x: Math.min(startRef.current.x, wp.x),
@@ -530,36 +442,75 @@ export function Canvas() {
           w: Math.abs(wp.x - startRef.current.x),
           h: Math.abs(wp.y - startRef.current.y),
         };
-      else next = d;
       draftRef.current = next;
       setDraft(next);
       return;
     }
+    const mv = moveRef.current;
+    if (mv) {
+      const dx = toWorld(event.clientX, event.clientY).x - mv.startX;
+      const dy = toWorld(event.clientX, event.clientY).y - mv.startY;
+      if (!mv.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
+      mv.moved = true;
+      setElements(moveElements(mv.origin, mv.ids, dx, dy));
+      return;
+    }
+    const mq = marqueeRef.current;
+    if (mq) {
+      const wp = toWorld(event.clientX, event.clientY);
+      setMarquee({ x: mq.x, y: mq.y, w: wp.x - mq.x, h: wp.y - mq.y });
+      return;
+    }
     const p = panRef.current;
-    if (!p) return;
-    setPan({ x: p.originX + (event.clientX - p.startClientX), y: p.originY + (event.clientY - p.startClientY) });
+    if (p) setPan({ x: p.originX + (event.clientX - p.startClientX), y: p.originY + (event.clientY - p.startClientY) });
   };
 
   const onCanvasPointerUp = () => {
     if (textPendingRef.current) {
       const { x, y } = textPendingRef.current;
       textPendingRef.current = null;
-      const shape: Shape = { id: nextId(), kind: 'text', x, y, text: '' };
-      setShapes((prev) => [...prev, shape]);
-      setEditingId(shape.id);
+      pushHistory();
+      const el: CanvasElement = { ...makeBase(), type: 'text', x, y, w: 0, h: 0, text: '' };
+      setElements((prev) => addElement(prev, el));
+      setEditingId(el.id);
       setTool('select');
       return;
     }
     const d = draftRef.current;
     if (d) {
-      const keep =
-        (d.kind === 'draw' && d.pts.length >= 4) ||
-        (d.kind === 'rect' && d.w > 3 && d.h > 3) ||
-        (d.kind === 'arrow' && Math.hypot(d.x2 - d.x1, d.y2 - d.y1) > 6);
-      if (keep) setShapes((prev) => [...prev, d]);
       draftRef.current = null;
       setDraft(null);
-      setTool('select'); // revert to select after drawing, like Excalidraw's default
+      const keep =
+        (d.type === 'draw' && d.points.length >= 4) ||
+        (d.type === 'rect' && d.w > 3 && d.h > 3) ||
+        (d.type === 'arrow' && Math.hypot(d.points[2] - d.points[0], d.points[3] - d.points[1]) > 6);
+      if (keep) {
+        pushHistory();
+        const committed = isLinear(d) ? normalizeLinear(d as LinearElement) : d;
+        setElements((prev) => addElement(prev, committed));
+      }
+      setTool('select');
+      return;
+    }
+    const mv = moveRef.current;
+    if (mv) {
+      moveRef.current = null;
+      if (!mv.moved) {
+        // a plain click (no drag): a note opens; anything else just stays selected.
+        const hit = elementsRef.current.find((e) => e.id === mv.hitId);
+        if (hit && hit.type === 'note') navigate(`/app/notes/${hit.noteId}`);
+        else historyRef.current.pop(); // no move happened → discard the pushed snapshot
+      }
+      return;
+    }
+    if (marqueeRef.current) {
+      const rect = marquee;
+      marqueeRef.current = null;
+      setMarquee(null);
+      if (rect) {
+        const picked = marqueeSelect(rect, elements).map((e) => e.id);
+        if (picked.length) setSelectedIds((prev) => Array.from(new Set([...(rect ? [] : prev), ...picked])));
+      }
       return;
     }
     if (panRef.current) {
@@ -568,36 +519,35 @@ export function Canvas() {
     }
   };
 
-  // Select + drag a drawn shape (only with the select tool active).
-  const onShapePointerDown = (event: ReactPointerEvent<Element>, shape: Shape) => {
-    if (tool !== 'select') return;
-    event.stopPropagation();
-    (event.target as Element).setPointerCapture?.(event.pointerId);
-    setSelectedId(shape.id);
-    shapeDragRef.current = { id: shape.id, startClientX: event.clientX, startClientY: event.clientY, origin: shape };
-  };
-
-  const onShapePointerMove = (event: ReactPointerEvent<Element>) => {
-    const sd = shapeDragRef.current;
-    if (!sd) return;
-    const dx = event.clientX - sd.startClientX;
-    const dy = event.clientY - sd.startClientY;
-    setShapes((prev) => prev.map((s) => (s.id === sd.id ? translateShape(sd.origin, dx, dy) : s)));
-  };
-
-  const onShapePointerUp = () => {
-    shapeDragRef.current = null;
+  const onCanvasDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const wp = toWorld(event.clientX, event.clientY);
+    const hit = hitTopElement(wp, elements);
+    if (hit && hit.type === 'text') setEditingId(hit.id);
   };
 
   const commitText = (id: string, value: string) => {
     setEditingId(null);
     const text = value.trim();
-    if (!text) setShapes((prev) => prev.filter((s) => s.id !== id));
-    else setShapes((prev) => prev.map((s) => (s.id === id && s.kind === 'text' ? { ...s, text } : s)));
+    if (!text) setElements((prev) => prev.filter((s) => s.id !== id));
+    else {
+      pushHistory();
+      setElements((prev) => prev.map((s) => (s.id === id && s.type === 'text' ? { ...s, text } : s)));
+    }
   };
 
-  // Upload an image; it lands as a small element at the viewport centre, sized
-  // to the file's aspect, then selectable/movable/deletable like any shape.
+  // Drag a note from the sidebar onto the board.
+  const onBoardDragOver = (event: React.DragEvent) => {
+    if (event.dataTransfer.types.includes('text/noteid')) event.preventDefault();
+  };
+  const onBoardDrop = (event: React.DragEvent) => {
+    const noteId = event.dataTransfer.getData('text/noteid');
+    if (!noteId) return;
+    event.preventDefault();
+    const wp = toWorld(event.clientX, event.clientY);
+    placeNoteElement(noteId, wp.x, wp.y);
+  };
+
+  // Add an image: lands as a local element (data: ref); U13 uploads it to a blob.
   const onAddImage = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -612,9 +562,10 @@ export function Canvas() {
         const rect = viewportRef.current?.getBoundingClientRect();
         const x = (rect ? rect.width / 2 : 320) - pan.x - w / 2;
         const y = (rect ? rect.height / 2 : 220) - pan.y - h / 2;
-        const shape: Shape = { id: nextId(), kind: 'image', x, y, w, h, src };
-        setShapes((prev) => [...prev, shape]);
-        setSelectedId(shape.id);
+        pushHistory();
+        const el: CanvasElement = { ...makeBase(), type: 'image', x, y, w, h, ref: src };
+        setElements((prev) => addElement(prev, el));
+        setSelectedIds([el.id]);
         setTool('select');
       };
       probe.src = src;
@@ -622,55 +573,38 @@ export function Canvas() {
     reader.readAsDataURL(file);
   };
 
-  const cursor = panning
-    ? 'grabbing'
-    : tool === 'hand'
-      ? 'grab'
-      : DRAW_TOOLS.has(tool)
-        ? 'crosshair'
-        : 'default';
+  const cursor = panning ? 'grabbing' : tool === 'hand' ? 'grab' : DRAW_TOOLS.has(tool) ? 'crosshair' : 'default';
 
-  // One shape -> its visible stroke plus (committed only) a fat invisible hit
-  // band that opts into pointer events when the select tool is active.
-  const renderShape = (s: Shape, isDraft: boolean) => {
-    if (s.kind === 'text' || s.kind === 'image') return null;
-    const sel = !isDraft && s.id === selectedId;
+  // Split the model into the two render layers, each in z-order.
+  const ordered = [...elements].sort((a, b) => a.index - b.index);
+  const vectorEls = ordered.filter((e) => e.type === 'rect' || e.type === 'ellipse' || e.type === 'arrow' || e.type === 'line' || e.type === 'draw');
+  const htmlEls = ordered.filter((e) => e.type === 'note' || e.type === 'text' || e.type === 'image');
+
+  const renderVector = (s: CanvasElement, isDraft: boolean) => {
+    const sel = !isDraft && selectedSet.has(s.id);
     const stroke = sel ? SEL : INK;
-    const hit = !isDraft && tool === 'select';
-    const hitProps = {
-      style: { pointerEvents: hit ? ('stroke' as const) : ('none' as const), cursor: 'move' },
-      onPointerDown: (e: ReactPointerEvent<Element>) => onShapePointerDown(e, s),
-      onPointerMove: onShapePointerMove,
-      onPointerUp: onShapePointerUp,
-    };
-    if (s.kind === 'draw') {
-      const pts = pointsAttr(s.pts);
+    const rot = s.angle ? `rotate(${(s.angle * 180) / Math.PI} ${s.x + s.w / 2} ${s.y + s.h / 2})` : undefined;
+    if (s.type === 'draw' || s.type === 'arrow' || s.type === 'line') {
+      const pts = linearPointsAttr(s as LinearElement);
       return (
-        <g key={s.id}>
-          <polyline points={pts} fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          {!isDraft ? <polyline points={pts} fill="none" stroke="transparent" strokeWidth="14" {...hitProps} /> : null}
-        </g>
+        <polyline
+          key={s.id}
+          points={pts}
+          transform={rot}
+          fill="none"
+          stroke={stroke}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          markerEnd={s.type === 'arrow' ? 'url(#cv-arrowhead)' : undefined}
+        />
       );
     }
-    if (s.kind === 'rect') {
-      return (
-        <g key={s.id}>
-          <rect x={s.x} y={s.y} width={s.w} height={s.h} rx="3" fill="none" stroke={stroke} strokeWidth="2" />
-          {!isDraft ? (
-            <rect x={s.x} y={s.y} width={s.w} height={s.h} fill="transparent" stroke="transparent" strokeWidth="14" {...{ ...hitProps, style: { pointerEvents: hit ? ('all' as const) : ('none' as const), cursor: 'move' } }} />
-          ) : null}
-        </g>
-      );
+    if (s.type === 'ellipse') {
+      return <ellipse key={s.id} cx={s.x + s.w / 2} cy={s.y + s.h / 2} rx={s.w / 2} ry={s.h / 2} transform={rot} fill="none" stroke={stroke} strokeWidth="2" />;
     }
-    return (
-      <g key={s.id}>
-        <line x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={stroke} strokeWidth="2" markerEnd="url(#cv-arrowhead)" />
-        {!isDraft ? <line x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke="transparent" strokeWidth="14" {...hitProps} /> : null}
-      </g>
-    );
+    return <rect key={s.id} x={s.x} y={s.y} width={s.w} height={s.h} rx="3" transform={rot} fill="none" stroke={stroke} strokeWidth="2" />;
   };
-
-  const textShapes = shapes.filter((s): s is Extract<Shape, { kind: 'text' }> => s.kind === 'text');
 
   return (
     <div className="pged">
@@ -690,7 +624,7 @@ export function Canvas() {
               const value = event.currentTarget.textContent?.trim() ?? '';
               if (!canvasId) return;
               if (value && value !== boardTitle) updateCanvas(canvasId, { title: value });
-              else event.currentTarget.textContent = boardTitle; // restore if emptied/unchanged
+              else event.currentTarget.textContent = boardTitle;
             }}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
@@ -713,13 +647,12 @@ export function Canvas() {
               const el = titleRef.current;
               if (!el) return;
               el.focus();
-              // place the caret at the end of the title
               const range = document.createRange();
               range.selectNodeContents(el);
               range.collapse(false);
-              const sel = window.getSelection();
-              sel?.removeAllRanges();
-              sel?.addRange(range);
+              const selr = window.getSelection();
+              selr?.removeAllRanges();
+              selr?.addRange(range);
             }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -739,16 +672,20 @@ export function Canvas() {
               color: connection === 'full' ? '#B4231F' : 'rgba(22,24,29,.55)',
             }}
           >
-            {connection === 'full'
-              ? 'This board is full — try again later.'
-              : 'Connection lost — presence is offline.'}
+            {connection === 'full' ? 'This board is full — try again later.' : 'Connection lost — presence is offline.'}
           </span>
         ) : null}
-        {savingLayout ? (
-          <span className="pgcv-save">
-            <span className="spin" aria-hidden="true">✦</span> saving layout…
-          </span>
-        ) : null}
+        <span className={`pgcv-save state-${saveState}`} role="status">
+          {saveState === 'saving' ? (
+            <>
+              <span className="spin" aria-hidden="true">✦</span> sealing…
+            </>
+          ) : saveState === 'failed' ? (
+            <span className="pgcv-save-fail">✕ not sealed — agent may need funds</span>
+          ) : saveState === 'saved' ? (
+            <>✦ sealed</>
+          ) : null}
+        </span>
         <span className="pgcv-cover-wrap">
           <button type="button" className="pgbtn" onClick={() => setCoverOpen((o) => !o)}>
             {boardCover ? 'Change cover' : 'Add cover'}
@@ -767,182 +704,122 @@ export function Canvas() {
         onPointerMove={onCanvasPointerMove}
         onPointerUp={onCanvasPointerUp}
         onPointerCancel={onCanvasPointerUp}
-        style={{
-          backgroundPosition: `${pan.x}px ${pan.y}px`,
-          touchAction: 'none',
-          cursor,
-        }}
+        onDoubleClick={onCanvasDoubleClick}
+        onDragOver={onBoardDragOver}
+        onDrop={onBoardDrop}
+        style={{ backgroundPosition: `${pan.x}px ${pan.y}px`, touchAction: 'none', cursor }}
       >
-        <div
-          className="pgcv-world"
-          style={{ position: 'absolute', inset: 0, transform: `translate(${pan.x}px, ${pan.y}px)` }}
-        >
-          <svg className="pgcv-edges" style={{ overflow: 'visible' }} aria-hidden="true">
-            {isShared && edges.map((edge) => {
-              const from = positions.get(edge.from);
-              const to = positions.get(edge.to);
-              if (!from || !to) return null;
-              return (
-                <line
-                  key={`${edge.from}~${edge.to}`}
-                  x1={from.x + CARD_WIDTH / 2}
-                  y1={from.y + CARD_CENTER_Y}
-                  x2={to.x + CARD_WIDTH / 2}
-                  y2={to.y + CARD_CENTER_Y}
-                  stroke="#9AA7C4"
-                  strokeOpacity="0.3"
-                  strokeWidth="1"
-                />
-              );
-            })}
-          </svg>
-
-          <svg className="pgcv-ink">
+        <div className="pgcv-world" style={{ position: 'absolute', inset: 0, transform: `translate(${pan.x}px, ${pan.y}px)` }}>
+          {/* Vector layer (z-order within the layer). Pointer-events off: the
+              viewport hit-tests in world space. */}
+          <svg className="pgcv-ink" style={{ pointerEvents: 'none' }}>
             <defs>
               <marker id="cv-arrowhead" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                 <path d="M0 0 L10 5 L0 10 z" fill={INK} />
               </marker>
             </defs>
-            {shapes.map((s) => renderShape(s, false))}
-            {draft ? renderShape(draft, true) : null}
+            {vectorEls.map((s) => renderVector(s, false))}
+            {draft ? renderVector(draft, true) : null}
+            {/* selection outlines */}
+            {ordered
+              .filter((e) => selectedSet.has(e.id))
+              .map((e) => (
+                <rect
+                  key={`sel-${e.id}`}
+                  x={e.x - 4}
+                  y={e.y - 4}
+                  width={e.w + 8}
+                  height={e.h + 8}
+                  transform={e.angle ? `rotate(${(e.angle * 180) / Math.PI} ${e.x + e.w / 2} ${e.y + e.h / 2})` : undefined}
+                  fill="none"
+                  stroke={SEL}
+                  strokeWidth="1"
+                  strokeDasharray="4 3"
+                />
+              ))}
+            {marquee ? (
+              <rect
+                x={Math.min(marquee.x, marquee.x + marquee.w)}
+                y={Math.min(marquee.y, marquee.y + marquee.h)}
+                width={Math.abs(marquee.w)}
+                height={Math.abs(marquee.h)}
+                fill="rgba(47,107,255,.07)"
+                stroke={SEL}
+                strokeWidth="1"
+              />
+            ) : null}
           </svg>
 
-          {textShapes.map((s) =>
-            editingId === s.id ? (
-              <textarea
-                key={s.id}
-                className="cv-text editing"
-                style={{ left: s.x, top: s.y }}
-                defaultValue={s.text}
-                autoFocus
-                rows={1}
-                onInput={(e) => {
-                  const el = e.currentTarget;
-                  el.style.height = 'auto';
-                  el.style.height = `${el.scrollHeight}px`;
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-                onBlur={(e) => commitText(s.id, e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') e.currentTarget.blur();
-                }}
-              />
-            ) : (
-              <div
-                key={s.id}
-                className={selectedId === s.id ? 'cv-text sel' : 'cv-text'}
-                style={{ left: s.x, top: s.y, cursor: tool === 'select' ? 'move' : 'default' }}
-                onPointerDown={(e) => onShapePointerDown(e, s)}
-                onPointerMove={onShapePointerMove}
-                onPointerUp={onShapePointerUp}
-                onDoubleClick={() => setEditingId(s.id)}
-              >
-                {s.text}
-              </div>
-            ),
-          )}
-
-          {shapes
-            .filter((s): s is Extract<Shape, { kind: 'image' }> => s.kind === 'image')
-            .map((s) => (
-              <img
-                key={s.id}
-                className={selectedId === s.id ? 'cv-image sel' : 'cv-image'}
-                src={s.src}
-                alt=""
-                draggable={false}
-                style={{ left: s.x, top: s.y, width: s.w, height: s.h, cursor: tool === 'select' ? 'move' : 'default' }}
-                onPointerDown={(e) => onShapePointerDown(e, s)}
-                onPointerMove={onShapePointerMove}
-                onPointerUp={onShapePointerUp}
-              />
-            ))}
-
-          {isShared && peers.map((peer) => (
-            <PeerCursor key={peer.id} peer={peer} />
-          ))}
-
-          {isShared && notes.map((note) => {
-            const pos = positions.get(note.noteId);
-            if (!pos) return null;
-            const byAgent = note.author.startsWith('agent');
-            const classes = [
-              'pgcv-note',
-              byAgent ? 'byagent2' : '',
-              draggingId === note.noteId ? 'drag2' : '',
-              materializedNoteId === note.noteId ? 'pop2' : '',
-            ]
-              .filter(Boolean)
-              .join(' ');
+          {/* HTML layer (notes / text / images), z-order within the layer. */}
+          {htmlEls.map((el) => {
+            if (el.type === 'note') {
+              const note = notesById.get(el.noteId);
+              const byAgent = note?.author.startsWith('agent');
+              return (
+                <div
+                  key={el.id}
+                  className={['pgcv-note', byAgent ? 'byagent2' : '', selectedSet.has(el.id) ? 'sel' : ''].filter(Boolean).join(' ')}
+                  style={{ left: el.x, top: el.y, pointerEvents: 'none' }}
+                >
+                  <div className="nt3">{note?.title || 'Untitled note'}</div>
+                  <div className="nb3">{note ? excerptOf(note, titles) : ''}</div>
+                  {byAgent ? (
+                    <div className="na3">
+                      <i>✧ {name.toLowerCase()} · {note ? shortAge(note.updatedAt) : ''}</i>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }
+            if (el.type === 'image') {
+              return (
+                <img
+                  key={el.id}
+                  className={selectedSet.has(el.id) ? 'cv-image sel' : 'cv-image'}
+                  src={el.ref}
+                  alt=""
+                  draggable={false}
+                  style={{ left: el.x, top: el.y, width: el.w, height: el.h, pointerEvents: 'none' }}
+                />
+              );
+            }
+            // text
+            if (editingId === el.id) {
+              return (
+                <textarea
+                  key={el.id}
+                  className="cv-text editing"
+                  style={{ left: el.x, top: el.y }}
+                  defaultValue={el.text}
+                  autoFocus
+                  rows={1}
+                  onInput={(e) => {
+                    const t = e.currentTarget;
+                    t.style.height = 'auto';
+                    t.style.height = `${t.scrollHeight}px`;
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onBlur={(e) => commitText(el.id, e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') e.currentTarget.blur();
+                  }}
+                />
+              );
+            }
             return (
-              <div
-                key={note.noteId}
-                className={classes}
-                style={{ left: pos.x, top: pos.y }}
-                role="button"
-                tabIndex={0}
-                aria-label={`Open ${note.title || 'Untitled note'}`}
-                onPointerDown={(event) => onCardPointerDown(event, note.noteId)}
-                onPointerMove={onCardPointerMove}
-                onPointerUp={onCardPointerUp}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    navigate(`/app/notes/${note.noteId}`);
-                  }
-                }}
-              >
-                <div className="nt3">{note.title || 'Untitled note'}</div>
-                <div className="nb3">{excerptOf(note, titles)}</div>
-                {byAgent ? (
-                  <div className="na3">
-                    <i>✧ {name.toLowerCase()} · {shortAge(note.updatedAt)}</i>
-                  </div>
-                ) : null}
+              <div key={el.id} className={selectedSet.has(el.id) ? 'cv-text sel' : 'cv-text'} style={{ left: el.x, top: el.y, pointerEvents: 'none' }}>
+                {el.text}
               </div>
             );
           })}
 
-          {/* Non-shared board: render its placed notes read-only at their stored
-              positions (the layout WRITE path is U3, so this is empty until an
-              agent places a note). Click opens the note. */}
-          {!isShared && placedNotes.map(({ note, x, y }) => {
-            const byAgent = note.author.startsWith('agent');
-            return (
-              <div
-                key={note.noteId}
-                className={['pgcv-note', byAgent ? 'byagent2' : ''].filter(Boolean).join(' ')}
-                style={{ left: x, top: y, cursor: 'pointer' }}
-                role="button"
-                tabIndex={0}
-                aria-label={`Open ${note.title || 'Untitled note'}`}
-                onClick={() => navigate(`/app/notes/${note.noteId}`)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    navigate(`/app/notes/${note.noteId}`);
-                  }
-                }}
-              >
-                <div className="nt3">{note.title || 'Untitled note'}</div>
-                <div className="nb3">{excerptOf(note, titles)}</div>
-                {byAgent ? (
-                  <div className="na3">
-                    <i>✧ {name.toLowerCase()} · {shortAge(note.updatedAt)}</i>
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
+          {isShared && peers.map((peer) => <PeerCursor key={peer.id} peer={peer} />)}
         </div>
 
-        {/* Empty-board state: a non-shared board with no placed notes and no
-            drawings yet. The placed-note write path arrives with canvas-aware
-            place_note (U3); for now you draw on it. */}
-        {!isShared && placedNotes.length === 0 && shapes.length === 0 ? (
+        {elements.length === 0 && !draft ? (
           <div className="pgcv-emptyboard" aria-hidden="true">
             <span className="pgcv-emptyboard-t">A blank canvas</span>
-            <span className="pgcv-emptyboard-x">Draw on it, or ask an agent to place notes here.</span>
+            <span className="pgcv-emptyboard-x">Drag a note here, draw, or add a note card.</span>
           </div>
         ) : null}
 
@@ -957,14 +834,7 @@ export function Canvas() {
         <input ref={imageInputRef} type="file" accept="image/*" hidden onChange={onAddImage} />
         <div className="pgcv-tools" aria-label="Canvas tools">
           {TOOLS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={tool === t.id ? 'on' : undefined}
-              aria-label={t.label}
-              aria-pressed={tool === t.id}
-              onClick={() => setTool(t.id)}
-            >
+            <button key={t.id} type="button" className={tool === t.id ? 'on' : undefined} aria-label={t.label} aria-pressed={tool === t.id} onClick={() => setTool(t.id)}>
               {t.icon}
             </button>
           ))}
@@ -976,7 +846,7 @@ export function Canvas() {
             </ToolIcon>
           </button>
           <span className="tsep" />
-          <button type="button" aria-label="New note card" onClick={newNote}>
+          <button type="button" aria-label="Add note card" onClick={newNoteAndPlace}>
             <ToolIcon>
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
