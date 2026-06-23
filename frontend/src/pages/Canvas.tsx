@@ -1068,7 +1068,7 @@ export function Canvas() {
                 <textarea
                   key={el.id}
                   className="cv-text editing"
-                  style={{ left: el.x, top: el.y }}
+                  style={{ left: el.x, top: el.y, color: el.strokeColor }}
                   defaultValue={el.text}
                   autoFocus
                   rows={1}
@@ -1090,7 +1090,7 @@ export function Canvas() {
               );
             }
             return (
-              <div key={el.id} className={selectedSet.has(el.id) ? 'cv-text sel' : 'cv-text'} style={{ left: el.x, top: el.y, pointerEvents: 'none' }}>
+              <div key={el.id} className={selectedSet.has(el.id) ? 'cv-text sel' : 'cv-text'} style={{ left: el.x, top: el.y, color: el.strokeColor, pointerEvents: 'none' }}>
                 {el.text}
               </div>
             );
