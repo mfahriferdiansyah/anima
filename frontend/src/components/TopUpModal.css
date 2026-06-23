@@ -198,6 +198,7 @@
 }
 .topup-act {
   min-width: 96px;
+  justify-content: center;
 }
 
 .topup-loading {
@@ -277,8 +278,9 @@
 .topup-done-actions {
   margin-top: 18px;
 }
+/* a centred, sensibly-sized confirm (full width only on mobile). */
 .topup-done-actions .topup-act {
-  width: 100%;
+  min-width: 168px;
 }
 
 /* Mobile: roomier taps, full-width stacked actions (primary at the bottom). */

@@ -83,6 +83,13 @@ export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => vo
                 <span className="pgst-v">{balances.wal.toFixed(2)} WAL</span>
               </div>
             </div>
+            <div className="topup-keys">
+              <svg className="topup-keys-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                <rect x="5" y="11" width="14" height="9" rx="2" />
+                <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+              </svg>
+              <span>This agent stays on your device, so only you can use it. Anima never touches your funds.</span>
+            </div>
             <div className="topup-done-actions">
               <Button variant="primary" className="topup-act" onClick={onClose} autoFocus>
                 Done
