@@ -274,6 +274,26 @@ describe('U5 — additive elements model', () => {
     expect(noteIds).toEqual(['fresh', 'noteA']);
   });
 
+  it('round-trips a styled + labelled rect and a measured text element', async () => {
+    const index = new VaultIndex();
+    const styledRect: CanvasElement = {
+      ...elBase, id: 'r1', type: 'rect', x: 0, y: 0, w: 40, h: 30, index: 0,
+      strokeColor: '#e03131', backgroundColor: '#ffc9c9', strokeWidth: 4, strokeStyle: 'dashed', label: 'inside',
+    };
+    const textEl: CanvasElement = {
+      ...elBase, id: 't1', type: 'text', x: 5, y: 6, w: 84, h: 21, index: 1, text: 'measured', strokeColor: '#1971c2',
+    };
+    await saveCanvasContent(deps as any, index, 'styled', { elements: [styledRect, textEl] });
+
+    const loaded = loadCanvasContent(index, 'styled');
+    const r = loaded.elements!.find((e) => e.id === 'r1') as Extract<CanvasElement, { type: 'rect' }>;
+    const t = loaded.elements!.find((e) => e.id === 't1') as Extract<CanvasElement, { type: 'text' }>;
+    expect({ strokeColor: r.strokeColor, backgroundColor: r.backgroundColor, strokeWidth: r.strokeWidth, strokeStyle: r.strokeStyle, label: r.label }).toEqual(
+      { strokeColor: '#e03131', backgroundColor: '#ffc9c9', strokeWidth: 4, strokeStyle: 'dashed', label: 'inside' },
+    );
+    expect({ w: t.w, h: t.h, strokeColor: t.strokeColor }).toEqual({ w: 84, h: 21, strokeColor: '#1971c2' });
+  });
+
   it('a legacy board stays legacy (no elements field written) on a drawings-only save', async () => {
     const note = newNote({ title: 'Canvas leg2', body: JSON.stringify({ layout: {}, drawings: [] } as CanvasContent), author: 'anima', tags: [canvasContentTag('leg2')] });
     const index = VaultIndex.fromEntries([entry(note)]);

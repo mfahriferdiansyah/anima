@@ -31,8 +31,24 @@ export interface ElementBinding {
   fixedPoint: [number, number];
 }
 
+/**
+ * Optional visual style. Shapes (`rect`/`ellipse`) use all four; a `text` element
+ * uses `strokeColor` as its text colour. Absent fields fall back to the canvas
+ * defaults at render time (ink stroke, no fill, 2px solid border).
+ */
+export interface ElementStyle {
+  /** Stroke / border colour. For a text element this is the text colour. */
+  strokeColor?: string;
+  /** Fill colour for a closed shape; absent or `'transparent'` = no fill. */
+  backgroundColor?: string;
+  /** Border width in px (1 thin / 2 bold / 4 extra-bold). */
+  strokeWidth?: number;
+  /** Border line style. */
+  strokeStyle?: 'solid' | 'dashed' | 'dotted';
+}
+
 /** Fields shared by every element. */
-export interface ElementBase {
+export interface ElementBase extends ElementStyle {
   id: string;
   /** Local box top-left (world coordinates). */
   x: number;
@@ -59,8 +75,8 @@ export const NOTE_H = 88;
 /** The serializable element union. A note is just another element (opens its note on click). */
 export type CanvasElement =
   | (ElementBase & { type: 'note'; noteId: string })
-  | (ElementBase & { type: 'rect' })
-  | (ElementBase & { type: 'ellipse' })
+  | (ElementBase & { type: 'rect'; label?: string })
+  | (ElementBase & { type: 'ellipse'; label?: string })
   | (ElementBase & { type: 'text'; text: string })
   | (ElementBase & { type: 'image'; ref: string })
   | (ElementBase & { type: 'draw'; points: number[] })

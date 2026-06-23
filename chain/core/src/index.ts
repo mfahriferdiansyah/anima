@@ -18,7 +18,7 @@ export {
   type Shape, type CanvasContent,
 } from './canvasContent.js';
 export {
-  type CanvasElement, type LinearElement, type ElementBinding, type ElementBase,
+  type CanvasElement, type LinearElement, type ElementBinding, type ElementBase, type ElementStyle,
   isLinear, isBindable, newElementId, newVersionNonce, bumpVersion,
   elementBounds, commonBounds, normalizeLinear, NOTE_W, NOTE_H,
   elementsFromLegacy, layoutFromElements, mergeLayoutIntoElements,
