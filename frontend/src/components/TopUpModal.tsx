@@ -21,7 +21,6 @@ export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => vo
   const [topping, setTopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [amountStr, setAmountStr] = useState(TOPUP_AGENT_SUI.toFixed(2));
-  const [sent, setSent] = useState(0);
 
   // Reset to the form when the modal closes (so a reopen never flashes a stale
   // success), and pull the agent's live balance + default amount when it opens.
@@ -55,7 +54,6 @@ export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => vo
       await topUp(amount); // owner wallet popup → SUI to agent, then agent self-converts to WAL
       await refreshBalances(); // so the success panel reads the new figures
       dismissLowBalance();
-      setSent(amount);
       setView('success'); // confirm in place — do NOT auto-close
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Top up failed. Check your wallet has SUI and try again.');
@@ -75,17 +73,15 @@ export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => vo
               </svg>
             </span>
             <div className="dt topup-done-title">Your agent is funded.</div>
-            <div className="dd2 topup-done-sub">It can keep sealing your saves.</div>
             <div className="topup-done-bal">
-              <span className="topup-balance-l">Agent balance</span>
-              <span className="topup-done-bal-v">
-                <b>{balances.sui.toFixed(2)}</b> SUI
-                <i className="topup-balance-dot" aria-hidden="true">·</i>
-                <b>{balances.wal.toFixed(2)}</b> WAL
-              </span>
-            </div>
-            <div className="topup-done-sent">
-              Sent {sent.toFixed(2)} SUI from your wallet, split into SUI for fees and WAL for storage.
+              <div className="pgst-row">
+                <span className="pgst-k">SUI · pays for transactions</span>
+                <span className="pgst-v">{balances.sui.toFixed(2)} SUI</span>
+              </div>
+              <div className="pgst-row">
+                <span className="pgst-k">WAL · pays for storage</span>
+                <span className="pgst-v">{balances.wal.toFixed(2)} WAL</span>
+              </div>
             </div>
             <div className="topup-done-actions">
               <Button variant="primary" className="topup-act" onClick={onClose} autoFocus>
