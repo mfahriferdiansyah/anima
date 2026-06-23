@@ -37,3 +37,6 @@ frontend/src/pages/01-home-light.png
 
 # compiled go binary (build artifact, do not commit)
 backend/api
+
+# internal docs live in the outer repo (sui-overflow-2026/docs), not the public submission
+/docs/
