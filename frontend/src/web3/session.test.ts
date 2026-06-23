@@ -10,7 +10,6 @@ import {
   deriveStartPhase,
   disconnect,
   pairingAffordability,
-  renameCompanion,
   resetSessionStore,
   sessionStore,
   type VaultInfo,
@@ -70,10 +69,5 @@ describe('web3/session store guards', () => {
     disconnect();
     expect(sessionStore.getSnapshot()).toEqual({ phase: 'disconnected' });
     expect(vaultData.getSnapshot().index).toBeNull();
-  });
-
-  it('renameCompanion is a no-op when not in the ready phase', () => {
-    renameCompanion('Echo');
-    expect(sessionStore.getSnapshot()).toEqual({ phase: 'disconnected' });
   });
 });

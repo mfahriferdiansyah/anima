@@ -78,7 +78,7 @@ function Ceremony({ session }: { session: FirstRunSession }) {
   const [signing, setSigning] = useState(false);
   const inProgress = session.onboarding !== null;
   const doneIndex = ONBOARDING_STEPS.findIndex((step) => step.key === session.onboarding);
-  const companion = name.trim() || 'Nova';
+  const companion = 'Nova';
 
   const close = useCallback(() => {
     if (inProgress) return;
@@ -164,16 +164,16 @@ function Ceremony({ session }: { session: FirstRunSession }) {
           <>
             <div className="cere-kick mono">NEW VAULT</div>
             <h1 className="cere-h">
-              Name your <span className="cere-hl">companion</span>.
+              Name your <span className="cere-hl">vault</span>.
             </h1>
             <p className="cere-sub">
-              She keeps what she learns in a vault your wallet owns. One signature creates it.
+              Nova keeps what she learns in a vault your wallet owns. One signature creates it.
             </p>
             <Field
-              label="Companion name"
+              label="Vault name"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              help="This becomes her name and the name of your vault."
+              help="Your wallet owns this vault."
               error={session.error ?? undefined}
             />
             <Button variant="primary" onClick={() => setSigning(true)}>

@@ -278,9 +278,9 @@
 .topup-done-actions {
   margin-top: 18px;
 }
-/* a centred, sensibly-sized confirm (full width only on mobile). */
+/* full-width confirm; the base .topup-act centers the label. */
 .topup-done-actions .topup-act {
-  min-width: 168px;
+  width: 100%;
 }
 
 /* Mobile: roomier taps, full-width stacked actions (primary at the bottom). */

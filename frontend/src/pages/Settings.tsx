@@ -18,7 +18,7 @@ import {
 import type { MilestoneKey } from '@/web3/milestones';
 import type { KeyEntry } from '@/hooks/useSettings';
 import { configureForgetExec, forgetEverything, useVault } from '@/hooks/useVault';
-import { renameCompanion, useVaultSession } from '@/hooks/useVaultSession';
+import { useVaultSession } from '@/hooks/useVaultSession';
 import { useWalletExecTx } from '@/web3/walletExecTx';
 import { vaultData } from '@/web3/vaultData';
 import { exportVaultZip } from '../../../chain/core/src/index.js';
@@ -318,7 +318,6 @@ export function Settings() {
   const { execTx } = useWalletExecTx();
   const ready = session.phase === 'ready' ? session : null;
 
-  const [name, setName] = useState(ready?.vault.name ?? '');
   const [connectOpen, setConnectOpen] = useState(false);
   const [issuedKeyId, setIssuedKeyId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -352,11 +351,6 @@ export function Settings() {
   const dismissToast = (id: string) => setToasts((prev) => prev.filter((toast) => toast.id !== id));
 
   if (!ready) return null;
-
-  const saveName = () => {
-    renameCompanion(name);
-    pushToast('success', 'Companion renamed');
-  };
 
   const revoke = async (entry: KeyEntry) => {
     try {
@@ -404,24 +398,6 @@ export function Settings() {
       <div className="pged-scroll">
         <div className="pgstcol">
       <h2 className="pgst-title">Settings</h2>
-
-      <div className="pgh-label">COMPANION IDENTITY</div>
-      <div className="pgst-row">
-        <div className="pgst-id">
-          <label htmlFor="pgstname">Companion name</label>
-          <input
-            type="text"
-            id="pgstname"
-            autoComplete="off"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-          <span className="pgst-help">renaming is routine, no signature needed</span>
-        </div>
-        <button type="button" className="pgbtn primary" onClick={saveName} disabled={!name.trim()}>
-          Save
-        </button>
-      </div>
 
       <div className="pgh-label">AGENTS AND DEVICES</div>
       <div className="pgst-keys">
@@ -507,8 +483,8 @@ export function Settings() {
         <div className="dh">
           <div className="dt">Forget everything?</div>
           <div className="dd2">
-            This erases every memory in {ready.vault.name || 'this vault'} — {notes.length}{' '}
-            {notes.length === 1 ? 'note' : 'notes'} — in one signed transaction. It cannot be undone.
+            This erases every memory in your vault ({notes.length}{' '}
+            {notes.length === 1 ? 'note' : 'notes'}) in one signed transaction. It cannot be undone.
             The vault stays yours to fill again.
           </div>
         </div>

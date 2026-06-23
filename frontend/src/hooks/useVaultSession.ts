@@ -73,7 +73,6 @@ export {
   closeBeforeSign,
   rejectPairing,
   retryRebuild,
-  renameCompanion,
   disconnect,
 } from '@/web3/session';
 export type { SessionState, VaultInfo, AgentInfo, OnboardingStep } from '@/web3/session';

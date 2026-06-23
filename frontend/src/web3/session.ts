@@ -141,7 +141,7 @@ export function getQuiltDeps(): QuiltDeps | null {
   return currentDeps;
 }
 
-/** Companion name = the on-chain vault name (Nova is the fixed default). */
+/** The companion is always Nova — a fixed product name, decoupled from the vault name. */
 const COMPANION_DEFAULT = 'Nova';
 
 function toVaultInfo(v: { vaultId: string; owner: string; name: string; agents: string[] }): VaultInfo {
@@ -310,7 +310,7 @@ async function backgroundSync(vault: VaultInfo, index: VaultIndex, gen: number):
       store.update(() => ({
         phase: 'needs-pairing',
         vault,
-        agent: { name: vault.name || COMPANION_DEFAULT, address: wired.agentAddress },
+        agent: { name: COMPANION_DEFAULT, address: wired.agentAddress },
         error: 'This device’s access to the vault was revoked. Pair again to restore it.',
       }));
     }
@@ -372,7 +372,7 @@ export async function startSession(): Promise<void> {
       store.update(() => ({ phase: 'first-run', address: owner, onboarding: null, error: null }));
       return;
     case 'needs-pairing':
-      store.update(() => ({ phase: 'needs-pairing', vault: vault!, agent: { name: vault!.name || COMPANION_DEFAULT, address: agentAddress }, error: null }));
+      store.update(() => ({ phase: 'needs-pairing', vault: vault!, agent: { name: COMPANION_DEFAULT, address: agentAddress }, error: null }));
       return;
     case 'rebuild':
       await rebuildAndReady(vault!);
@@ -462,7 +462,7 @@ export async function pair(): Promise<void> {
     store.update(() => ({
       phase: 'needs-pairing',
       vault,
-      agent: { name: vault.name || COMPANION_DEFAULT, address: agentAddress },
+      agent: { name: COMPANION_DEFAULT, address: agentAddress },
       error,
     }));
   const suiClient = getSuiClient();
@@ -486,7 +486,7 @@ export async function pair(): Promise<void> {
     const tx = buildRegisterAgentTx({ vaultId: vault.vaultId, agent: agentAddress, fundAgentMist: FUND_AGENT_MIST });
     // Registering this device on the vault allowlist — the tx is the provenance.
     await runWithReceipt(
-      { key: 'pair', title: vault.name || COMPANION_DEFAULT, labels: { pending: 'Pairing device', success: 'Device paired', fail: 'Pairing failed' } },
+      { key: 'pair', title: COMPANION_DEFAULT, labels: { pending: 'Pairing device', success: 'Device paired', fail: 'Pairing failed' } },
       async () => {
         const res = await execTx(tx); // wallet signature
         const digest = digestOf(res);
@@ -535,21 +535,6 @@ export function retryRebuild(): void {
   void rebuildAndReady(pendingVault);
 }
 
-/**
- * Rename the companion locally (non-destructive, no wallet): the ready-phase
- * vault/agent display names update in place. The on-chain vault name is fixed at
- * creation; this only follows the header (Nova stays the default).
- */
-export function renameCompanion(name: string): void {
-  const state = store.getSnapshot();
-  const trimmed = name.trim();
-  if (state.phase !== 'ready' || !trimmed) return;
-  store.update(() => ({
-    ...state,
-    vault: { ...state.vault, name: trimmed },
-    agent: { ...state.agent, name: trimmed },
-  }));
-}
 
 /** Disconnect: cancel any in-flight async, clear the shared index, go disconnected. */
 export function disconnect(): void {
