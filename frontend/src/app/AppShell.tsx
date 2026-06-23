@@ -8,6 +8,7 @@ import type { SessionState } from '@/hooks/useVaultSession';
 import { closePopup, expandPopup, openPopup, setOnCompanionRoute, useChat } from '@/hooks/useChat';
 import { createNote, useVault } from '@/hooks/useVault';
 import { vaultData } from '@/web3/vaultData';
+import { restoreCalendar } from '@/web3/calendar';
 import { createCanvas, useCanvases, useFolders } from '@/hooks/useCanvases';
 import { buildLibrary } from './library';
 import { ManageLibrary } from './ManageLibrary';
@@ -364,6 +365,11 @@ export function AppShell({ session }: { session: ReadySession }) {
     setDrawerOpen(false);
     setAcctOpen(false);
   }, [location.pathname]);
+  // Re-establish the Google Calendar connection after a refresh without a popup
+  // (cached token → silent re-auth). No-ops when never connected/unconfigured.
+  useEffect(() => {
+    void restoreCalendar();
+  }, []);
   return (
     <div className="shell v-single">
       {/* floating menu toggle (small screens only); opens the rail drawer */}

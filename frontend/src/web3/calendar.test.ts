@@ -24,6 +24,7 @@ import {
   listEvents,
   disconnectCalendar,
   connectCalendar,
+  restoreCalendar,
   getCalendarContext,
   calendarStore,
   __resetCalendarForTests,
@@ -37,7 +38,7 @@ const FAKE_CLIENT_ID = 'test-client-id.apps.googleusercontent.com';
 
 // ── Stub the GIS global (no DOM or script tag) ────────────────────────────────
 
-type GisCallback = (resp: { access_token?: string; error?: string }) => void;
+type GisCallback = (resp: { access_token?: string; error?: string; expires_in?: number }) => void;
 
 function stubGis(token: string) {
   let savedCallback: GisCallback | null = null;
@@ -59,6 +60,56 @@ function stubGis(token: string) {
   vi.stubGlobal('google', gis);
   return gis;
 }
+
+// Richer GIS stub for the restore path: captures the prompt passed to
+// requestAccessToken, and can fire either the success callback (with expires_in)
+// or the error_callback (simulating a blocked silent channel, e.g. Brave).
+const TOKEN_CACHE_KEY = 'anima:gcal:token';
+const CONNECTED_FLAG = 'anima:gcal:connected';
+
+function stubGisRestore(opts: { token?: string; expiresIn?: number; fail?: boolean }) {
+  const requestSpy = vi.fn();
+  let cb: GisCallback | null = null;
+  let errCb: ((e: { type?: string }) => void) | null = null;
+  const gis = {
+    accounts: {
+      oauth2: {
+        initTokenClient: vi.fn((o: { callback: GisCallback; error_callback?: (e: { type?: string }) => void }) => {
+          cb = o.callback;
+          errCb = o.error_callback ?? null;
+          return {
+            requestAccessToken: requestSpy.mockImplementation(() => {
+              if (opts.fail) {
+                errCb?.({ type: 'interaction_required' });
+                return;
+              }
+              cb?.({ access_token: opts.token ?? 'silent-tok', expires_in: opts.expiresIn });
+            }),
+          };
+        }),
+      },
+    },
+  };
+  vi.stubGlobal('google', gis);
+  return { requestSpy, initSpy: gis.accounts.oauth2.initTokenClient };
+}
+
+// In-memory Web Storage (the vitest node env has neither session nor local).
+function makeStorage(name: 'sessionStorage' | 'localStorage', initial: Record<string, string> = {}) {
+  const map = new Map(Object.entries(initial));
+  vi.stubGlobal(name, {
+    getItem: (k: string) => (map.has(k) ? map.get(k)! : null),
+    setItem: (k: string, v: string) => void map.set(k, v),
+    removeItem: (k: string) => void map.delete(k),
+    clear: () => map.clear(),
+    key: (i: number) => Array.from(map.keys())[i] ?? null,
+    get length() {
+      return map.size;
+    },
+  });
+  return map;
+}
+const stubLocalStorage = (initial: Record<string, string> = {}) => makeStorage('localStorage', initial);
 
 const ANIMA_BACKEND = 'http://localhost:8080';
 
@@ -242,6 +293,115 @@ describe('disconnectCalendar', () => {
     expect(snap.status).toBe('disconnected');
     expect(snap.events).toEqual([]);
     expect(snap.lastSyncedAt).toBeNull();
+  });
+
+  it('clears the cached token so a later refresh cannot reuse it', async () => {
+    __setClientIdForTests(FAKE_CLIENT_ID);
+    const store = stubLocalStorage();
+    stubGis('tok-to-cache');
+    vi.stubGlobal('fetch', vi.fn(async () => makeGCalResponse([])));
+    await connectCalendar();
+    expect(store.has(TOKEN_CACHE_KEY)).toBe(true);
+
+    disconnectCalendar();
+    expect(store.has(TOKEN_CACHE_KEY)).toBe(false);
+  });
+});
+
+// ── restoreCalendar — survive a refresh without a popup ──────────────────────
+
+describe('restoreCalendar', () => {
+  it('Net 1: reuses a valid cached token without invoking GIS', async () => {
+    __setClientIdForTests(FAKE_CLIENT_ID);
+    stubLocalStorage({
+      [TOKEN_CACHE_KEY]: JSON.stringify({ token: 'cached-tok', expiresAt: Date.now() + 3_600_000 }),
+    });
+    const { initSpy } = stubGisRestore({}); // should NOT be called on a cache hit
+
+    const authHeaders: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      authHeaders.push((init?.headers as Record<string, string>)?.['Authorization'] ?? '');
+      return makeGCalResponse([
+        { id: 'r1', summary: 'Restored event', start: { dateTime: '2026-06-23T09:00:00Z' }, end: { dateTime: '2026-06-23T10:00:00Z' } },
+      ]);
+    }));
+
+    await restoreCalendar();
+
+    expect(calendarStore.getSnapshot().status).toBe('connected');
+    expect(calendarStore.getSnapshot().events).toHaveLength(1);
+    expect(authHeaders[0]).toBe('Bearer cached-tok'); // the cached token, not a fresh GIS one
+    expect(initSpy).not.toHaveBeenCalled(); // no popup, no silent handshake needed
+  });
+
+  it('Net 1: ignores an expired cached token and falls through to silent re-auth', async () => {
+    __setClientIdForTests(FAKE_CLIENT_ID);
+    stubLocalStorage({
+      [TOKEN_CACHE_KEY]: JSON.stringify({ token: 'stale', expiresAt: Date.now() - 1000 }),
+      [CONNECTED_FLAG]: '1', // opted in → Net 2 allowed
+    });
+    const { requestSpy } = stubGisRestore({ token: 'fresh-silent-tok', expiresIn: 3600 });
+    vi.stubGlobal('fetch', vi.fn(async () => makeGCalResponse([])));
+
+    await restoreCalendar();
+
+    expect(requestSpy).toHaveBeenCalledWith({ prompt: 'none' }); // silent, no UI
+    expect(calendarStore.getSnapshot().status).toBe('connected');
+  });
+
+  it('Net 2: silently re-auths (prompt:none) when there is no cache but the device opted in', async () => {
+    __setClientIdForTests(FAKE_CLIENT_ID);
+    const ls = stubLocalStorage({ [CONNECTED_FLAG]: '1' });
+    const { requestSpy } = stubGisRestore({ token: 'silent-fresh', expiresIn: 3600 });
+    vi.stubGlobal('fetch', vi.fn(async () => makeGCalResponse([])));
+
+    await restoreCalendar();
+
+    expect(requestSpy).toHaveBeenCalledWith({ prompt: 'none' });
+    expect(calendarStore.getSnapshot().status).toBe('connected');
+    expect(ls.has(TOKEN_CACHE_KEY)).toBe(true); // fresh token re-cached
+  });
+
+  it('does NOT touch GIS for a device that never connected (no cache, no flag)', async () => {
+    __setClientIdForTests(FAKE_CLIENT_ID);
+    stubLocalStorage(); // never connected — no flag, no cache
+    const { initSpy } = stubGisRestore({});
+    vi.stubGlobal('fetch', vi.fn(async () => makeGCalResponse([])));
+
+    await restoreCalendar();
+
+    expect(initSpy).not.toHaveBeenCalled(); // no GIS load, no Google ping
+    expect(calendarStore.getSnapshot().status).toBe('disconnected');
+  });
+
+  it('stays disconnected (no throw) when the silent channel is blocked, e.g. Brave', async () => {
+    __setClientIdForTests(FAKE_CLIENT_ID);
+    stubLocalStorage({ [CONNECTED_FLAG]: '1' });
+    stubGisRestore({ fail: true }); // error_callback fires → interaction_required
+    vi.stubGlobal('fetch', vi.fn(async () => makeGCalResponse([])));
+
+    await expect(restoreCalendar()).resolves.toBeUndefined();
+    expect(calendarStore.getSnapshot().status).toBe('disconnected'); // not 'error'
+  });
+
+  it('records the connected flag on connect and clears it on disconnect', async () => {
+    __setClientIdForTests(FAKE_CLIENT_ID);
+    const ls = stubLocalStorage();
+    stubGis('tok');
+    vi.stubGlobal('fetch', vi.fn(async () => makeGCalResponse([])));
+
+    await connectCalendar();
+    expect(ls.get(CONNECTED_FLAG)).toBe('1');
+
+    disconnectCalendar();
+    expect(ls.has(CONNECTED_FLAG)).toBe(false);
+  });
+
+  it('sets unconfigured and does not touch GIS when no client id is set', async () => {
+    const { initSpy } = stubGisRestore({});
+    await expect(restoreCalendar()).resolves.toBeUndefined();
+    expect(calendarStore.getSnapshot().status).toBe('unconfigured');
+    expect(initSpy).not.toHaveBeenCalled();
   });
 });
 
