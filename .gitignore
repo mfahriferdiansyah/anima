@@ -28,7 +28,6 @@ contract/build/
 
 # spike artifacts (testnet keys — never commit keys)
 chain/core/.spike-keys.json
-contract/Published.toml
 
 # frontend screenshot artifacts (verification sweeps)
 frontend/.shots/
