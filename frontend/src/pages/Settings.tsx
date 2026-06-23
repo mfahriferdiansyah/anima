@@ -7,13 +7,12 @@ import { Modal } from '@/components/Modal';
 import { ToastStack } from '@/components/ToastStack';
 import type { ToastItem } from '@/components/ToastStack';
 import type { ToastVariant } from '@/components/Toast';
-import { dismissLowBalance } from '@/hooks/useChat';
+import { TopUpModal } from '@/components/TopUpModal';
 import {
   connectExternalAgent,
   refreshBalances,
   refreshMilestones,
   revokeKey,
-  topUp as topUpAgent,
   useSettings,
 } from '@/hooks/useSettings';
 import type { MilestoneKey } from '@/web3/milestones';
@@ -326,7 +325,7 @@ export function Settings() {
   const toastCounter = useRef(0);
   const [confirmWipe, setConfirmWipe] = useState(false);
   const [wiping, setWiping] = useState(false);
-  const [topping, setTopping] = useState(false);
+  const [topUpOpen, setTopUpOpen] = useState(false);
 
   // useWalletExecTx returns a fresh execTx each render; keep the latest in a ref
   // so the settings layer always calls the current one (mirrors useVaultSession).
@@ -365,20 +364,6 @@ export function Settings() {
       pushToast('success', 'Key revoked', entry.label);
     } catch {
       pushToast('error', 'Revoke failed', entry.label);
-    }
-  };
-
-  const topUp = async () => {
-    setTopping(true);
-    pushToast('info', 'Topping up the agent', 'approve the transfer in your wallet');
-    try {
-      await topUpAgent();
-      dismissLowBalance();
-      pushToast('success', 'Agent topped up', 'you can save again');
-    } catch (e) {
-      pushToast('error', 'Top up failed', e instanceof Error ? e.message : 'try again');
-    } finally {
-      setTopping(false);
     }
   };
 
@@ -461,12 +446,10 @@ export function Settings() {
           {walLow ? <i className="low">✧ running low</i> : null}
         </span>
         <span className="pgst-v">{settings.balances.wal.toFixed(2)} WAL</span>
-        {walLow ? (
-          <button type="button" className="pgbtn primary" onClick={() => void topUp()} disabled={topping}>
-            {topping ? 'Topping up…' : 'Top up'}
-          </button>
-        ) : null}
       </div>
+      <button type="button" className="pgbtn pgst-connect" onClick={() => setTopUpOpen(true)}>
+        Top up agent
+      </button>
 
       <div className="pgh-label">MILESTONES</div>
       <div className="pgst-miles">
@@ -517,6 +500,7 @@ export function Settings() {
         issuedKey={issuedKey}
         onIssued={(key) => setIssuedKeyId(key.id)}
       />
+      <TopUpModal open={topUpOpen} onClose={() => setTopUpOpen(false)} />
       <Modal open={confirmWipe} onClose={() => setConfirmWipe(false)}>
         <div className="dh">
           <div className="dt">Forget everything?</div>
