@@ -1,6 +1,6 @@
 /* Top-up modal — kit-standard dialog content (Space Grotesk title via .dt, mono
-   numerics, orange agent accent) with a staggered entrance, a pulsing agent orb,
-   and a responsive layout. Lives in its own file so the banner stays slim. */
+   numerics, orange agent orb, teal safety accent) with a staggered entrance and a
+   responsive layout. Lives in its own file so the banner stays slim. */
 
 .topup {
   padding: 24px 24px 22px;
@@ -48,49 +48,83 @@
   50% { box-shadow: 0 7px 22px rgba(255, 92, 26, 0.48), 0 0 0 6px rgba(255, 92, 26, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.45); }
 }
 
-/* Agent balance card. */
-.topup-wallet {
+/* Non-custody trust callout — the headline reassurance, teal (the kit's safety
+   accent), high in the modal so the agent-key ownership reads as a feature. */
+.topup-keys {
   margin-top: 18px;
-  background: var(--gray-100);
-  border-radius: 14px;
-  padding: 14px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  background: var(--teal-100);
+  border-radius: 12px;
+  padding: 12px 14px;
 }
-.topup-wallet-h {
+.topup-keys-i {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  margin-top: 1px;
+  color: var(--teal-500);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.topup-keys-tx {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.topup-keys-tx b {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-900);
+}
+.topup-keys-tx span {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--gray-600);
+}
+
+/* Agent balance — one clean stat row (value + unit), no nested tiles. */
+.topup-balance {
+  margin-top: 16px;
+}
+.topup-balance-l {
+  display: block;
   font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--gray-600);
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
-.topup-bals {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.topup-bal2 {
+.topup-balance-row {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  background: #fff;
-  border-radius: 10px;
-  padding: 10px 13px;
-  box-shadow: var(--shadow-softer);
+  align-items: center;
+  gap: 18px;
+  background: var(--gray-100);
+  border-radius: 12px;
+  padding: 13px 16px;
 }
-.topup-bal2-k {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+.topup-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--gray-600);
 }
-.topup-bal2-v {
+.topup-stat b {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 18px;
+  font-size: 21px;
   font-weight: 700;
   color: var(--ink-900);
   font-variant-numeric: tabular-nums;
+}
+.topup-stat-sep {
+  width: 1px;
+  height: 22px;
+  background: var(--gray-200);
 }
 
 /* Editable amount: the SUI sent from the owner wallet to the agent. */
@@ -134,13 +168,6 @@
   font-weight: 700;
   color: var(--ink-900);
   font-variant-numeric: tabular-nums;
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-.topup-amt-input::-webkit-outer-spin-button,
-.topup-amt-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
 }
 .topup-amt-suffix {
   flex: none;
@@ -149,27 +176,6 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--gray-600);
-}
-
-/* Non-custody reassurance: teal (the kit's safety accent), calm and small. */
-.topup-custody {
-  margin-top: 14px;
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--gray-600);
-}
-.topup-custody-i {
-  width: 15px;
-  height: 15px;
-  flex: none;
-  margin-top: 1px;
-  color: var(--teal-500);
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 .topup-err {

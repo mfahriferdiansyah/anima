@@ -10,9 +10,9 @@ import './TopUpModal.css';
  * signs and pays for every seal, so it depletes and saves stop sealing. Topping
  * up sends a chosen amount of SUI from the OWNER's connected wallet to the agent
  * (one wallet approval); the agent then swaps a slice to WAL itself, no second
- * popup. The agent key is non-custodial — it lives in this browser — which the
- * modal states plainly so funding your own agent makes sense. Refreshes the agent
- * balance on open; on success the global receipt toast confirms (so we just close).
+ * popup. The agent key is non-custodial (it lives in this browser), stated up
+ * front as the trust callout so funding your OWN agent makes sense. Refreshes the
+ * agent balance on open; on success the global receipt toast confirms.
  */
 export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { balances } = useSettings();
@@ -30,6 +30,15 @@ export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => vo
 
   const amount = parseFloat(amountStr);
   const valid = Number.isFinite(amount) && amount > 0;
+
+  // Keep the field locale-proof: digits + a single separator, comma normalized to a
+  // dot. (A type=number input renders "0,3" in comma locales, which parseFloat then
+  // reads as 0, so we drive a plain text input ourselves.)
+  const onAmount = (raw: string) => {
+    const cleaned = raw.replace(/[^0-9.,]/g, '').replace(',', '.');
+    const parts = cleaned.split('.');
+    setAmountStr(parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : cleaned);
+  };
 
   const doTopUp = async () => {
     if (!valid) return;
@@ -58,17 +67,27 @@ export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => vo
           </div>
         </div>
 
-        <div className="topup-wallet">
-          <div className="topup-wallet-h">Agent balance</div>
-          <div className="topup-bals">
-            <div className="topup-bal2">
-              <span className="topup-bal2-k">SUI</span>
-              <span className="topup-bal2-v">{balances.sui.toFixed(2)}</span>
-            </div>
-            <div className="topup-bal2">
-              <span className="topup-bal2-k">WAL</span>
-              <span className="topup-bal2-v">{balances.wal.toFixed(2)}</span>
-            </div>
+        <div className="topup-keys">
+          <svg className="topup-keys-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+            <rect x="5" y="11" width="14" height="9" rx="2" />
+            <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+          </svg>
+          <div className="topup-keys-tx">
+            <b>You hold the keys</b>
+            <span>This agent&apos;s key lives in this browser, on your device. Anima never holds it.</span>
+          </div>
+        </div>
+
+        <div className="topup-balance">
+          <span className="topup-balance-l">Agent balance</span>
+          <div className="topup-balance-row">
+            <span className="topup-stat">
+              <b>{balances.sui.toFixed(2)}</b> SUI
+            </span>
+            <span className="topup-stat-sep" aria-hidden="true" />
+            <span className="topup-stat">
+              <b>{balances.wal.toFixed(2)}</b> WAL
+            </span>
           </div>
         </div>
 
@@ -80,26 +99,15 @@ export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => vo
             <input
               id="topup-amount"
               className="topup-amt-input"
-              type="number"
+              type="text"
               inputMode="decimal"
-              min="0"
-              step="0.05"
+              autoComplete="off"
               value={amountStr}
-              onChange={(e) => setAmountStr(e.target.value)}
+              onChange={(e) => onAmount(e.target.value)}
               disabled={topping}
             />
             <span className="topup-amt-suffix">SUI</span>
           </div>
-        </div>
-
-        <div className="topup-custody">
-          <svg className="topup-custody-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
-            <rect x="5" y="11" width="14" height="9" rx="2" />
-            <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-          </svg>
-          <span>
-            This agent&apos;s key stays in this browser, on your device. Anima never holds it.
-          </span>
         </div>
 
         {error ? (
