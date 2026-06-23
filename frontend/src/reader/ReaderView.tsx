@@ -25,6 +25,9 @@ import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { parseNote } from '../../../chain/core/src/notes.js';
 import { isPasswordShare, openWithPassword } from '../../../chain/core/src/share-crypto.js';
 import { sanitizeNoteHtml } from '../web3/collabOps';
+import { Frame } from './Frame';
+import { CanvasReadonly } from './CanvasReadonly';
+import type { CanvasSnapshot } from '../web3/canvasSnapshot';
 
 // Mirror the testnet aggregator the app's chainConfig uses (chain/core/config.ts),
 // but read it from a Vite env so the reader never imports that `@mysten`-laden module.
@@ -33,12 +36,10 @@ const AGG = import.meta.env.VITE_AGGREGATOR_URL ?? 'https://aggregator.walrus-te
 type ViewState =
   | { kind: 'loading' }
   | { kind: 'ready'; title: string; bodyHtml: string; meta: string; cover: string | null }
+  | { kind: 'canvas'; snapshot: CanvasSnapshot }
   | { kind: 'password'; bytes: Uint8Array; error: string | null; busy: boolean }
   | { kind: 'not-found' }
   | { kind: 'network-error' };
-
-/** A reader state label mirrored onto `[data-reader-state]` for the browser smoke. */
-type ReaderStateAttr = 'loading' | 'ready' | 'wrong-password' | 'not-found' | 'network-error' | 'edit';
 
 // ---------------------------------------------------------------------------
 // URL parsing — `?b=` (view) and `?room=`/`?salt=&edit=1` (edit) are exclusive.
@@ -48,10 +49,15 @@ type Route =
   | { mode: 'view'; blobId: string; locked: boolean }
   | { mode: 'edit'; room: string | null; salt: string | null }
   | { mode: 'fixture' }
+  | { mode: 'fixture-locked' }
+  | { mode: 'fixture-canvas' }
   | { mode: 'none' };
 
 export function parseRoute(search: string, hash: string): Route {
   const q = new URLSearchParams(search);
+  // `?fixture=…` renders a deterministic surface with no network, for the screenshot smoke.
+  if (q.get('fixture') === 'locked' || hash === '#fixture-locked') return { mode: 'fixture-locked' };
+  if (q.get('fixture') === 'canvas' || hash === '#fixture-canvas') return { mode: 'fixture-canvas' };
   if (q.get('fixture') === '1' || hash === '#fixture') return { mode: 'fixture' };
 
   const b = q.get('b');
@@ -84,9 +90,18 @@ export function presetCover(ref: string | undefined): string | null {
 // View read path — fetch the blob, decrypt if needed, sanitize, render.
 // ---------------------------------------------------------------------------
 
-/** Build a `ready` state from a plaintext serialized-note markdown blob. */
-export function readyFromMarkdown(markdown: string): Extract<ViewState, { kind: 'ready' }> {
-  const note = parseNote(markdown);
+/** A decoded note body that is a canvas snapshot (`anima:'canvas'` marker), else null. */
+function canvasSnapshotOf(body: string): CanvasSnapshot | null {
+  try {
+    const parsed = JSON.parse(body) as { anima?: string };
+    return parsed && parsed.anima === 'canvas' ? (parsed as CanvasSnapshot) : null;
+  } catch {
+    return null; // ordinary markdown body — not JSON
+  }
+}
+
+/** The `ready` doc state from a parsed note. */
+function readyDocFromNote(note: ReturnType<typeof parseNote>): Extract<ViewState, { kind: 'ready' }> {
   return {
     kind: 'ready',
     title: note.title,
@@ -96,73 +111,71 @@ export function readyFromMarkdown(markdown: string): Extract<ViewState, { kind: 
   };
 }
 
-/** Open a password envelope and build a `ready` state (throws on wrong password). */
-async function readyFromEnvelope(bytes: Uint8Array, password: string): Promise<Extract<ViewState, { kind: 'ready' }>> {
-  const note = await openWithPassword(bytes, password);
-  return {
-    kind: 'ready',
-    title: note.title,
-    bodyHtml: sanitizeNoteHtml(note.body),
-    meta: note.author ? `Shared by ${note.author}` : 'Shared note',
-    cover: presetCover(note.cover),
-  };
+/** A decoded share renders as one of these two doc states. */
+type ViewDoc = Extract<ViewState, { kind: 'ready' | 'canvas' }>;
+
+/** Classify a decoded note: a canvas snapshot → canvas view, else a markdown doc. */
+function viewStateFromNote(note: ReturnType<typeof parseNote>): ViewDoc {
+  const snapshot = canvasSnapshotOf(note.body);
+  return snapshot ? { kind: 'canvas', snapshot } : readyDocFromNote(note);
+}
+
+/** Build the view state from a plaintext serialized-note (markdown OR canvas snapshot). */
+export function readyFromMarkdown(markdown: string): ViewDoc {
+  return viewStateFromNote(parseNote(markdown));
+}
+
+/** Open a password envelope and classify (throws on wrong password). */
+async function readyFromEnvelope(bytes: Uint8Array, password: string): Promise<ViewDoc> {
+  return viewStateFromNote(await openWithPassword(bytes, password));
 }
 
 // ---------------------------------------------------------------------------
 // Components
 // ---------------------------------------------------------------------------
 
-function Shell({ state, children }: { state: ReaderStateAttr; children: ReactElement }): ReactElement {
-  // `data-reader-state` lets a screenshot agent read a pass/fail verdict from the DOM.
-  return (
-    <div className="rd-shell" data-reader-state={state}>
-      {children}
-    </div>
-  );
-}
-
 function LoadingDoc(): ReactElement {
   return (
-    <Shell state="loading">
+    <Frame state="loading">
       <div className="rd-doc rd-skeleton">
         <span />
         <span />
         <span />
         <span />
       </div>
-    </Shell>
+    </Frame>
   );
 }
 
 function NotFound(): ReactElement {
   return (
-    <Shell state="not-found">
+    <Frame state="not-found">
       <div className="rd-center">
         <div className="rd-card">
           <h2>This link is no longer available</h2>
           <p>The shared note may have been revoked, or the link is incomplete.</p>
-          <a className="rd-link" href="/">
+          <a className="btn btn-primary" href="/">
             Go to Anima
           </a>
         </div>
       </div>
-    </Shell>
+    </Frame>
   );
 }
 
 function NetworkError({ onRetry }: { onRetry: () => void }): ReactElement {
   return (
-    <Shell state="network-error">
+    <Frame state="network-error">
       <div className="rd-center">
         <div className="rd-card">
           <h2>Could not load this note</h2>
           <p>The network request failed. Check your connection and try again.</p>
-          <button className="rd-btn" onClick={onRetry}>
+          <button className="btn btn-primary" onClick={onRetry}>
             Retry
           </button>
         </div>
       </div>
-    </Shell>
+    </Frame>
   );
 }
 
@@ -178,8 +191,22 @@ function PasswordGate({
   const [pw, setPw] = useState('');
   // wrong-password is the smoke-relevant state when an error is present.
   return (
-    <Shell state={error ? 'wrong-password' : 'loading'}>
-      <div className="rd-center">
+    <Frame state={error ? 'wrong-password' : 'loading'} tag="Shared with you" bleed>
+      <div className="rd-locked">
+        {/* a blurred doc skeleton + frosted veil behind the modal — "there is
+            content here, locked" — then the password card as a centered modal. */}
+        <div className="rd-locked-bg" aria-hidden="true">
+          <div className="rd-doc rd-skeleton">
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
+        </div>
+        <div className="rd-locked-veil" aria-hidden="true" />
+        <div className="rd-modal">
         <form
           className="rd-card"
           onSubmit={(e) => {
@@ -199,29 +226,29 @@ function PasswordGate({
               placeholder="Password"
               aria-label="Password"
             />
-            <button className="rd-btn" type="submit" disabled={!pw || busy}>
+            <button className="btn btn-primary" type="submit" disabled={busy}>
               {busy ? 'Opening…' : 'Open'}
             </button>
           </div>
           {error ? <div className="rd-error">{error}</div> : null}
         </form>
+        </div>
       </div>
-    </Shell>
+    </Frame>
   );
 }
 
 function ReadyDoc({ title, bodyHtml, meta, cover }: Extract<ViewState, { kind: 'ready' }>): ReactElement {
   return (
-    <Shell state="ready">
+    <Frame state="ready">
       <article className="rd-doc">
-        <div className="rd-brand">Anima · shared</div>
         {cover ? <img className="rd-cover" src={cover} alt="" /> : null}
         <h1 className="rd-title">{title}</h1>
         <div className="rd-meta">{meta}</div>
         {/* THE XSS SINK — bodyHtml is always sanitizeNoteHtml() output. */}
         <div className="rd-body" dangerouslySetInnerHTML={{ __html: bodyHtml }} />
       </article>
-    </Shell>
+    </Frame>
   );
 }
 
@@ -287,6 +314,7 @@ function ViewReader({ blobId, locked }: { blobId: string; locked: boolean }): Re
   if (state.kind === 'loading') return <LoadingDoc />;
   if (state.kind === 'not-found') return <NotFound />;
   if (state.kind === 'network-error') return <NetworkError onRetry={() => setAttempt((n) => n + 1)} />;
+  if (state.kind === 'canvas') return <CanvasReadonly snapshot={state.snapshot} />;
   if (state.kind === 'ready') return <ReadyDoc {...state} />;
 
   // password gate
@@ -360,7 +388,36 @@ const FIXTURE_NOTE = [
 
 function FixtureDoc(): ReactElement {
   // Render synchronously, no fetch — the smoke screenshot must be deterministic.
-  return <ReadyDoc {...readyFromMarkdown(FIXTURE_NOTE)} />;
+  const s = readyFromMarkdown(FIXTURE_NOTE);
+  return s.kind === 'canvas' ? <CanvasReadonly snapshot={s.snapshot} /> : <ReadyDoc {...s} />;
+}
+
+function FixtureLocked(): ReactElement {
+  // The password gate with no fetched envelope — for the screenshot smoke.
+  return <PasswordGate error={null} busy={false} onSubmit={() => {}} />;
+}
+
+/** A hardcoded board snapshot to render the read-only canvas with no wallet/network. */
+const FIXTURE_CANVAS: CanvasSnapshot = {
+  v: 1,
+  anima: 'canvas',
+  title: 'Wedding planning',
+  elements: [
+    { id: 'r1', type: 'rect', x: 80, y: 80, w: 560, h: 260, angle: 0, index: 0, version: 1, versionNonce: 1, strokeColor: '#2F6BFF', strokeStyle: 'dashed', label: 'This week' },
+    { id: 'n1', type: 'note', noteId: 'a', x: 120, y: 140, w: 190, h: 88, angle: 0, index: 1, version: 1, versionNonce: 2 },
+    { id: 'n2', type: 'note', noteId: 'b', x: 400, y: 210, w: 190, h: 88, angle: 0, index: 2, version: 1, versionNonce: 3 },
+    { id: 'a1', type: 'arrow', x: 310, y: 184, w: 90, h: 70, angle: 0, index: 3, version: 1, versionNonce: 4, points: [0, 0, 90, 70] },
+    { id: 't1', type: 'text', x: 120, y: 380, w: 260, h: 24, angle: 0, index: 4, version: 1, versionNonce: 5, text: 'Call Maya about the vows' },
+    { id: 'e1', type: 'ellipse', x: 470, y: 360, w: 150, h: 90, angle: 0, index: 5, version: 1, versionNonce: 6, strokeColor: '#FF5C1A' },
+  ],
+  notes: {
+    a: { title: 'Check in with Maya', excerpt: 'Reach out to your sister Maya today to talk about the wedding.', byAgent: false },
+    b: { title: 'Sister wedding', excerpt: 'Venue booked. Catering pending. Send the playlist over the weekend.', byAgent: true },
+  },
+};
+
+function FixtureCanvas(): ReactElement {
+  return <CanvasReadonly snapshot={FIXTURE_CANVAS} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -374,6 +431,10 @@ export function ReaderView(): ReactElement {
   switch (route.mode) {
     case 'fixture':
       return <FixtureDoc />;
+    case 'fixture-locked':
+      return <FixtureLocked />;
+    case 'fixture-canvas':
+      return <FixtureCanvas />;
     case 'view':
       return <ViewReader blobId={route.blobId} locked={route.locked} />;
     case 'edit':

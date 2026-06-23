@@ -167,8 +167,8 @@ const isDeclined = (e: unknown): boolean => {
   return m.includes('reject') || m.includes('declin') || m.includes('denied') || m.includes('cancel');
 };
 
-/** Best-effort label for a wallet/tx failure that is really an out-of-SUI gas error. */
-const isInsufficientFunds = (e: unknown): boolean => {
+/** Best-effort label for a wallet/tx failure that is really an out-of-funds error. */
+export const isInsufficientFunds = (e: unknown): boolean => {
   const m = (e instanceof Error ? e.message : String(e)).toLowerCase();
   return (
     m.includes('insufficient') ||

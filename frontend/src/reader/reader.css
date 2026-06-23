@@ -1,85 +1,215 @@
-/* Chromeless reader styles (plan 008 U3). Self-contained — the reader bundle does
- * not load the app's kit.css shell. Tokens mirror the Slipstream kit's surface so
- * a shared doc still feels like Anima, without dragging the whole theme. */
-
-:root {
-  --rd-ink: #14161a;
-  --rd-muted: #5b626d;
-  --rd-faint: #8b919b;
-  --rd-line: #e6e3dd;
-  --rd-paper: #faf8f4;
-  --rd-card: #ffffff;
-  --rd-accent: #1f6f63;
-  --rd-danger: #b23b2e;
-}
+/* Reader styles, built ON the app's design system. main.tsx imports kit.css first
+ * (tokens, .btn, .field, fonts, base body); this file adds the reader chrome and
+ * surfaces, all on kit tokens. @mysten-free: CSS only.
+ *
+ * Redesign: no sidebar. A clean centered document, a thin animated sheen + quiet
+ * brand wordmark on top, and a floating breathing brand orb (the app's signature)
+ * bottom-right that links home. Rounding is tightened to one restrained scale
+ * (10px controls, 14px cards) and the surfaces animate in. */
 
 * {
   box-sizing: border-box;
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
+/* one restrained radius scale across the reader (was too round/bubbly before) */
+.btn {
+  border-radius: 9px;
+  font-weight: 600;
+}
+a.btn {
+  text-decoration: none;
 }
 
-body {
-  background: var(--rd-paper);
-  color: var(--rd-ink);
+@keyframes rd-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rd-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.14);
+  }
+}
+
+@keyframes rd-sweep {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ============ shell + top chrome ============ */
+
+.rd-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--white);
+  color: var(--ink-900);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
 
-.rd-shell {
-  min-height: 100vh;
+/* a thin moving sheen pinned to the very top — quiet motion, premium not loud */
+.rd-sheen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 5;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--blue-600) 35%,
+    var(--orange-500) 50%,
+    var(--blue-600) 65%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: rd-sweep 6s linear infinite;
+  opacity: 0.85;
+}
+
+.rd-top {
+  flex: none;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 28px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(10px);
+}
+
+.rd-top-brand {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+  color: var(--ink-900);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.rd-top-brand i {
+  font-style: normal;
+  color: var(--blue-600);
+  margin-left: 3px;
+  display: inline-block;
+  animation: rd-breathe 3.6s ease-in-out infinite;
+}
+
+.rd-top-tag {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: rgba(22, 24, 29, 0.38);
+}
+
+/* ============ floating brand orb (the app's signature FAB, links home) ============ */
+
+.rd-orb {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 6;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  background: var(--orange-500);
+  box-shadow: 0 10px 24px rgba(255, 92, 26, 0.34), 0 0 0 1px rgba(255, 92, 26, 0.5);
+  transition: transform var(--motion-duration-fast) ease, box-shadow var(--motion-duration-base) ease;
+}
+
+.rd-orb:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(255, 92, 26, 0.42), 0 0 0 1px rgba(255, 92, 26, 0.62);
+}
+
+.rd-orb-star {
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  animation: rd-breathe 3.6s ease-in-out infinite;
+}
+
+/* ============ main column ============ */
+
+.rd-main {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 48px 24px 96px;
+  padding: 40px 28px 120px;
 }
+
+/* full-bleed: the pannable board fills the area, no centered padding */
+.rd-main-bleed {
+  padding: 0;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+/* ============ document (view) ============ */
 
 .rd-doc {
   width: 100%;
   max-width: 720px;
-}
-
-.rd-brand {
-  font-family: 'Space Grotesk', sans-serif;
-  font-weight: 700;
-  font-size: 0.8rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--rd-faint);
-  margin-bottom: 28px;
+  animation: rd-rise var(--motion-duration-slow) var(--motion-easing-enter) both;
 }
 
 .rd-cover {
   width: 100%;
-  height: 180px;
+  height: 200px;
   object-fit: cover;
-  border-radius: 14px;
-  border: 1px solid var(--rd-line);
-  margin-bottom: 28px;
+  border-radius: 16px;
+  border: 1px solid var(--gray-200);
+  margin-bottom: 30px;
   display: block;
 }
 
 .rd-title {
   font-family: 'Space Grotesk', sans-serif;
   font-weight: 700;
-  font-size: 2rem;
-  line-height: 1.2;
-  margin: 0 0 8px;
+  font-size: 2.2rem;
+  line-height: 1.18;
+  letter-spacing: -0.015em;
+  margin: 8px 0 10px;
 }
 
 .rd-meta {
-  color: var(--rd-faint);
+  color: rgba(22, 24, 29, 0.45);
   font-size: 0.85rem;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
 }
 
 .rd-body {
   font-size: 1.05rem;
+  color: var(--ink-900);
 }
 
 .rd-body h1,
@@ -90,13 +220,13 @@ body {
 }
 
 .rd-body a {
-  color: var(--rd-accent);
+  color: var(--blue-600);
 }
 
 .rd-body pre {
-  background: #f1efe9;
+  background: var(--gray-100);
   padding: 14px 16px;
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: auto;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.9rem;
@@ -109,34 +239,35 @@ body {
 
 .rd-body img {
   max-width: 100%;
-  border-radius: 10px;
+  border-radius: 12px;
 }
 
-/* --- centered states (loading / not-found / password / network) --- */
+/* ============ centered card states (loading / not-found / password / network) ============ */
 
 .rd-center {
   width: 100%;
-  max-width: 460px;
+  max-width: 420px;
   margin: 12vh auto 0;
-  text-align: center;
 }
 
 .rd-card {
-  background: var(--rd-card);
-  border: 1px solid var(--rd-line);
-  border-radius: 16px;
-  padding: 36px 32px;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: 14px;
+  padding: 28px;
+  box-shadow: var(--shadow-soft);
   text-align: left;
+  animation: rd-rise var(--motion-duration-slow) var(--motion-easing-enter) both;
 }
 
 .rd-card h2 {
   font-family: 'Space Grotesk', sans-serif;
   margin: 0 0 8px;
-  font-size: 1.35rem;
+  font-size: 1.3rem;
 }
 
 .rd-card p {
-  color: var(--rd-muted);
+  color: var(--gray-600);
   margin: 0 0 20px;
 }
 
@@ -145,63 +276,50 @@ body {
   gap: 8px;
 }
 
+/* crisp input (a hairline border + white fill reads sharper than a gray pill) */
 .rd-input {
   flex: 1;
-  font: inherit;
-  padding: 10px 12px;
-  border: 1px solid var(--rd-line);
-  border-radius: 10px;
-  background: var(--rd-paper);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: var(--ink-900);
+  padding: 10px 13px;
+  border: 1px solid var(--gray-200);
+  border-radius: 9px;
+  background: var(--white);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.rd-input::placeholder {
+  color: rgba(22, 24, 29, 0.36);
 }
 
 .rd-input:focus {
-  outline: 2px solid var(--rd-accent);
-  outline-offset: 1px;
-}
-
-.rd-btn {
-  font: inherit;
-  font-weight: 600;
-  padding: 10px 16px;
-  border: none;
-  border-radius: 10px;
-  background: var(--rd-accent);
-  color: #fff;
-  cursor: pointer;
-}
-
-.rd-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.rd-btn-ghost {
-  background: transparent;
-  color: var(--rd-accent);
-  border: 1px solid var(--rd-line);
+  outline: none;
+  border-color: var(--blue-600);
+  box-shadow: 0 0 0 3px var(--blue-100);
 }
 
 .rd-error {
-  color: var(--rd-danger);
-  font-size: 0.9rem;
+  color: #c92b33;
+  font-size: 0.88rem;
+  font-weight: 500;
   margin-top: 14px;
 }
 
-.rd-link {
-  color: var(--rd-accent);
-  text-decoration: none;
-  font-weight: 600;
-}
+/* ============ loading skeleton ============ */
 
-/* --- loading skeleton --- */
+.rd-skeleton {
+  width: 100%;
+  max-width: 720px;
+}
 
 .rd-skeleton span {
   display: block;
   height: 14px;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #ece9e3 25%, #f5f3ee 50%, #ece9e3 75%);
+  border-radius: 7px;
+  background: linear-gradient(90deg, var(--gray-100) 25%, #f7f9fd 50%, var(--gray-100) 75%);
   background-size: 200% 100%;
-  animation: rd-shimmer 1.3s ease-in-out infinite;
+  animation: rd-sweep 1.3s ease-in-out infinite;
   margin-bottom: 12px;
 }
 
@@ -220,28 +338,20 @@ body {
   width: 78%;
 }
 
-@keyframes rd-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-/* --- minimal edit (multiplayer) view --- */
+/* ============ edit (multiplayer) view ============ */
 
 .rd-editor {
   width: 100%;
   max-width: 720px;
+  animation: rd-rise var(--motion-duration-slow) var(--motion-easing-enter) both;
 }
 
 .rd-lockbanner {
-  background: #fff6e9;
-  border: 1px solid #f0d9ad;
-  color: #8a5a12;
-  border-radius: 10px;
-  padding: 10px 14px;
+  background: var(--orange-100);
+  border: 1px solid #f6d2bd;
+  color: #a8430f;
+  border-radius: 11px;
+  padding: 11px 14px;
   margin-bottom: 14px;
   display: flex;
   align-items: center;
@@ -251,34 +361,184 @@ body {
 }
 
 .rd-notsaved {
-  background: #eef4f3;
-  border: 1px solid #cfe2de;
-  color: #2c5a52;
-  border-radius: 10px;
-  padding: 10px 14px;
+  background: var(--blue-100);
+  border: 1px solid #cfe0ff;
+  color: var(--blue-700);
+  border-radius: 11px;
+  padding: 11px 14px;
   margin-bottom: 14px;
   font-size: 0.9rem;
 }
 
 .rd-textarea {
   width: 100%;
-  min-height: 420px;
-  font: inherit;
+  min-height: 440px;
+  font-family: 'Inter', sans-serif;
   font-size: 1.02rem;
   line-height: 1.6;
+  color: var(--ink-900);
   padding: 18px 20px;
-  border: 1px solid var(--rd-line);
-  border-radius: 14px;
-  background: var(--rd-card);
+  border: 1px solid var(--gray-200);
+  border-radius: 12px;
+  background: var(--white);
   resize: vertical;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.rd-textarea::placeholder {
+  color: rgba(22, 24, 29, 0.34);
 }
 
 .rd-textarea:disabled {
-  background: #f4f2ec;
-  color: var(--rd-muted);
+  background: var(--gray-100);
+  color: var(--gray-600);
 }
 
 .rd-textarea:focus {
-  outline: 2px solid var(--rd-accent);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--blue-600);
+  box-shadow: 0 0 0 3px var(--blue-100);
+}
+
+/* ============ canvas read-only view — a real pannable board ============ */
+
+.rd-board {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  background:
+    radial-gradient(circle at 1px 1px, rgba(22, 24, 29, 0.07) 1px, transparent 0) 0 0 / 24px 24px,
+    var(--white);
+}
+
+.rd-board.panning {
+  cursor: grabbing;
+}
+
+/* the world is board-sized and translated; the SVG overflows it so far-flung
+   shapes still render (mirrors the in-app .pgcv-world / .pgcv-ink). */
+.rd-board-world {
+  position: absolute;
+  inset: 0;
+}
+
+.rd-ink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* text element (mirrors canvas.css .cv-text, read-only) */
+.rd-board-world .cv-text {
+  position: absolute;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--ink-900);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 340px;
+}
+
+/* image placeholder — the wallet-free reader cannot resolve a board image (deferred) */
+.rd-img-ph {
+  position: absolute;
+  border-radius: 8px;
+  background: var(--gray-100);
+  box-shadow: inset 0 0 0 1px var(--gray-200);
+}
+
+/* centred label inside a rect/ellipse */
+.rd-label {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: var(--ink-900);
+  pointer-events: none;
+}
+
+.rd-canvas-empty {
+  margin: auto;
+  color: var(--gray-600);
+  font-size: 1rem;
+}
+
+/* ============ password gate — a centered modal over blurred, dimmed content ============ */
+
+.rd-locked {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* the faint content hint behind the modal: a blurred doc skeleton */
+.rd-locked-bg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  padding: 64px 28px;
+  filter: blur(3px);
+  opacity: 0.5;
+}
+
+/* frosted veil so the modal pops and the content stays unreadable */
+.rd-locked-veil {
+  position: absolute;
+  inset: 0;
+  background: rgba(250, 250, 251, 0.6);
+  backdrop-filter: blur(3px);
+}
+
+/* the modal layer: centre the card */
+.rd-modal {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.rd-modal .rd-card {
+  width: 100%;
+  max-width: 420px;
+}
+
+/* ============ small screens ============ */
+
+@media (max-width: 640px) {
+  .rd-top {
+    padding: 14px 18px;
+  }
+  .rd-main {
+    padding: 28px 18px 110px;
+  }
+  .rd-orb {
+    right: 16px;
+    bottom: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rd-sheen,
+  .rd-top-brand i,
+  .rd-orb-star,
+  .rd-doc,
+  .rd-card,
+  .rd-editor {
+    animation: none;
+  }
 }

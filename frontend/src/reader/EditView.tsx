@@ -19,6 +19,7 @@
  * with no owner present sees the live state only (the relay never replays).
  */
 import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { Frame } from './Frame';
 import { parseMsg, serializeMsg } from '../mocks/presenceStore';
 import {
   deriveRoomId,
@@ -59,17 +60,17 @@ export function EditView({ room, salt }: { room: string | null; salt: string | n
 
   if (phase.kind === 'error') {
     return (
-      <div className="rd-shell" data-reader-state="not-found">
+      <Frame state="not-found" tag="Live edit">
         <div className="rd-center">
           <div className="rd-card">
             <h2>This edit link is incomplete</h2>
             <p>Ask the sender for a fresh link.</p>
-            <a className="rd-link" href="/">
+            <a className="btn btn-primary" href="/">
               Go to Anima
             </a>
           </div>
         </div>
-      </div>
+      </Frame>
     );
   }
 
@@ -87,14 +88,14 @@ export function EditView({ room, salt }: { room: string | null; salt: string | n
 
   if (phase.kind === 'deriving') {
     return (
-      <div className="rd-shell" data-reader-state="loading">
+      <Frame state="loading" tag="Live edit">
         <div className="rd-doc rd-skeleton">
           <span />
           <span />
           <span />
           <span />
         </div>
-      </div>
+      </Frame>
     );
   }
 
@@ -111,7 +112,7 @@ function JoinGate({ onPassword }: { onPassword: (pw: string) => void }): ReactEl
   // Neutral on first paint (no attempt yet) — mirrors the view gate's `loading`
   // label; a wrong password lands in a different empty room (it does not error).
   return (
-    <div className="rd-shell" data-reader-state="loading">
+    <Frame state="loading" tag="Live edit">
       <div className="rd-center">
         <form
           className="rd-card"
@@ -132,13 +133,13 @@ function JoinGate({ onPassword }: { onPassword: (pw: string) => void }): ReactEl
               placeholder="Password"
               aria-label="Password"
             />
-            <button className="rd-btn" type="submit" disabled={!pw}>
+            <button className="btn btn-primary" type="submit" disabled={!pw}>
               Join
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </Frame>
   );
 }
 
@@ -210,13 +211,12 @@ function Room({ room }: { room: string }): ReactElement {
   }
 
   return (
-    <div className="rd-shell" data-reader-state="edit">
+    <Frame state="edit" tag="Live edit">
       <div className="rd-editor">
-        <div className="rd-brand">Anima · live edit</div>
         {locked ? (
           <div className="rd-lockbanner">
             <span>Someone is editing — wait or take over.</span>
-            <button className="rd-btn rd-btn-ghost" onClick={reclaim}>
+            <button className="btn btn-sm" onClick={reclaim}>
               Take over
             </button>
           </div>
@@ -234,6 +234,6 @@ function Room({ room }: { room: string }): ReactElement {
           aria-label="Shared note"
         />
       </div>
-    </div>
+    </Frame>
   );
 }

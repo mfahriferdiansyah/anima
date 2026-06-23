@@ -9,6 +9,11 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ReaderView } from './ReaderView';
+// The app's design system (tokens, .btn, .field, typography). Pure CSS, so the
+// reader inherits the real Anima look without importing any `@mysten`/wallet JS
+// (KTD6 is about the JS graph, not styles). reader.css layers the reader frame on
+// top, so it must load AFTER the kit.
+import '../theme/kit.css';
 import './reader.css';
 
 createRoot(document.getElementById('reader-root')!).render(

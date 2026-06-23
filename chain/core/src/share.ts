@@ -33,18 +33,30 @@ export interface PublishedShare {
   blobObjectId: string;
   noteId: string;
   mode: 'public' | 'password';
+  /** 'note' = a published memory; 'canvas' = a read-only board snapshot. */
+  kind: 'note' | 'canvas';
   url: string; // reader URL (relative); aggregator URL also valid for public mode
 }
 
+/** Walrus `app` attribute per kind — distinct so a canvas snapshot never lists as a note. */
+const APP_BY_KIND = { note: 'anima-pub', canvas: 'anima-canvas-pub' } as const;
+const KIND_BY_APP: Record<string, 'note' | 'canvas'> = { 'anima-pub': 'note', 'anima-canvas-pub': 'canvas' };
+
 export const aggregatorUrl = (blobId: string) => `${chainConfig.aggregator}/v1/blobs/${encodeURIComponent(blobId)}`;
 
-/** Publish one note as a standalone blob (plaintext or password envelope), wallet-owned. */
+/**
+ * Publish one note as a standalone blob (plaintext or password envelope),
+ * wallet-owned. A canvas read-only snapshot rides the SAME path (`kind: 'canvas'`):
+ * the snapshot JSON is carried as the note body, so crypto, transfer and the
+ * reader's decode are reused unchanged — only the `app` attribute differs.
+ */
 export async function publishNote(
   deps: QuiltDeps,
   note: Note,
-  opts: { password?: string; epochs?: number } = {},
+  opts: { password?: string; epochs?: number; kind?: 'note' | 'canvas' } = {},
 ): Promise<PublishedShare> {
   const mode: 'public' | 'password' = opts.password ? 'password' : 'public';
+  const kind = opts.kind ?? 'note';
   const bytes = opts.password ? await sealWithPassword(note, opts.password) : te.encode(serializeNote(note));
 
   const result = await deps.suiClient.walrus.writeBlob({
@@ -52,7 +64,7 @@ export async function publishNote(
     epochs: opts.epochs ?? 53,
     deletable: true,
     signer: deps.agentSigner,
-    attributes: { app: 'anima-pub', noteId: note.noteId, mode },
+    attributes: { app: APP_BY_KIND[kind], noteId: note.noteId, mode },
   });
   const blobObjectId: string = result.blobObject.id;
 
@@ -67,7 +79,7 @@ export async function publishNote(
   if (tRes.effects?.status?.status !== 'success') throw new Error('share transfer failed');
   await deps.suiClient.waitForTransaction({ digest: tRes.digest });
 
-  return { blobId: result.blobId, blobObjectId, noteId: note.noteId, mode, url: shareUrl(result.blobId, mode) };
+  return { blobId: result.blobId, blobObjectId, noteId: note.noteId, mode, kind, url: shareUrl(result.blobId, mode) };
 }
 
 /**
@@ -102,14 +114,15 @@ export async function listPublished(
       if (!id) continue;
       try {
         const attrs = await deps.suiClient.walrus.readBlobAttributes({ blobObjectId: id });
-        if (attrs?.app !== 'anima-pub') continue;
+        const kind = attrs?.app ? KIND_BY_APP[attrs.app] : undefined;
+        if (!kind) continue;
         if (noteId && attrs.noteId !== noteId) continue;
         const obj = await deps.suiClient.walrus.getBlobObject(id);
         const { blobIdFromInt } = await import('@mysten/walrus');
         const raw: string = obj.blob_id ?? obj.blobId;
         const blobId = /^[0-9]+$/.test(raw) ? blobIdFromInt(BigInt(raw)) : raw;
         const mode = (attrs.mode as 'public' | 'password') ?? 'public';
-        out.push({ blobId, blobObjectId: id, noteId: attrs.noteId, mode, url: shareUrl(blobId, mode) });
+        out.push({ blobId, blobObjectId: id, noteId: attrs.noteId, mode, kind, url: shareUrl(blobId, mode) });
       } catch {
         /* not an attributed blob — skip */
       }

@@ -10,6 +10,9 @@ export {
   createShareLink,
   setLinkAccess,
   setLinkPassword,
+  generateView,
+  removeStaleCopy,
+  dismissFunds,
   unpublish,
   newSharePassword,
 } from '../web3/share';

@@ -9,7 +9,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // full-mock the wallet seams (importing the originals drags react/useChat into node-env)
-vi.mock('./session', () => ({ getQuiltDeps: vi.fn() }));
+vi.mock('./session', () => ({
+  getQuiltDeps: vi.fn(),
+  isInsufficientFunds: (e: unknown) => String(e instanceof Error ? e.message : e).toLowerCase().includes('insufficient'),
+}));
 vi.mock('../hooks/useVault', () => ({ runDestructiveTx: vi.fn() }));
 
 // partial-mock chain/core: keep newNote/etc., stub only the chain-touching share ops
@@ -28,6 +31,8 @@ import {
   createShareLink,
   setLinkAccess,
   setLinkPassword,
+  generateView,
+  removeStaleCopy,
   unpublish,
   reconcilePublished,
   resetShareStore,
@@ -79,23 +84,27 @@ describe('createShareLink edit (instant, no chain write)', () => {
   });
 });
 
-describe('createShareLink view (publishes a blob)', () => {
-  it('no password → publishNote → a `?b=<blobId>` url + blobObjectId', async () => {
+describe('createShareLink view is local — no publish until generateView', () => {
+  it('selecting view does NOT publish; the blob is written only on an explicit generateView', async () => {
     seedNote('n-1');
     vi.mocked(publishNote).mockResolvedValue({
       blobId: 'BLOB123', blobObjectId: '0xobj', noteId: 'n-1', mode: 'public', url: '/read.html?b=BLOB123',
     } as never);
 
     await createShareLink('n-1', 'view');
+    expect(publishNote).not.toHaveBeenCalled(); // a mere card selection never stamps a blob
+    expect(link('n-1')!.url).toBe(''); // empty until generated → dialog shows "Generate link"
+
+    await generateView('n-1');
     const l = link('n-1')!;
-    expect(publishNote).toHaveBeenCalledWith(DEPS, expect.objectContaining({ noteId: 'n-1' }), {});
+    expect(publishNote).toHaveBeenCalledWith(DEPS, expect.objectContaining({ noteId: 'n-1' }), { kind: 'note' });
     expect(l.url).toBe('/read.html?b=BLOB123');
+    expect(l.viewUrl).toBe('/read.html?b=BLOB123');
     expect(l.blobObjectId).toBe('0xobj');
-    expect(l.publishing).toBe(false);
-    expect(l.roomId).toBeUndefined();
+    expect(l.phase).toBeUndefined(); // a fresh publish (no prior copy) has no cleanup step
   });
 
-  it('with password → publishNote({password}) → a locked `?b=...&locked=1` url', async () => {
+  it('generateView carries the link password → a locked `?b=...&locked=1` url', async () => {
     seedNote('n-1');
     vi.mocked(publishNote).mockResolvedValue({
       blobId: 'B', blobObjectId: '0xp', noteId: 'n-1', mode: 'password', url: '/read.html?b=B&locked=1',
@@ -103,39 +112,59 @@ describe('createShareLink view (publishes a blob)', () => {
 
     await createShareLink('n-1', 'edit'); // start as edit
     await setLinkPassword('n-1', 'pw');
-    await setLinkAccess('n-1', 'view'); // flip to view carries the password
-    expect(publishNote).toHaveBeenCalledWith(DEPS, expect.objectContaining({ noteId: 'n-1' }), { password: 'pw' });
+    await setLinkAccess('n-1', 'view'); // flip to view is local — no publish
+    expect(publishNote).not.toHaveBeenCalled();
+
+    await generateView('n-1');
+    expect(publishNote).toHaveBeenCalledWith(DEPS, expect.objectContaining({ noteId: 'n-1' }), { password: 'pw', kind: 'note' });
     expect(link('n-1')!.url).toBe('/read.html?b=B&locked=1');
   });
 
-  it('publish failure surfaces an error and clears publishing', async () => {
+  it('an out-of-funds failure surfaces needsFunds (a Top up), not a raw chain error', async () => {
+    seedNote('n-1');
+    vi.mocked(publishNote).mockRejectedValue(
+      new Error('Insufficient balance of 0xabc for owner 0xdef. Required: 100, Available: 10'),
+    );
+    await createShareLink('n-1', 'view');
+    await generateView('n-1');
+    const l = link('n-1')!;
+    expect(l.needsFunds).toBe(true);
+    expect(l.error).toBeUndefined();
+    expect(l.phase).toBeUndefined();
+  });
+
+  it('a publish failure surfaces an error and clears the phase', async () => {
     seedNote('n-1');
     vi.mocked(publishNote).mockRejectedValue(new Error('aggregator down'));
     await createShareLink('n-1', 'view');
+    await generateView('n-1');
     const l = link('n-1')!;
-    expect(l.publishing).toBe(false);
+    expect(l.phase).toBeUndefined();
     expect(l.error).toBe('aggregator down');
+    expect(l.url).toBe(''); // still ungenerated → the Generate affordance stays
   });
 });
 
-describe('setLinkAccess flip', () => {
-  it('view → edit unpublishes the blob and hands out a room', async () => {
+describe('setLinkAccess flip is local — no chain ops on a card switch', () => {
+  it('view → edit keeps the published blob (no destructive delete) and shows a room', async () => {
     seedNote('n-1');
     vi.mocked(publishNote).mockResolvedValue({
       blobId: 'B', blobObjectId: '0xobj', noteId: 'n-1', mode: 'public', url: '/read.html?b=B',
     } as never);
     await createShareLink('n-1', 'view');
+    await generateView('n-1');
 
     await setLinkAccess('n-1', 'edit');
-    expect(unpublishNote).toHaveBeenCalledWith(DEPS, '0xobj');
-    expect(runDestructiveTx).toHaveBeenCalled();
+    expect(unpublishNote).not.toHaveBeenCalled(); // toggling a card never deletes
+    expect(runDestructiveTx).not.toHaveBeenCalled();
     const l = link('n-1')!;
     expect(l.access).toBe('edit');
-    expect(l.blobObjectId).toBeUndefined();
+    expect(l.blobObjectId).toBe('0xobj'); // blob is kept — Revoke is the only delete
+    expect(l.viewUrl).toBe('/read.html?b=B'); // the generated link is remembered
     expect(l.url).toMatch(/\?room=/);
   });
 
-  it('edit → view publishes a blob and drops the room', async () => {
+  it('edit → view does NOT publish; the generated link returns on switch-back without re-publishing', async () => {
     seedNote('n-1');
     vi.mocked(publishNote).mockResolvedValue({
       blobId: 'B2', blobObjectId: '0xo2', noteId: 'n-1', mode: 'public', url: '/read.html?b=B2',
@@ -143,27 +172,39 @@ describe('setLinkAccess flip', () => {
     await createShareLink('n-1', 'edit');
 
     await setLinkAccess('n-1', 'view');
+    expect(publishNote).not.toHaveBeenCalled(); // selecting view is local
+    expect(link('n-1')!.url).toBe(''); // → Generate affordance
+
+    await generateView('n-1');
     expect(publishNote).toHaveBeenCalledTimes(1);
-    const l = link('n-1')!;
-    expect(l.access).toBe('view');
-    expect(l.roomId).toBeUndefined();
-    expect(l.url).toBe('/read.html?b=B2');
+    expect(link('n-1')!.url).toBe('/read.html?b=B2');
+
+    // toggle away and back: the link is restored from viewUrl, no second publish
+    await setLinkAccess('n-1', 'edit');
+    await setLinkAccess('n-1', 'view');
+    expect(publishNote).toHaveBeenCalledTimes(1);
+    expect(link('n-1')!.url).toBe('/read.html?b=B2');
   });
 });
 
-describe('setLinkPassword view re-publish (publish-before-delete)', () => {
-  it('adding a password re-publishes the envelope, then deletes the prior plaintext blob', async () => {
+describe('setLinkPassword view is local — re-publish only on the next generateView', () => {
+  it('changing the password invalidates the link; generateView publishes the envelope, then deletes the prior plaintext blob', async () => {
     seedNote('n-1');
     vi.mocked(publishNote)
       .mockResolvedValueOnce({ blobId: 'P', blobObjectId: '0xplain', noteId: 'n-1', mode: 'public', url: '/read.html?b=P' } as never)
       .mockResolvedValueOnce({ blobId: 'E', blobObjectId: '0xenc', noteId: 'n-1', mode: 'password', url: '/read.html?b=E&locked=1' } as never);
 
-    await createShareLink('n-1', 'view'); // plaintext blob 0xplain
-    await setLinkPassword('n-1', 'secret');
+    await createShareLink('n-1', 'view');
+    await generateView('n-1'); // plaintext blob 0xplain
 
-    // second publish carried the password; then the prior plaintext blob is deleted
-    expect(publishNote).toHaveBeenNthCalledWith(2, DEPS, expect.objectContaining({ noteId: 'n-1' }), { password: 'secret' });
-    expect(unpublishNote).toHaveBeenCalledWith(DEPS, '0xplain'); // prior blob removed AFTER new one
+    await setLinkPassword('n-1', 'secret');
+    expect(publishNote).toHaveBeenCalledTimes(1); // setting the password does NOT re-publish
+    expect(link('n-1')!.url).toBe(''); // invalidated → Generate again
+    expect(link('n-1')!.password).toBe('secret');
+
+    await generateView('n-1');
+    expect(publishNote).toHaveBeenNthCalledWith(2, DEPS, expect.objectContaining({ noteId: 'n-1' }), { password: 'secret', kind: 'note' });
+    expect(unpublishNote).toHaveBeenCalledWith(DEPS, '0xplain'); // prior blob removed AFTER the new one
     const l = link('n-1')!;
     expect(l.blobObjectId).toBe('0xenc');
     expect(l.url).toBe('/read.html?b=E&locked=1');
@@ -177,11 +218,65 @@ describe('unpublish revoke under a wallet signature', () => {
       blobId: 'B', blobObjectId: '0xobj', noteId: 'n-1', mode: 'public', url: '/read.html?b=B',
     } as never);
     await createShareLink('n-1', 'view');
+    await generateView('n-1');
 
     await unpublish('n-1');
     expect(unpublishNote).toHaveBeenCalledWith(DEPS, '0xobj');
     expect(runDestructiveTx).toHaveBeenCalled();
     expect(link('n-1')).toBeUndefined();
+  });
+});
+
+describe('re-publish cleanup (publish-before-delete) — narrated, with a stale-copy retry', () => {
+  it('a rejected prior-copy delete records staleBlob; removeStaleCopy retries it', async () => {
+    seedNote('n-1');
+    vi.mocked(publishNote)
+      .mockResolvedValueOnce({ blobId: 'P', blobObjectId: '0xplain', noteId: 'n-1', mode: 'public', kind: 'note', url: '/read.html?b=P' } as never)
+      .mockResolvedValueOnce({ blobId: 'E', blobObjectId: '0xenc', noteId: 'n-1', mode: 'password', kind: 'note', url: '/read.html?b=E&locked=1' } as never);
+
+    await createShareLink('n-1', 'view');
+    await generateView('n-1'); // first publish, no prior copy → 0xplain, no cleanup
+    expect(link('n-1')!.staleBlob).toBeUndefined();
+
+    // the next publish must delete the prior copy — the user rejects that wallet step
+    vi.mocked(runDestructiveTx).mockRejectedValueOnce(new Error('User rejected the request'));
+    await setLinkPassword('n-1', 'secret'); // local: clears the link, keeps blobObjectId as the prior
+    await generateView('n-1'); // publishes 0xenc, then the 0xplain delete is rejected
+
+    let l = link('n-1')!;
+    expect(l.url).toBe('/read.html?b=E&locked=1'); // the NEW copy is already live
+    expect(l.phase).toBeUndefined();
+    expect(l.staleBlob).toBe('0xplain'); // the old copy lingers (its earlier link still opens)
+
+    // retry the cleanup — succeeds, clears the warning
+    vi.mocked(runDestructiveTx).mockResolvedValueOnce({} as never);
+    await removeStaleCopy('n-1');
+    l = link('n-1')!;
+    expect(unpublishNote).toHaveBeenCalledWith(DEPS, '0xplain');
+    expect(l.staleBlob).toBeUndefined();
+  });
+});
+
+describe('canvas view — generateView publishes a read-only board snapshot (kind canvas)', () => {
+  it('is local until Generate, then publishes a snapshot note with kind:canvas', async () => {
+    seedNote('n-keep'); // ensures the vault index is non-null so the snapshot can build
+    vi.mocked(publishNote).mockResolvedValue({
+      blobId: 'CB', blobObjectId: '0xcanvas', noteId: 'c-1', mode: 'public', kind: 'canvas', url: '/read.html?b=CB',
+    } as never);
+
+    await createShareLink('c-1', 'view', 'canvas', 'My board');
+    expect(publishNote).not.toHaveBeenCalled(); // selecting view never stamps a blob
+    expect(link('c-1')!.kind).toBe('canvas');
+
+    await generateView('c-1');
+    expect(publishNote).toHaveBeenCalledTimes(1);
+    const call = vi.mocked(publishNote).mock.calls[0];
+    const snapNote = call[1] as { body: string; tags: string[] };
+    const opts = call[2] as { kind?: string };
+    expect(opts.kind).toBe('canvas');
+    expect(snapNote.tags).toContain('anima:canvas-snapshot');
+    expect(JSON.parse(snapNote.body).anima).toBe('canvas'); // the body is the snapshot, marker present
+    expect(link('c-1')!.url).toBe('/read.html?b=CB');
   });
 });
 
@@ -199,14 +294,15 @@ describe('dedup on noteId', () => {
     seedNote('n-1');
     await createShareLink('n-1', 'edit'); // local edit link for n-1
     vi.mocked(listPublished).mockResolvedValue([
-      { blobId: 'B1', blobObjectId: '0xa', noteId: 'n-1', mode: 'public', url: '/read.html?b=B1' }, // already known → skip
-      { blobId: 'B2', blobObjectId: '0xb', noteId: 'n-2', mode: 'password', url: '/read.html?b=B2&locked=1' }, // new
+      { blobId: 'B1', blobObjectId: '0xa', noteId: 'n-1', mode: 'public', kind: 'note', url: '/read.html?b=B1' }, // already known → skip
+      { blobId: 'B2', blobObjectId: '0xb', noteId: 'n-2', mode: 'password', kind: 'note', url: '/read.html?b=B2&locked=1' }, // new
     ] as never);
 
     await reconcilePublished();
     expect(link('n-1')!.access).toBe('edit'); // not clobbered by the chain registry
     const reconciled = link('n-2')!;
     expect(reconciled.access).toBe('view');
+    expect(reconciled.kind).toBe('note');
     expect(reconciled.blobObjectId).toBe('0xb');
     expect(reconciled.password).toBe(''); // password-mode marker (value unknown to the owner here)
   });
@@ -218,7 +314,7 @@ describe('reconcile trigger (lifecycle wiring)', () => {
 
   it('a published-index swap reconciles view links in (not just the explicit call)', async () => {
     vi.mocked(listPublished).mockResolvedValue([
-      { blobId: 'B', blobObjectId: '0xb', noteId: 'n-pub', mode: 'public', url: '/read.html?b=B' },
+      { blobId: 'B', blobObjectId: '0xb', noteId: 'n-pub', mode: 'public', kind: 'note', url: '/read.html?b=B' },
     ] as never);
 
     // publishing a fresh index is the swap the hooks see on session rebuild
@@ -239,5 +335,28 @@ describe('reconcile trigger (lifecycle wiring)', () => {
     vaultData.reset(); // index → null
     await flush();
     expect(links()).toHaveLength(0); // stale-account links never linger
+  });
+});
+
+describe('absolute links — the browser origin is stamped so a copied link has a host', () => {
+  // node-env has no `window`; emulate the browser edge for this one case, then restore.
+  const g = globalThis as unknown as { window?: { location: { origin: string } } };
+
+  it('an edit link and a generated view link both carry the origin', async () => {
+    seedNote('n-1');
+    vi.mocked(publishNote).mockResolvedValue({
+      blobId: 'B', blobObjectId: '0xo', noteId: 'n-1', mode: 'public', url: '/read.html?b=B',
+    } as never);
+    g.window = { location: { origin: 'https://anima.app' } };
+    try {
+      await createShareLink('n-1', 'edit');
+      expect(link('n-1')!.url).toBe(`https://anima.app/read.html?room=${link('n-1')!.roomId}`);
+
+      await setLinkAccess('n-1', 'view');
+      await generateView('n-1');
+      expect(link('n-1')!.url).toBe('https://anima.app/read.html?b=B');
+    } finally {
+      delete g.window;
+    }
   });
 });

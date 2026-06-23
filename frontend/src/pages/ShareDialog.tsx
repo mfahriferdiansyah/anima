@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/Button';
 import { Modal } from '@/components/Modal';
-import { createShareLink, newSharePassword, setLinkAccess, setLinkPassword, unpublish, useShare } from '@/hooks/useShare';
+import { createShareLink, dismissFunds, generateView, newSharePassword, removeStaleCopy, setLinkAccess, setLinkPassword, unpublish, useShare } from '@/hooks/useShare';
 import type { LinkAccess } from '@/hooks/useShare';
+import { TopUpModal } from '@/components/TopUpModal';
 import './share.css';
 
 /** Kit .copybtn: the ✦ bursts once on copy, then back to work. */
@@ -53,21 +54,31 @@ export interface ShareDialogProps {
 export function ShareDialog({ open, onClose, noteId, title, kind = 'note' }: ShareDialogProps) {
   const { links } = useShare();
   const noun = kind === 'canvas' ? 'canvas' : 'memory';
+  // Read-only VIEW is the default for both notes and canvases (a canvas publishes a
+  // read-only board snapshot; live edit is secondary).
+  const defaultAccess: LinkAccess = 'view';
 
   const link = links.find((entry) => entry.noteId === noteId) ?? null;
-  const access = link?.access ?? 'edit';
+  const access = link?.access ?? defaultAccess;
   const password = link?.password ?? null;
-  const publishing = link?.publishing ?? false;
+  const phase = link?.phase; // 'publishing' (new copy, no wallet) | 'cleaning' (delete old, wallet)
+  const busy = phase !== undefined;
+  const staleBlob = link?.staleBlob ?? null;
+  const needsFunds = link?.needsFunds ?? false;
+  // A re-publish replaces an existing copy → step 2 (wallet delete) will run.
+  const replacing = phase === 'cleaning' || (phase === 'publishing' && !!link?.blobObjectId) || !!staleBlob;
   const error = link?.error ?? null;
+
+  const [topUpOpen, setTopUpOpen] = useState(false);
 
   const [copied, setCopied] = useState<'link' | 'password' | null>(null);
   const copyTimer = useRef<number | null>(null);
 
   // the link is the share itself; ensure one exists while the dialog is open
-  // (defaults to edit: an instant room id, no chain write on mere open)
+  // (a view link is local until Generate — no chain write on mere open)
   useEffect(() => {
-    if (open && !link) void createShareLink(noteId, 'edit', title);
-  }, [open, link, noteId, title]);
+    if (open && !link) void createShareLink(noteId, defaultAccess, kind, title);
+  }, [open, link, noteId, title, kind, defaultAccess]);
 
   useEffect(
     () => () => {
@@ -83,21 +94,11 @@ export function ShareDialog({ open, onClose, noteId, title, kind = 'note' }: Sha
 
   const choose = (next: LinkAccess) => {
     if (link) void setLinkAccess(noteId, next);
-    else void createShareLink(noteId, next, title);
+    else void createShareLink(noteId, next, kind, title);
   };
 
   const togglePassword = () => {
     void setLinkPassword(noteId, password ? null : newSharePassword());
-  };
-
-  const revoke = () => {
-    const ok = window.confirm(
-      `Revoke this link? Anyone currently reading this ${noun} will lose access, and the published copy is permanently deleted.`,
-    );
-    if (ok) {
-      void unpublish(noteId);
-      close();
-    }
   };
 
   const copyText = (key: 'link' | 'password', text: string) => {
@@ -107,13 +108,11 @@ export function ShareDialog({ open, onClose, noteId, title, kind = 'note' }: Sha
     copyTimer.current = window.setTimeout(() => setCopied(null), 1800);
   };
 
-  // A view link publishes a read-only snapshot of a note's body; a canvas's
-  // durable snapshot is 007 territory, so canvases share as live edit links only.
+  // View first (the default); a view link publishes a read-only snapshot (a note's
+  // body, or a board's elements). Edit is the secondary live-collab option.
   const CARDS: { value: LinkAccess; label: string; desc: string }[] = [
+    { value: 'view', label: 'Can view', desc: `Anyone with the link can read this ${noun}. No changes.` },
     { value: 'edit', label: 'Can edit', desc: `Anyone with the link joins and edits this ${noun}, live.` },
-    ...(kind === 'canvas'
-      ? []
-      : [{ value: 'view' as LinkAccess, label: 'Can view', desc: `Anyone with the link can read this ${noun}. No changes.` }]),
   ];
 
   return (
@@ -145,18 +144,81 @@ export function ShareDialog({ open, onClose, noteId, title, kind = 'note' }: Sha
           </div>
         ) : null}
 
-        {link && publishing ? (
-          <div className="sharebar sharebar-busy">
-            <span className="url">Publishing this {noun}…</span>
-          </div>
-        ) : link && link.url ? (
+        {/* The published link, once it exists (the new copy is live as soon as
+            step 1 finishes, so it shows during the step-2 cleanup too). Hidden
+            while publishing the first copy and while revoking it away. */}
+        {link && link.url && phase !== 'publishing' && phase !== 'revoking' ? (
           <div className="sharebar">
             <span className="url">{link.url}</span>
             <CopyButton copied={copied === 'link'} onCopy={() => copyText('link', link.url)} />
           </div>
         ) : null}
 
-        {error ? <div className="shareerror" role="alert">{error}</div> : null}
+        {/* Step progression: a re-publish is two on-chain ops, a revoke is one;
+            narrate them so the wallet approval is expected, not a surprise. */}
+        {busy ? (
+          <ol className="shareprog" aria-live="polite">
+            {phase === 'revoking' ? (
+              <li className="on">
+                <span className="shareprog-i" aria-hidden="true" />
+                <span className="shareprog-t">
+                  Removing the published copy
+                  <i>frees its storage, a small deposit comes back to you</i>
+                </span>
+              </li>
+            ) : (
+              <>
+                <li className={phase === 'publishing' ? 'on' : 'done'}>
+                  <span className="shareprog-i" aria-hidden="true" />
+                  <span className="shareprog-t">Publishing the new copy</span>
+                </li>
+                {replacing ? (
+                  <li className={phase === 'cleaning' ? 'on' : ''}>
+                    <span className="shareprog-i" aria-hidden="true" />
+                    <span className="shareprog-t">
+                      Removing the old copy
+                      <i>frees its storage, a small deposit comes back to you</i>
+                    </span>
+                  </li>
+                ) : null}
+              </>
+            )}
+          </ol>
+        ) : null}
+
+        {/* Out of funds: a graceful Top up, not a raw chain error. */}
+        {!busy && needsFunds ? (
+          <div className="sharefunds" role="alert">
+            <span className="sharefunds-dot" aria-hidden="true" />
+            <p>Your agent doesn&apos;t have enough funds to publish this {noun}.</p>
+            <button type="button" className="sharefunds-act" onClick={() => setTopUpOpen(true)}>
+              Top up
+            </button>
+          </div>
+        ) : null}
+
+        {/* A skipped/rejected cleanup: the old copy is still readable. */}
+        {!busy && staleBlob ? (
+          <div className="sharewarn" role="alert">
+            <p>The previous copy is still published — anyone with the earlier link can still open it.</p>
+            <button type="button" className="btn btn-sm" onClick={() => void removeStaleCopy(noteId)}>
+              Remove old copy
+            </button>
+          </div>
+        ) : null}
+
+        {/* Generate affordance (a view link is published only on demand). */}
+        {!busy && !staleBlob && !needsFunds && (!link || !link.url) && access === 'view' ? (
+          <div className="sharebar sharebar-generate">
+            <span className="url">{password ? 'Publish a password-locked copy to share' : 'Publish a read-only copy to share'}</span>
+            <button type="button" className="copybtn" onClick={() => void generateView(noteId)}>
+              <span className="cstar" aria-hidden="true">✦</span>
+              Generate link
+            </button>
+          </div>
+        ) : null}
+
+        {error && !needsFunds ? <div className="shareerror" role="alert">{error}</div> : null}
 
         <div className="protect">
           <label className="protect-row">
@@ -168,7 +230,7 @@ export function ShareDialog({ open, onClose, noteId, title, kind = 'note' }: Sha
               Protect with a password
             </span>
             <span className="switch">
-              <input type="checkbox" checked={!!password} onChange={togglePassword} disabled={publishing} />
+              <input type="checkbox" checked={!!password} onChange={togglePassword} disabled={busy} />
               <span className="track" />
             </span>
           </label>
@@ -186,7 +248,7 @@ export function ShareDialog({ open, onClose, noteId, title, kind = 'note' }: Sha
 
         <div className="wallet-actions">
           {access === 'view' && link?.blobObjectId ? (
-            <Button variant="danger" onClick={revoke}>
+            <Button variant="danger" disabled={busy} onClick={() => void unpublish(noteId)}>
               Revoke link
             </Button>
           ) : null}
@@ -195,6 +257,15 @@ export function ShareDialog({ open, onClose, noteId, title, kind = 'note' }: Sha
           </Button>
         </div>
       </div>
+      {/* Top up in place (no navigation). On close, clear the funds notice so the
+          Generate affordance returns for a retry. */}
+      <TopUpModal
+        open={topUpOpen}
+        onClose={() => {
+          setTopUpOpen(false);
+          dismissFunds(noteId);
+        }}
+      />
     </Modal>
   );
 }

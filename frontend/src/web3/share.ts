@@ -27,9 +27,10 @@
 import { useSyncExternalStore } from 'react';
 import { createStore } from '../mocks/store';
 import { vaultData } from './vaultData';
-import { getQuiltDeps } from './session';
+import { getQuiltDeps, isInsufficientFunds } from './session';
 import { runDestructiveTx } from '../hooks/useVault';
 import { randomShareId } from './collabOps';
+import { buildCanvasSnapshotNote } from './canvasSnapshot';
 import { runWithReceipt, objectProvenanceUrl, txProvenanceUrl, digestOf } from './onchainToast';
 import { publishNote, unpublishNote, listPublished } from '../../../chain/core/src/index.js';
 import type { Note } from '../../../chain/core/src/index.js';
@@ -39,18 +40,37 @@ export type LinkAccess = 'edit' | 'view';
 export interface ShareLink {
   noteId: string;
   access: LinkAccess;
+  /** 'note' shares a memory; 'canvas' publishes a read-only board snapshot. */
+  kind: 'note' | 'canvas';
   /** Set when the link is password-protected; readers must enter it to open. */
   password: string | null;
   url: string;
   // --- additive optional fields (binding contract: shape stays compatible) ---
+  /** the document title, baked into a canvas snapshot at generate time. */
+  title?: string;
   /** view links: the published blob's object id, so unpublish can delete it. */
   blobObjectId?: string;
   /** edit links (no password): the unguessable relay room id (`?room=`). */
   roomId?: string;
   /** edit links (with password): the link salt; the room id is derived from password+salt at join. */
   salt?: string;
-  /** a view publish (or re-publish) is in flight (the ~10s silent agent write). */
-  publishing?: boolean;
+  /** view links: the generated absolute reader link, kept across access switches so re-selecting view never re-publishes. */
+  viewUrl?: string;
+  /**
+   * The current step of a publish/revoke, narrated as a progression:
+   *  - 'publishing': the silent agent write of the new copy (no wallet).
+   *  - 'cleaning': deleting the PRIOR wallet-owned copy (a wallet approval; refunds the deposit).
+   *  - 'revoking': deleting the published copy on Revoke (a wallet approval; refunds the deposit).
+   * Absent when idle.
+   */
+  phase?: 'publishing' | 'cleaning' | 'revoking';
+  /**
+   * Set when the prior-copy delete was skipped/rejected: that old copy is STILL
+   * published (the previous link still opens it). Drives the warning + a retry.
+   */
+  staleBlob?: string;
+  /** the publish failed because the agent is out of funds — drives a Top up action. */
+  needsFunds?: boolean;
   /** the last publish/unpublish error, surfaced in the dialog. */
   error?: string;
 }
@@ -93,12 +113,26 @@ function noteFor(noteId: string): Note | undefined {
   return vaultData.getSnapshot().notes.find((n) => n.noteId === noteId) as Note | undefined;
 }
 
+// ── url helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * Make a reader link absolute. The reader lives at `<origin>/read.html`, so a
+ * bare `/read.html?…` path is unusable once copied out of the app (no host).
+ * `chain/core`'s `shareUrl` stays origin-agnostic (isomorphic); the origin is
+ * stamped here, at the browser edge. In a non-browser env (the node tests) there
+ * is no origin, so the path is left relative.
+ */
+function withOrigin(path: string): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  return origin ? `${origin}${path}` : path;
+}
+
 // ── edit-link url helpers (no blob is published for edit links) ──────────────
 
 /** A no-password edit link: an unguessable room id. */
-const editRoomUrl = (roomId: string): string => `/read.html?room=${encodeURIComponent(roomId)}`;
+const editRoomUrl = (roomId: string): string => withOrigin(`/read.html?room=${encodeURIComponent(roomId)}`);
 /** A password-gated edit link: carries the SALT (room id derived client-side at join), never the room id. */
-const editSaltUrl = (salt: string): string => `/read.html?salt=${encodeURIComponent(salt)}&edit=1`;
+const editSaltUrl = (salt: string): string => withOrigin(`/read.html?salt=${encodeURIComponent(salt)}&edit=1`);
 
 /** Build the edit link fields for the given password state (instant, no chain). */
 function editFields(password: string | null): Pick<ShareLink, 'url' | 'roomId' | 'salt'> {
@@ -114,98 +148,136 @@ function editFields(password: string | null): Pick<ShareLink, 'url' | 'roomId' |
 
 /**
  * Publish (or re-publish) a view link's blob for the given password state, then
- * delete any PRIOR blob. Publish-before-delete (the forget/survivors ordering)
- * so the live share is never broken and a stale plaintext blob is removed only
- * after the new one certifies. Sets `publishing`/`error` on the link.
+ * delete any PRIOR blob. Two on-chain ops the dialog narrates as a progression:
+ *  1. 'publishing' — the silent agent write of the new copy (no wallet). Walrus
+ *     blobs are immutable, so a content/password change is always a NEW blob.
+ *  2. 'cleaning' — delete the PRIOR wallet-owned copy (a wallet approval). Done
+ *     AFTER the new copy certifies (publish-before-delete) so the link never
+ *     breaks. If the user skips/rejects this delete, the old copy stays published
+ *     (its earlier link still opens) — recorded as `staleBlob` for a retry.
  */
 async function publishView(noteId: string, password: string | null): Promise<void> {
   const deps = getQuiltDeps();
   if (!deps) {
-    patchLink(noteId, { publishing: false, error: 'Connect your wallet to publish a view link.' });
+    patchLink(noteId, { phase: undefined, error: 'Connect your wallet to publish a view link.' });
     return;
   }
-  const note = noteFor(noteId);
+  // A canvas link publishes a denormalized read-only board snapshot (carried as a
+  // note body, kind 'canvas'); a note link publishes the memory itself.
+  const link = findLink(noteId);
+  const kind = link?.kind ?? 'note';
+  const note = kind === 'canvas' ? buildCanvasSnapshotNote(noteId, link?.title ?? '') : noteFor(noteId);
   if (!note) {
-    patchLink(noteId, { publishing: false, error: 'This note is not in the vault yet.' });
+    patchLink(noteId, {
+      phase: undefined,
+      error: kind === 'canvas' ? 'This board is not in the vault yet.' : 'This note is not in the vault yet.',
+    });
     return;
   }
-  const priorBlob = findLink(noteId)?.blobObjectId;
-  patchLink(noteId, { publishing: true, error: undefined });
+  const priorBlob = link?.blobObjectId;
+  patchLink(noteId, { phase: 'publishing', error: undefined, staleBlob: undefined, needsFunds: undefined });
+  let published;
   try {
-    // Publishing writes a world-readable `anima-pub` blob: surface the SAME
-    // provenance receipt a note save does (the dialog's `publishing` flag stays).
-    const published = await runWithReceipt(
+    // Step 1 — publish the new copy (silent agent write; the SAME provenance
+    // receipt a note save does).
+    published = await runWithReceipt(
       {
         key: `publish:${noteId}`,
         title: note.title || 'Untitled',
         labels: { pending: 'Publishing link', success: 'Link published' },
       },
       () =>
-        publishNote(deps, note, password ? { password } : {}).then((p) => ({
+        publishNote(deps, note, { ...(password ? { password } : {}), kind }).then((p) => ({
           result: p,
           provenanceUrl: objectProvenanceUrl(p.blobObjectId),
         })),
     );
-    patchLink(noteId, {
-      url: published.url,
-      blobObjectId: published.blobObjectId,
-      roomId: undefined,
-      salt: undefined,
-      publishing: false,
-      error: undefined,
-    });
-    // remove the now-stale prior blob (wallet-signed delete) AFTER the new one is live
-    if (priorBlob && priorBlob !== published.blobObjectId) {
-      await runDestructiveTx(await unpublishNote(deps, priorBlob));
-    }
   } catch (e) {
-    patchLink(noteId, { publishing: false, error: e instanceof Error ? e.message : 'Publish failed.' });
+    // An out-of-funds failure is recoverable: surface a Top up action, not a raw
+    // chain error with hex addresses.
+    if (isInsufficientFunds(e)) {
+      patchLink(noteId, { phase: undefined, needsFunds: true, error: undefined });
+    } else {
+      patchLink(noteId, { phase: undefined, error: e instanceof Error ? e.message : 'Publish failed.' });
+    }
+    return;
+  }
+  const url = withOrigin(published.url);
+  const needsCleanup = !!priorBlob && priorBlob !== published.blobObjectId;
+  patchLink(noteId, {
+    url,
+    viewUrl: url,
+    blobObjectId: published.blobObjectId,
+    phase: needsCleanup ? 'cleaning' : undefined,
+    error: undefined,
+  });
+  // Step 2 — remove the now-stale prior copy (wallet-signed delete). The new copy
+  // is already live, so a failure/rejection here only leaves the OLD copy around.
+  if (needsCleanup) {
+    try {
+      await runDestructiveTx(await unpublishNote(deps, priorBlob!));
+      patchLink(noteId, { phase: undefined, staleBlob: undefined });
+    } catch {
+      patchLink(noteId, { phase: undefined, staleBlob: priorBlob });
+    }
   }
 }
 
-/** Delete the published blob for a view link under a wallet signature (the destructive op). */
-async function unpublishView(noteId: string): Promise<void> {
+/**
+ * Retry deleting a prior copy whose cleanup was skipped/rejected (`staleBlob`).
+ * The new copy is already the live link; this just removes the lingering old one
+ * (a wallet-signed delete).
+ */
+export async function removeStaleCopy(noteId: string): Promise<void> {
   const link = findLink(noteId);
-  const blobObjectId = link?.blobObjectId;
-  if (!blobObjectId) return;
+  const blob = link?.staleBlob;
+  if (!blob) return;
   const deps = getQuiltDeps();
   if (!deps) return;
-  // The revoke tx IS the provenance for a delete — link the receipt at its digest.
-  await runWithReceipt(
-    {
-      key: `unpublish:${noteId}`,
-      title: noteFor(noteId)?.title || 'Shared link',
-      labels: { pending: 'Revoking link', success: 'Link revoked' },
-    },
-    async () => {
-      const res = await runDestructiveTx(await unpublishNote(deps, blobObjectId));
-      const digest = digestOf(res);
-      return { result: res, provenanceUrl: digest ? txProvenanceUrl(digest) : '' };
-    },
-  );
-  patchLink(noteId, { blobObjectId: undefined });
+  patchLink(noteId, { phase: 'cleaning', error: undefined });
+  try {
+    await runDestructiveTx(await unpublishNote(deps, blob));
+    patchLink(noteId, { phase: undefined, staleBlob: undefined });
+  } catch {
+    patchLink(noteId, { phase: undefined }); // keep staleBlob so the retry stays offered
+  }
 }
+
+/** Clear the out-of-funds notice (e.g. after the Top up modal closes), so the
+ * Generate affordance returns for a retry. */
+export function dismissFunds(noteId: string): void {
+  patchLink(noteId, { needsFunds: undefined });
+}
+
 
 // ── public API (consumed by useShare → ShareDialog) ─────────────────────────
 
 /**
- * Open (or return) the live link for a note/canvas with the given access.
- * `edit` is instant (a room id / salt, no chain write); `view` triggers a silent
- * agent publish (filling `blobObjectId`+`url` when it resolves).
+ * Open (or return) the live link for a note/canvas with the given access. Pure
+ * LOCAL state — no chain write on open, for EITHER access (the earlier auto-
+ * publish on view stamped a blob the moment the dialog touched the view card).
+ * `edit` is an instant relay room; `view` seeds an empty link whose blob is
+ * published only on an explicit `generateView`.
  */
-export async function createShareLink(noteId: string, access: LinkAccess, _titleOverride?: string): Promise<void> {
+export async function createShareLink(
+  noteId: string,
+  access: LinkAccess,
+  kind: 'note' | 'canvas' = 'note',
+  title?: string,
+): Promise<void> {
   if (findLink(noteId)) return; // one link per note/canvas
-  const base: ShareLink = { noteId, access, password: null, url: '' };
-  if (access === 'edit') {
-    store.update((prev) => ({ links: [{ ...base, ...editFields(null) }, ...prev.links] }));
-    return;
-  }
-  // view → publish; seed with a publishing placeholder so the UI shows progress
-  store.update((prev) => ({ links: [{ ...base, publishing: true }, ...prev.links] }));
-  await publishView(noteId, null);
+  const base: ShareLink = { noteId, access, kind, title, password: null, url: '' };
+  const fields = access === 'edit' ? editFields(null) : {};
+  store.update((prev) => ({ links: [{ ...base, ...fields }, ...prev.links] }));
 }
 
-/** Flip a link between edit (multiplayer) and view (read-only). */
+/**
+ * Flip a link between edit (multiplayer) and view (read-only). LOCAL ONLY: a card
+ * switch never writes to the chain. Switching to view shows the already-generated
+ * link (if any) or the Generate affordance (empty url); switching to edit reuses
+ * the existing room (no churn) and KEEPS any published blob — deletion is the
+ * Revoke op alone, never a side effect of toggling.
+ */
 export async function setLinkAccess(noteId: string, access: LinkAccess): Promise<void> {
   const link = findLink(noteId);
   if (!link) {
@@ -214,49 +286,87 @@ export async function setLinkAccess(noteId: string, access: LinkAccess): Promise
   }
   if (link.access === access) return;
   if (access === 'edit') {
-    // view → edit: tear down the published blob, hand out a live room
-    const priorBlob = link.blobObjectId;
-    patchLink(noteId, { access, blobObjectId: undefined, error: undefined, ...editFields(link.password) });
-    if (priorBlob) {
-      const deps = getQuiltDeps();
-      if (deps) {
-        try {
-          await runDestructiveTx(await unpublishNote(deps, priorBlob));
-        } catch {
-          /* best-effort: the blob self-heals on a later unpublish; the link is already an edit room */
-        }
-      }
-    }
+    // reuse the link's existing room/salt so the edit link is stable across switches;
+    // mint one only if this link has never had an edit room.
+    const haveRoom = link.password ? !!link.salt : !!link.roomId;
+    const fields = haveRoom
+      ? { url: link.password ? editSaltUrl(link.salt!) : editRoomUrl(link.roomId!) }
+      : editFields(link.password);
+    patchLink(noteId, { access, error: undefined, ...fields });
     return;
   }
-  // edit → view: publish a blob (carrying the link's current password), drop the room
-  patchLink(noteId, { access, roomId: undefined, salt: undefined });
-  await publishView(noteId, link.password);
+  // edit → view: show the generated link if we have one, else the Generate CTA.
+  patchLink(noteId, { access, url: link.viewUrl ?? '', error: undefined });
 }
 
 /**
- * Set or clear the link's password.
- *  - view: re-publish the blob with/without the envelope (publish-before-delete
- *    of the prior blob).
+ * Set or clear the link's password. LOCAL ONLY (the password switch used to
+ * re-publish a view blob on every toggle — same stamping bug as the access card).
+ *  - view: record the password and invalidate any generated link, so the new
+ *    envelope is published on the next explicit `generateView` (which still does
+ *    publish-before-delete of the prior blob, kept here for that cleanup).
  *  - edit: set/clear the link SALT (no chain); the room id is derived from the
  *    password + salt at join time.
  */
 export async function setLinkPassword(noteId: string, password: string | null): Promise<void> {
   const link = findLink(noteId);
   if (!link) return;
-  patchLink(noteId, { password });
   if (link.access === 'view') {
-    await publishView(noteId, password);
+    patchLink(noteId, { password, url: '', viewUrl: undefined, error: undefined });
     return;
   }
-  // edit: a password introduces a salt (room derived from it); clearing it returns to a plain room id
-  patchLink(noteId, editFields(password));
+  patchLink(noteId, { password, ...editFields(password) });
 }
 
-/** Revoke a view link: delete its published blob under a wallet signature. */
+/**
+ * Publish (or re-publish) a view link's blob — the ONLY path that writes to the
+ * chain for a share. The link appears only after this resolves, so a copied link
+ * is always live. Carries the link's current password (a locked envelope when
+ * set). Publish-before-delete removes any prior blob after the new one certifies.
+ */
+export async function generateView(noteId: string): Promise<void> {
+  const link = findLink(noteId);
+  if (!link) return;
+  await publishView(noteId, link.password);
+}
+
+/**
+ * Revoke a published view link: delete its blob under a wallet signature (which
+ * also refunds the storage deposit). Runs through the SAME progression ('revoking')
+ * the dialog narrates — no native confirm; the wallet approval is the confirmation.
+ * On success the link is removed; on failure the phase clears with an error.
+ */
 export async function unpublish(noteId: string): Promise<void> {
-  await unpublishView(noteId);
-  store.update((prev) => ({ links: prev.links.filter((l) => l.noteId !== noteId) }));
+  const link = findLink(noteId);
+  const blobObjectId = link?.blobObjectId;
+  if (!blobObjectId) {
+    store.update((prev) => ({ links: prev.links.filter((l) => l.noteId !== noteId) }));
+    return;
+  }
+  const deps = getQuiltDeps();
+  if (!deps) {
+    patchLink(noteId, { error: 'Connect your wallet to revoke this link.' });
+    return;
+  }
+  patchLink(noteId, { phase: 'revoking', error: undefined });
+  try {
+    // The revoke tx IS the provenance for a delete — link the receipt at its digest.
+    await runWithReceipt(
+      {
+        key: `unpublish:${noteId}`,
+        title: noteFor(noteId)?.title || link?.title || 'Shared link',
+        labels: { pending: 'Revoking link', success: 'Link revoked' },
+      },
+      async () => {
+        const res = await runDestructiveTx(await unpublishNote(deps, blobObjectId));
+        const digest = digestOf(res);
+        return { result: res, provenanceUrl: digest ? txProvenanceUrl(digest) : '' };
+      },
+    );
+    store.update((prev) => ({ links: prev.links.filter((l) => l.noteId !== noteId) }));
+  } catch (e) {
+    patchLink(noteId, { phase: undefined, error: e instanceof Error ? e.message : 'Could not revoke this link.' });
+  }
 }
 
 /** Reset (tests / disconnect). */
@@ -285,8 +395,10 @@ export async function reconcilePublished(): Promise<void> {
     .map((p) => ({
       noteId: p.noteId,
       access: 'view' as const,
+      kind: p.kind,
       password: p.mode === 'password' ? '' : null,
-      url: p.url,
+      url: withOrigin(p.url),
+      viewUrl: withOrigin(p.url),
       blobObjectId: p.blobObjectId,
     }));
   if (additions.length) store.update((prev) => ({ links: [...additions, ...prev.links] }));

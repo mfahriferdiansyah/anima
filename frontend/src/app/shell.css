@@ -117,8 +117,10 @@
 
 /* write toasts: top-center, clear of the companion orb (bottom-right) and the
    content/calendar they used to overlap; they rise in from just below as they
-   appear (the .toast children animate translateY; the stack itself is centred) */
-#toaststack{position:fixed;top:20px;left:50%;right:auto;bottom:auto;transform:translateX(-50%);z-index:84;display:flex;flex-direction:column;align-items:center;gap:10px;}
+   appear (the .toast children animate translateY; the stack itself is centred).
+   z above the modal overlay (110) — a provenance toast often fires FROM a modal
+   (e.g. publishing inside the share dialog), so it must sit on top, not behind. */
+#toaststack{position:fixed;top:20px;left:50%;right:auto;bottom:auto;transform:translateX(-50%);z-index:120;display:flex;flex-direction:column;align-items:center;gap:10px;}
 
 /* mock wallet dialog. Lift the shared overlay above the organize modal (97) so
    the forget confirmation it triggers lands on top, not behind. The overlay is

@@ -44,6 +44,76 @@
 /* a view publish in flight (the ~10s silent agent write) */
 .sharebar-busy .url { color: var(--gray-600); }
 
+/* publish progression: a re-publish is two on-chain steps (write new copy →
+   delete old copy). Narrate them so the wallet approval is expected, not a
+   surprise: a dot per step (pending / active pulse / done check) + a sub-hint. */
+.shareprog {
+  list-style: none; margin: 12px 0 0; padding: 12px 14px;
+  border: 1px solid var(--gray-200); border-radius: 10px; background: var(--gray-100);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.shareprog li {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 12.5px; font-weight: 600; color: rgba(22, 24, 29, .4);
+}
+.shareprog-t { display: flex; flex-direction: column; line-height: 1.35; }
+.shareprog-t i {
+  font-style: normal; font-size: 11px; font-weight: 500; color: rgba(22, 24, 29, .5); margin-top: 2px;
+}
+
+/* per-step status marker: a gray ring (pending), a blue spinner (active, the
+   motion), a teal check (done). All kit tokens. */
+.shareprog-i {
+  flex: none; width: 16px; height: 16px; margin-top: 1px; box-sizing: border-box;
+  border-radius: 50%; border: 2px solid var(--gray-200);
+  display: flex; align-items: center; justify-content: center;
+}
+.shareprog li.on { color: var(--ink-900); }
+.shareprog li.on .shareprog-i {
+  border-color: var(--blue-100); border-top-color: var(--blue-600);
+  animation: shareprog-spin .7s linear infinite;
+}
+/* a completed step recedes: gray text, a teal check */
+.shareprog li.done { color: var(--gray-600); }
+.shareprog li.done .shareprog-t i { color: var(--gray-600); }
+.shareprog li.done .shareprog-i { border-color: var(--teal-500); background: var(--teal-500); animation: none; }
+.shareprog li.done .shareprog-i::after {
+  content: ''; width: 4px; height: 8px; margin-top: -1px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+@keyframes shareprog-spin { to { transform: rotate(360deg); } }
+
+/* out of funds: a graceful Top up — mirrors the shared FundsBanner exactly (the
+   app's one low-funds aesthetic): a warm strip, a pulsing dot, an orange action. */
+.sharefunds {
+  margin-top: 10px; padding: 9px 13px; border-radius: 10px;
+  display: flex; align-items: center; gap: 10px;
+  background: #fff4e5; border: 1px solid rgba(180, 35, 31, 0.16);
+  font-size: 12.5px; line-height: 1.35; color: #7a3b12;
+}
+.sharefunds-dot {
+  flex: none; width: 7px; height: 7px; border-radius: 50%;
+  background: #e8590c; animation: fundspulse 1.6s ease-in-out infinite;
+}
+.sharefunds p { margin: 0; flex: 1; min-width: 0; }
+.sharefunds-act {
+  flex: none; border: none; border-radius: 7px; padding: 5px 13px;
+  background: #e8590c; color: #fff; font-weight: 650; font-size: 11.5px;
+  cursor: pointer; transition: background 120ms ease;
+}
+.sharefunds-act:hover { background: #d24e08; }
+@keyframes fundspulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* the prior copy's delete was skipped/rejected: it is still readable. A neutral
+   notice (the .sharenote pattern), not an invented tint. */
+.sharewarn {
+  margin-top: 10px; padding: 11px 13px; border-radius: 10px;
+  background: var(--gray-100); border: 1px solid var(--gray-200);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.sharewarn p { margin: 0; font-size: 12px; line-height: 1.45; color: var(--gray-600); }
+.sharewarn .btn { flex: none; }
+
 /* a publish/unpublish failure */
 .shareerror {
   margin-top: 10px; padding: 9px 11px; border-radius: 10px;

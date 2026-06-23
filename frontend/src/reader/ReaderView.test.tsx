@@ -125,6 +125,7 @@ describe('readyFromMarkdown sanitizes (XSS sink)', () => {
   it('a hostile body has its script/onerror stripped', () => {
     const note = newNote({ title: 'X', body: '<script>steal()</script><img src=x onerror="alert(1)">', author: 'owner' });
     const ready = readyFromMarkdown(serializeNote(note));
+    if (ready.kind !== 'ready') throw new Error('expected a markdown doc');
     expect(ready.bodyHtml.toLowerCase()).not.toContain('<script');
     expect(ready.bodyHtml.toLowerCase()).not.toContain('onerror');
     expect(ready.bodyHtml).not.toContain('steal()');
