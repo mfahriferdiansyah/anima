@@ -24,9 +24,6 @@
 .pglib-cover { display: flex; align-items: center; justify-content: center; flex: none; height: 84px; background: var(--gray-100); }
 .pglib-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pglib-body { display: flex; flex-direction: column; gap: 6px; flex: 1; padding: 13px 15px 15px; }
-.pglib-ic { width: 18px; height: 18px; display: flex; color: rgba(22, 24, 29, .4); }
-.pglib-ic svg { width: 17px; height: 17px; }
-.pglib-card.canvas .pglib-ic { color: var(--orange-500); }
 .pglib-t { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 14.5px; line-height: 1.3; color: var(--ink-900); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .pglib-x { flex: 1; font-size: 12.5px; line-height: 1.45; color: rgba(22, 24, 29, .55); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .pglib-m { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 700; color: var(--orange-500); }
@@ -40,20 +37,37 @@
 .pghome-search svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; color: rgba(22, 24, 29, .4); pointer-events: none; }
 .pghome-empty { padding: 30px 4px; font-size: 13px; color: rgba(22, 24, 29, .45); }
 
-/* canvas card + its delete affordance (the seed board has none) + confirm popover */
-.pglib-cardwrap { position: relative; }
-.pglib-carddel {
-  position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
-  border: none; border-radius: 7px; background: rgba(255, 255, 255, .86); color: rgba(22, 24, 29, .5); cursor: pointer;
-  opacity: 0; transition: opacity 130ms ease, background 130ms ease, color 130ms ease; box-shadow: inset 0 0 0 1px rgba(22, 24, 29, .10);
+/* canvas gallery card: the board rendered as a thumbnail (or its cover) with the
+   title overlaid. A single preview surface — no body, no description, no delete
+   (delete lives in Organize). Overrides the .pglib-card flex/body layout. */
+.pgcv-card { position: relative; display: block; height: 168px; padding: 0; }
+/* a hairline ring painted ABOVE the full-bleed surface, so the card edge reads
+   against the page even with a light thumbnail (the base inset shadow sits under
+   the surface). */
+.pgcv-card::after {
+  content: ''; position: absolute; inset: 0; border-radius: 12px; pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(22, 24, 29, .10); transition: box-shadow 150ms ease;
 }
-.pglib-carddel svg { width: 14px; height: 14px; }
-.pglib-cardwrap:hover .pglib-carddel { opacity: 1; }
-.pglib-carddel:hover { background: var(--red-100); color: var(--red-500); }
-.pglib-cardconfirm {
-  position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; gap: 6px; justify-content: center;
-  padding: 14px 15px; background: rgba(255, 255, 255, .97); border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(22, 24, 29, .16);
+.pgcv-card:hover::after { box-shadow: inset 0 0 0 1px rgba(22, 24, 29, .16); }
+.pgcv-surface { position: absolute; inset: 0; display: block; background: #fff; }
+.pgcv-thumb { width: 100%; height: 100%; display: block; }
+/* empty board: a faint dotted grid so a blank canvas reads as a board, not broken */
+.pgcv-thumb.empty {
+  background-color: #fff;
+  background-image: radial-gradient(rgba(22, 24, 29, .12) 1px, transparent 1px);
+  background-size: 16px 16px; background-position: -1px -1px;
 }
-.pglib-cardconfirm-t { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13.5px; color: var(--ink-900); }
-.pglib-cardconfirm-x { font-size: 12px; line-height: 1.45; color: rgba(22, 24, 29, .6); }
-.pglib-cardconfirm-row { display: flex; gap: 8px; margin-top: 4px; }
+.pgcv-cover { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* title overlay: a white scrim at the TOP with ink text, so the title reads as a
+   light header over both a light content thumbnail and a dark cover fallback. The
+   white stays solid through the (max two-line) title, then fades so the preview
+   below shows through. */
+.pgcv-titlebar {
+  position: absolute; left: 0; right: 0; top: 0; padding: 12px 14px 26px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, .97), rgba(255, 255, 255, .85) 46%, transparent);
+  pointer-events: none;
+}
+.pgcv-cardtitle {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 14.5px; line-height: 1.3; color: var(--ink-900, #16181d);
+}

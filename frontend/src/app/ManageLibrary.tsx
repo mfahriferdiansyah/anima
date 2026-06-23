@@ -151,13 +151,6 @@ export function ManageLibrary({ open, onClose }: { open: boolean; onClose: () =>
                           placeholder="Canvas title"
                           onChange={(e) => updateCanvas(item.id, { title: e.target.value })}
                         />
-                        <input
-                          type="text"
-                          className="mlib-cv-d"
-                          value={item.canvas.desc}
-                          placeholder="Description"
-                          onChange={(e) => updateCanvas(item.id, { desc: e.target.value })}
-                        />
                       </div>
                     ) : (
                       <span className="mlib-title">{item.title}</span>
