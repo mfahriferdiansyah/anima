@@ -17,6 +17,7 @@ import {
   canvasContentTag,
   type CanvasElement,
   type LinearElement,
+  type ElementStyle,
   newElementId,
   newVersionNonce,
   isLinear,
@@ -38,6 +39,7 @@ import { moveEndpoint, endpointWorld, bindEndpoint, breakBinding, type BindableL
 import { Modal } from '@/components/Modal';
 import { Button } from '@/components/Button';
 import { FundsBanner } from '@/components/FundsBanner';
+import { CanvasStylePanel } from '@/components/CanvasStylePanel';
 import { triggerLowBalance, dismissLowBalance } from '@/hooks/useChat';
 import './canvas.css';
 
@@ -559,7 +561,7 @@ export function Canvas() {
   // ── Board pointer dispatch (the viewport captures everything; rendered
   // elements are pointer-events:none, so hit-testing is done in world space). ──
   const onCanvasPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest('.pgcv-tools, .pgcv-avs')) return;
+    if ((event.target as HTMLElement).closest('.pgcv-tools, .pgcv-avs, .cv-stylepanel')) return;
     const wp = toWorld(event.clientX, event.clientY);
     event.currentTarget.setPointerCapture(event.pointerId);
 
@@ -837,12 +839,17 @@ export function Canvas() {
   // text-only selection is content-sized (the box ignores w/h), so handles would
   // drift off the glyphs — text gets just the selection outline, move and edit.
   const showTransform = selBox !== null && selectedEls.some((e) => e.type !== 'text');
+  // The single styleable element (rect/ellipse/text) the style panel edits. Gated to
+  // one selection so the panel shows that element's exact values (no mixed-value blanks).
+  const styleTarget =
+    selectedEls.length === 1 && (selectedEls[0].type === 'rect' || selectedEls[0].type === 'ellipse' || selectedEls[0].type === 'text')
+      ? selectedEls[0]
+      : null;
 
   const renderVector = (s: CanvasElement, isDraft: boolean) => {
-    const sel = !isDraft && selectedSet.has(s.id);
-    const stroke = sel ? SEL : INK;
     const rot = s.angle ? `rotate(${(s.angle * 180) / Math.PI} ${s.x + s.w / 2} ${s.y + s.h / 2})` : undefined;
     if (s.type === 'draw' || s.type === 'arrow' || s.type === 'line') {
+      const sel = !isDraft && selectedSet.has(s.id);
       const pts = linearPointsAttr(s as LinearElement);
       return (
         <polyline
@@ -850,7 +857,7 @@ export function Canvas() {
           points={pts}
           transform={rot}
           fill="none"
-          stroke={stroke}
+          stroke={sel ? SEL : INK}
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -858,10 +865,17 @@ export function Canvas() {
         />
       );
     }
+    // rect / ellipse honour the element's style (defaults: ink stroke, no fill, 2px
+    // solid). Selection is shown by the separate dashed outline, NOT by recolouring,
+    // so a styled shape keeps its colour while selected. A draft renders plain.
+    const stroke = isDraft ? INK : s.strokeColor ?? INK;
+    const fill = !isDraft && s.backgroundColor && s.backgroundColor !== 'transparent' ? s.backgroundColor : 'none';
+    const sw = isDraft ? 2 : s.strokeWidth ?? 2;
+    const dash = !isDraft && s.strokeStyle === 'dashed' ? '8 6' : !isDraft && s.strokeStyle === 'dotted' ? '2 5' : undefined;
     if (s.type === 'ellipse') {
-      return <ellipse key={s.id} cx={s.x + s.w / 2} cy={s.y + s.h / 2} rx={s.w / 2} ry={s.h / 2} transform={rot} fill="none" stroke={stroke} strokeWidth="2" />;
+      return <ellipse key={s.id} cx={s.x + s.w / 2} cy={s.y + s.h / 2} rx={s.w / 2} ry={s.h / 2} transform={rot} fill={fill} stroke={stroke} strokeWidth={sw} strokeDasharray={dash} />;
     }
-    return <rect key={s.id} x={s.x} y={s.y} width={s.w} height={s.h} rx="3" transform={rot} fill="none" stroke={stroke} strokeWidth="2" />;
+    return <rect key={s.id} x={s.x} y={s.y} width={s.w} height={s.h} rx="3" transform={rot} fill={fill} stroke={stroke} strokeWidth={sw} strokeDasharray={dash} />;
   };
 
   return (
@@ -1100,6 +1114,17 @@ export function Canvas() {
 
           {isShared && peers.map((peer) => <PeerCursor key={peer.id} peer={peer} />)}
         </div>
+
+        {/* Per-selection style controls (screen-fixed; outside the panned world). */}
+        {styleTarget && !draft && editingId === null ? (
+          <CanvasStylePanel
+            el={styleTarget}
+            onPatch={(patch) => {
+              pushHistory();
+              setElements((prev) => prev.map((e) => (e.id === styleTarget.id ? { ...e, ...patch } : e)));
+            }}
+          />
+        ) : null}
 
         {elements.length === 0 && !draft ? (
           <div className="pgcv-emptyboard" aria-hidden="true">

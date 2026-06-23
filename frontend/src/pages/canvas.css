@@ -75,6 +75,42 @@
   min-width: 60px; font-family: 'Inter', sans-serif; font-size: 15px; line-height: 1.4; color: var(--ink-900);
 }
 
+/* per-selection style panel: a small screen-fixed island (top-left, clear of the
+   bottom-centre toolbar) shown while a single shape or text element is selected */
+.cv-stylepanel {
+  position: absolute; left: 14px; top: 14px; z-index: 8;
+  display: flex; flex-direction: column; gap: 8px;
+  background: #fff; border-radius: 12px; box-shadow: var(--shadow-soft); padding: 10px 12px;
+}
+.cv-sp-row { display: flex; align-items: center; gap: 10px; }
+.cv-sp-lbl {
+  width: 46px; flex: none; font-family: 'Inter', sans-serif; font-size: 10.5px; font-weight: 600;
+  letter-spacing: .02em; text-transform: uppercase; color: rgba(22, 24, 29, .45);
+}
+.cv-sp-swatches { display: flex; gap: 5px; }
+.cv-sw {
+  width: 18px; height: 18px; flex: none; padding: 0; border-radius: 5px; cursor: pointer;
+  border: 1px solid rgba(22, 24, 29, .14); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .4);
+  transition: transform 100ms ease;
+}
+.cv-sw:hover { transform: scale(1.12); }
+.cv-sw.on { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--blue-600, #2F6BFF); }
+/* the no-fill swatch reads as an empty cell with a diagonal slash */
+.cv-sw.none {
+  background:
+    linear-gradient(to top left, transparent calc(50% - 1px), #E03131 calc(50% - 1px), #E03131 calc(50% + 1px), transparent calc(50% + 1px)),
+    #fff;
+}
+.cv-sp-segs { display: flex; gap: 3px; }
+.cv-seg {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 24px; padding: 0; border-radius: 6px; cursor: pointer;
+  border: 1px solid rgba(22, 24, 29, .12); background: #fff; color: rgba(22, 24, 29, .6);
+  transition: background 100ms ease, color 100ms ease, border-color 100ms ease;
+}
+.cv-seg:hover { background: rgba(22, 24, 29, .05); color: var(--ink-900, #16181d); }
+.cv-seg.on { border-color: var(--blue-600, #2F6BFF); color: var(--blue-600, #2F6BFF); background: rgba(47, 107, 255, .08); }
+
 /* empty-board state: a non-shared canvas with no placed notes or drawings yet.
    Centered, non-interactive (pointer-events off so drawing still starts here). */
 .pgcv-emptyboard {
