@@ -93,55 +93,83 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Flow: your wallet → +amount → agent. */
-.topup-flow {
+/* Editable amount: the SUI sent from the owner wallet to the agent. */
+.topup-amt {
   margin-top: 16px;
+}
+.topup-amt-l {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--gray-600);
+  margin-bottom: 8px;
+}
+.topup-amt-field {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  flex-wrap: wrap;
+  background: #fff;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 12px;
+  padding: 11px 14px;
+  transition: border-color var(--motion-duration-base) ease, box-shadow var(--motion-duration-base) ease;
 }
-.topup-flow-node {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--gray-600);
-  background: var(--gray-100);
-  border-radius: 999px;
-  padding: 5px 11px;
+.topup-amt-field:focus-within {
+  border-color: var(--blue-600);
+  box-shadow: 0 0 0 3px rgba(47, 107, 255, 0.12);
 }
-.topup-flow-node.accent {
-  color: var(--ink-900);
-  background: var(--orange-100);
+.topup-amt-field.invalid {
+  border-color: #e5786f;
 }
-.topup-flow-node.accent i {
-  font-style: normal;
-  color: var(--orange-500);
-  margin-right: 3px;
-}
-.topup-flow-arrow {
-  width: 22px;
-  height: 11px;
-  flex: none;
-  color: rgba(22, 24, 29, 0.3);
-}
-.topup-flow-amt {
+.topup-amt-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
+  font-size: 18px;
   font-weight: 700;
-  color: var(--blue-600);
-  background: var(--blue-100);
-  border-radius: 999px;
-  padding: 5px 11px;
+  color: var(--ink-900);
   font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.topup-amt-input::-webkit-outer-spin-button,
+.topup-amt-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.topup-amt-suffix {
+  flex: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--gray-600);
 }
 
-.topup-note {
-  margin-top: 12px;
-  text-align: center;
-  font-size: 12.5px;
-  line-height: 1.5;
+/* Non-custody reassurance: teal (the kit's safety accent), calm and small. */
+.topup-custody {
+  margin-top: 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.45;
   color: var(--gray-600);
+}
+.topup-custody-i {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  margin-top: 1px;
+  color: var(--teal-500);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .topup-err {

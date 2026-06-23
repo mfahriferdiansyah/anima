@@ -217,13 +217,16 @@ export function createSettings() {
      * SUI → WAL (no popup) so both the gas and storage floors clear. Re-reads
      * balances after, so the page reflects the refill.
      */
-    async topUp(): Promise<void> {
+    async topUp(amountSui?: number): Promise<void> {
       const deps = getQuiltDeps();
       if (!deps || !execTx) throw new Error('Top up needs a ready vault.');
       const exec = execTx;
       const agentAddr = deps.agentSigner.toSuiAddress();
+      // The transfer amount is the caller's choice (default = the floor-clearing
+      // FUND_AGENT_MIST); the WAL top-up below is independent (it lifts WAL to a floor).
+      const mist = amountSui && amountSui > 0 ? BigInt(Math.round(amountSui * MIST_PER_SUI)) : FUND_AGENT_MIST;
       const tx = new Transaction();
-      const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(FUND_AGENT_MIST)]);
+      const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(mist)]);
       tx.transferObjects([coin], agentAddr);
       await runWithReceipt(
         { key: 'topup', title: 'Agent wallet', labels: { pending: 'Topping up agent', success: 'Agent funded' } },
@@ -316,8 +319,8 @@ export function revokeKey(id: string): Promise<void> {
 }
 
 /** Refill the device agent (owner → agent SUI transfer + agent SUI→WAL swap), then re-read balances. */
-export function topUp(): Promise<void> {
-  return settings.topUp();
+export function topUp(amountSui?: number): Promise<void> {
+  return settings.topUp(amountSui);
 }
 
 /** A fixed on-chain agent address can't rotate a secret in place; returns null (revoke + reconnect instead). */

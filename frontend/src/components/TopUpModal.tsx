@@ -5,41 +5,38 @@ import { useSettings, refreshBalances, topUp, TOPUP_AGENT_SUI } from '@/hooks/us
 import { dismissLowBalance } from '@/hooks/useChat';
 import './TopUpModal.css';
 
-const Arrow = () => (
-  <svg className="topup-flow-arrow" viewBox="0 0 24 12" aria-hidden="true">
-    <path d="M1 6h20m0 0-5-4m5 4-5 4" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
 /**
  * A focused top-up modal opened from the shared FundsBanner. The device agent
  * signs and pays for every seal, so it depletes and saves stop sealing. Topping
- * up sends a fixed amount of SUI from the OWNER's connected wallet to the agent
+ * up sends a chosen amount of SUI from the OWNER's connected wallet to the agent
  * (one wallet approval); the agent then swaps a slice to WAL itself, no second
- * popup. Refreshes the agent balance on open; on success the global receipt toast
- * confirms the transfer (so we just close). Styled to the kit (Space Grotesk
- * title, mono numerics, orange agent accent) with staggered entrance motion and a
- * responsive layout.
+ * popup. The agent key is non-custodial — it lives in this browser — which the
+ * modal states plainly so funding your own agent makes sense. Refreshes the agent
+ * balance on open; on success the global receipt toast confirms (so we just close).
  */
 export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { balances } = useSettings();
   const [topping, setTopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const amount = TOPUP_AGENT_SUI.toFixed(2);
+  const [amountStr, setAmountStr] = useState(TOPUP_AGENT_SUI.toFixed(2));
 
-  // Pull the agent's live balance whenever the modal opens, so it never shows a
-  // stale 0.00 (the settings store only refreshes on demand).
+  // Pull the agent's live balance + reset the amount whenever the modal opens.
   useEffect(() => {
     if (!open) return;
     setError(null);
+    setAmountStr(TOPUP_AGENT_SUI.toFixed(2));
     void refreshBalances();
   }, [open]);
 
+  const amount = parseFloat(amountStr);
+  const valid = Number.isFinite(amount) && amount > 0;
+
   const doTopUp = async () => {
+    if (!valid) return;
     setTopping(true);
     setError(null);
     try {
-      await topUp(); // owner wallet popup → SUI to agent, then agent self-swaps to WAL
+      await topUp(amount); // owner wallet popup → SUI to agent, then agent self-swaps to WAL
       await refreshBalances();
       dismissLowBalance();
       onClose();
@@ -57,10 +54,7 @@ export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => vo
           <span className="topup-orb" aria-hidden="true">✦</span>
           <div className="topup-head-tx">
             <div className="dt">Top up your agent</div>
-            <div className="dd2">
-              Your device agent signs and pays for every save. It has run low, so new edits can&apos;t seal to your vault
-              until you add funds.
-            </div>
+            <div className="dd2">Your agent signs and pays for every save, and it has run low.</div>
           </div>
         </div>
 
@@ -78,18 +72,34 @@ export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => vo
           </div>
         </div>
 
-        <div className="topup-flow">
-          <span className="topup-flow-node">Your wallet</span>
-          <Arrow />
-          <span className="topup-flow-amt">+{amount} SUI</span>
-          <Arrow />
-          <span className="topup-flow-node accent">
-            <i aria-hidden="true">✦</i> Agent
-          </span>
+        <div className="topup-amt">
+          <label className="topup-amt-l" htmlFor="topup-amount">
+            Add from your wallet
+          </label>
+          <div className={valid ? 'topup-amt-field' : 'topup-amt-field invalid'}>
+            <input
+              id="topup-amount"
+              className="topup-amt-input"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.05"
+              value={amountStr}
+              onChange={(e) => setAmountStr(e.target.value)}
+              disabled={topping}
+            />
+            <span className="topup-amt-suffix">SUI</span>
+          </div>
         </div>
 
-        <div className="topup-note">
-          One wallet approval. The agent converts a little to WAL on its own, so both the gas and storage floors clear.
+        <div className="topup-custody">
+          <svg className="topup-custody-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+            <rect x="5" y="11" width="14" height="9" rx="2" />
+            <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+          </svg>
+          <span>
+            This agent&apos;s key stays in this browser, on your device. Anima never holds it.
+          </span>
         </div>
 
         {error ? (
@@ -102,13 +112,15 @@ export function TopUpModal({ open, onClose }: { open: boolean; onClose: () => vo
           <Button variant="quiet" className="topup-act" onClick={onClose} disabled={topping}>
             Close
           </Button>
-          <Button variant="primary" className="topup-act" onClick={() => void doTopUp()} disabled={topping}>
+          <Button variant="primary" className="topup-act" onClick={() => void doTopUp()} disabled={topping || !valid}>
             {topping ? (
               <span className="topup-loading">
                 <span className="topup-spin" aria-hidden="true" /> Waiting for wallet…
               </span>
+            ) : valid ? (
+              `Top up ${amount.toFixed(2)} SUI`
             ) : (
-              `Top up ${amount} SUI`
+              'Enter an amount'
             )}
           </Button>
         </div>
