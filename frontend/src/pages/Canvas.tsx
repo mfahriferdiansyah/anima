@@ -23,10 +23,12 @@ import {
   isBindable,
   normalizeLinear,
   commonBounds,
+  uploadCover,
   NOTE_W,
   NOTE_H,
 } from '../../../chain/core/src/index.js';
 import { getQuiltDeps } from '@/web3/session';
+import { resolveCover } from '@/web3/covers';
 import { vaultData } from '@/web3/vaultData';
 import { hitTopElement, marqueeSelect } from '@/canvas/hittest';
 import { addElement, moveElements, deleteElements, duplicateElements, reorder } from '@/canvas/ops';
@@ -135,6 +137,41 @@ function PeerCursor({ peer }: { peer: Peer }) {
         {peer.isWriting ? <i> · is writing…</i> : null}
       </span>
     </div>
+  );
+}
+
+/**
+ * An image element. A `data:` ref (just dropped, upload in flight) renders
+ * directly; a durable `blob:`/`seal:` ref resolves to an object URL (revoked on
+ * change), mirroring CanvasHome's cover resolver.
+ */
+function CanvasImage({ el, canvasId, selected }: { el: Extract<CanvasElement, { type: 'image' }>; canvasId: string; selected: boolean }) {
+  const [url, setUrl] = useState<string | null>(el.ref.startsWith('data:') ? el.ref : null);
+  useEffect(() => {
+    if (el.ref.startsWith('data:')) {
+      setUrl(el.ref);
+      return;
+    }
+    let cancelled = false;
+    let obj: string | null = null;
+    void resolveCover(el.ref, canvasId).then((u) => {
+      if (cancelled) return;
+      setUrl(u);
+      if (u && u.startsWith('blob:')) obj = u;
+    });
+    return () => {
+      cancelled = true;
+      if (obj) URL.revokeObjectURL(obj);
+    };
+  }, [el.ref, canvasId]);
+  return (
+    <img
+      className={selected ? 'cv-image sel' : 'cv-image'}
+      src={url ?? ''}
+      alt=""
+      draggable={false}
+      style={{ left: el.x, top: el.y, width: el.w, height: el.h, pointerEvents: 'none' }}
+    />
   );
 }
 
@@ -672,9 +709,24 @@ export function Canvas() {
         const y = (rect ? rect.height / 2 : 220) - pan.y - h / 2;
         pushHistory();
         const el: CanvasElement = { ...makeBase(), type: 'image', x, y, w, h, ref: src };
+        const elId = el.id;
         setElements((prev) => addElement(prev, el));
         setSelectedIds([el.id]);
         setTool('select');
+        // Upload the bytes to a durable (sealed) blob and swap the data: ref for the
+        // returned ref, so the image persists in the sealed scene (U13). On failure
+        // the local data: image stays visible but won't persist.
+        void (async () => {
+          const deps = getQuiltDeps();
+          if (!deps) return;
+          try {
+            const bytes = new Uint8Array(await file.arrayBuffer());
+            const { ref } = await uploadCover(deps, bytes, { noteId: canvasId, public: false });
+            setElements((prev) => prev.map((e) => (e.id === elId && e.type === 'image' ? { ...e, ref } : e)));
+          } catch {
+            /* keep the local image; it just won't persist */
+          }
+        })();
       };
       probe.src = src;
     };
@@ -883,16 +935,7 @@ export function Canvas() {
               );
             }
             if (el.type === 'image') {
-              return (
-                <img
-                  key={el.id}
-                  className={selectedSet.has(el.id) ? 'cv-image sel' : 'cv-image'}
-                  src={el.ref}
-                  alt=""
-                  draggable={false}
-                  style={{ left: el.x, top: el.y, width: el.w, height: el.h, pointerEvents: 'none' }}
-                />
-              );
+              return <CanvasImage key={el.id} el={el} canvasId={canvasId} selected={selectedSet.has(el.id)} />;
             }
             // text
             if (editingId === el.id) {
