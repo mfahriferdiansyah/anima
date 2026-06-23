@@ -154,11 +154,15 @@ function CanvasImage({ el, canvasId, selected }: { el: Extract<CanvasElement, { 
     }
     let cancelled = false;
     let obj: string | null = null;
-    void resolveCover(el.ref, canvasId).then((u) => {
-      if (cancelled) return;
-      setUrl(u);
-      if (u && u.startsWith('blob:')) obj = u;
-    });
+    void resolveCover(el.ref, canvasId)
+      .then((u) => {
+        if (cancelled) return;
+        setUrl(u);
+        if (u && u.startsWith('blob:')) obj = u;
+      })
+      .catch(() => {
+        if (!cancelled) setUrl(null);
+      });
     return () => {
       cancelled = true;
       if (obj) URL.revokeObjectURL(obj);
@@ -247,9 +251,9 @@ export function Canvas() {
   const marqueeRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const lastSeededCanvasRef = useRef<string | null>(null);
   // A resize/rotate drag of the current selection (U7).
-  const transformRef = useRef<{ kind: 'resize' | 'rotate'; handle?: ResizeHandle; startX: number; startY: number; origin: CanvasElement[] } | null>(null);
+  const transformRef = useRef<{ kind: 'resize' | 'rotate'; handle?: ResizeHandle; startX: number; startY: number; origin: CanvasElement[]; moved: boolean } | null>(null);
   // A linear-element endpoint/midpoint drag (U8).
-  const linearRef = useRef<{ id: string; which: 'start' | 'end'; origin: BindableLinear } | null>(null);
+  const linearRef = useRef<{ id: string; which: 'start' | 'end'; origin: BindableLinear; moved: boolean } | null>(null);
   const textPendingRef = useRef<{ x: number; y: number } | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const elementsRef = useRef<CanvasElement[]>([]);
@@ -468,16 +472,14 @@ export function Canvas() {
     event.stopPropagation();
     const wp = toWorld(event.clientX, event.clientY);
     viewportRef.current?.setPointerCapture(event.pointerId);
-    pushHistory();
-    transformRef.current = { kind, handle, startX: wp.x, startY: wp.y, origin: elementsRef.current.filter((e) => selectedSet.has(e.id)) };
+    transformRef.current = { kind, handle, startX: wp.x, startY: wp.y, origin: elementsRef.current.filter((e) => selectedSet.has(e.id)), moved: false };
   };
 
   // Drag an arrow/line endpoint (U8); binds to a bindable element under the tip.
   const onEndpointDown = (event: ReactPointerEvent<HTMLDivElement>, el: BindableLinear, which: 'start' | 'end') => {
     event.stopPropagation();
     viewportRef.current?.setPointerCapture(event.pointerId);
-    pushHistory();
-    linearRef.current = { id: el.id, which, origin: el };
+    linearRef.current = { id: el.id, which, origin: el, moved: false };
   };
 
   // ── Board pointer dispatch (the viewport captures everything; rendered
@@ -535,6 +537,10 @@ export function Canvas() {
     }
     const tr = transformRef.current;
     if (tr) {
+      if (!tr.moved) {
+        tr.moved = true;
+        pushHistory();
+      }
       const wp = toWorld(event.clientX, event.clientY);
       const dx = wp.x - tr.startX;
       const dy = wp.y - tr.startY;
@@ -558,6 +564,10 @@ export function Canvas() {
     }
     const ln = linearRef.current;
     if (ln) {
+      if (!ln.moved) {
+        ln.moved = true;
+        pushHistory();
+      }
       const wp = toWorld(event.clientX, event.clientY);
       const target = hitTopElement(wp, elementsRef.current.filter((e) => e.id !== ln.id && isBindable(e)));
       let moved = moveEndpoint(ln.origin, ln.which, wp);
