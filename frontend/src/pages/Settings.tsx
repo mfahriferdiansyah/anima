@@ -446,10 +446,12 @@ export function Settings() {
           {walLow ? <i className="low">✧ running low</i> : null}
         </span>
         <span className="pgst-v">{settings.balances.wal.toFixed(2)} WAL</span>
+        {walLow ? (
+          <button type="button" className="pgbtn primary" onClick={() => setTopUpOpen(true)}>
+            Top up
+          </button>
+        ) : null}
       </div>
-      <button type="button" className="pgbtn pgst-connect" onClick={() => setTopUpOpen(true)}>
-        Top up agent
-      </button>
 
       <div className="pgh-label">MILESTONES</div>
       <div className="pgst-miles">
