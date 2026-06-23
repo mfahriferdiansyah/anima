@@ -17,7 +17,6 @@ import {
   canvasContentTag,
   type CanvasElement,
   type LinearElement,
-  type ElementStyle,
   newElementId,
   newVersionNonce,
   isLinear,
@@ -30,6 +29,7 @@ import {
   NOTE_H,
 } from '../../../chain/core/src/index.js';
 import { getQuiltDeps } from '@/web3/session';
+import { objectProvenanceUrl } from '@/web3/onchainToast';
 import { resolveCover } from '@/web3/covers';
 import { vaultData } from '@/web3/vaultData';
 import { hitTopElement, marqueeSelect } from '@/canvas/hittest';
@@ -544,7 +544,13 @@ export function Canvas() {
       }
       try {
         const res = await saveCanvasContent(deps, index, canvasId, { elements: elementsForSave(elementsRef.current) });
-        vaultData.updateWriteEvent(eventId, { phase: 'certified', blobObjectId: '', provenanceUrl: '' });
+        // Link the receipt to the sealed blob on chain (same provenance link a note
+        // save shows), so "View provenance" appears on the canvas-saved toast.
+        vaultData.updateWriteEvent(eventId, {
+          phase: 'certified',
+          blobObjectId: res.blobObjectId,
+          provenanceUrl: objectProvenanceUrl(res.blobObjectId),
+        });
         if (res.migrationTx) void runDestructiveTx(res.migrationTx).catch(() => {});
         dismissLowBalance();
         setDirty(false);

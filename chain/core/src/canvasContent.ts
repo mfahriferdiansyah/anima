@@ -156,7 +156,7 @@ export async function saveCanvasContent(
   canvasId: string,
   partial: Partial<CanvasContent>,
   author = 'anima',
-): Promise<{ note: Note; migrationTx?: Transaction }> {
+): Promise<{ note: Note; migrationTx?: Transaction; blobObjectId: string }> {
   const existing = findContentNote(index, canvasId);
 
   // read base: the RAW stored content (no element migration), so `base.elements`
@@ -213,5 +213,5 @@ export async function saveCanvasContent(
     }
   }
 
-  return { note, migrationTx };
+  return { note, migrationTx, blobObjectId: result.blobObjectId };
 }
