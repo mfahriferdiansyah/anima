@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useAutoConnectWallet, useCurrentAccount } from '@mysten/dapp-kit';
 import {
   Navigate,
   Outlet,
@@ -12,33 +12,35 @@ import { Companion } from '@/pages/Companion';
 import { Home } from '@/pages/Home';
 import { Landing } from '@/pages/Landing';
 import { Notes } from '@/pages/Notes';
-import { SessionGate } from '@/pages/SessionStates';
+import { Checking, SessionGate } from '@/pages/SessionStates';
 import { Settings } from '@/pages/Settings';
+import { disconnectedGate } from './appGate';
 import { AppShell } from './AppShell';
 import { WriteToasts } from './WriteToasts';
 
 /**
  * Phase gate for every /app route. `useVaultSession` self-drives discovery from
  * the connected wallet (account change → configure + start; no wallet →
- * disconnected), so the gate only reads the phase: render the workspace when
- * ready, redirect to the landing after a disconnect, show the placeholder in
- * between. The mount latch suppresses the first-tick redirect before the session
- * hook's effect has run.
+ * disconnected), so the gate reads the phase: render the workspace when ready,
+ * show the placeholder while the session spins up, redirect to the landing only
+ * after a real disconnect. On a hard refresh dapp-kit reconnects the wallet
+ * asynchronously, so for the first few renders `account` is null while
+ * `autoConnect` is still `'idle'`, and for one more render after it arrives the
+ * phase lags at `'disconnected'`. `disconnectedGate` holds the route through
+ * that whole window instead of bouncing to the landing and discarding it.
  */
 function AppGate() {
   const session = useVaultSession();
-  const mountedRef = useRef(false);
-
-  useEffect(() => {
-    mountedRef.current = true;
-  }, []);
+  const account = useCurrentAccount();
+  const autoConnect = useAutoConnectWallet();
 
   if (session.phase === 'ready') return <AppShell session={session} />;
   if (session.phase === 'disconnected') {
-    // Before the hook's effect runs the store still reads disconnected; only an
-    // actual disconnect (no wallet, or a failed start) should bounce to landing.
-    if (!mountedRef.current) return null;
-    return <Navigate to="/" replace />;
+    return disconnectedGate(!!account, autoConnect) === 'landing' ? (
+      <Navigate to="/" replace />
+    ) : (
+      <Checking />
+    );
   }
   return <SessionGate session={session} />;
 }

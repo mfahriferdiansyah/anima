@@ -49,7 +49,12 @@ function StarDraw() {
   );
 }
 
-function Checking() {
+/**
+ * The "we're loading your session" surface. Shown for the `'checking'` phase and
+ * reused by AppGate to hold the route while dapp-kit's autoConnect rehydrates the
+ * wallet on a refresh (see `app/appGate.ts`).
+ */
+export function Checking() {
   return (
     <div className="gate" role="status">
       <GateMark />
