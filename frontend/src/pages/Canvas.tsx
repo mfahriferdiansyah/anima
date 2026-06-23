@@ -298,6 +298,7 @@ export function Canvas() {
   // Manual save (consistent with notes): `dirty` drives the Save/Saved button, the
   // navigation guard and the beforeunload warning.
   const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
   const blocker = useBlocker(dirty);
 
   useEffect(() => {
@@ -501,20 +502,35 @@ export function Canvas() {
 
   // Manual seal of the scene to Walrus (owner-signed), mirroring the note Save.
   const save = () => {
-    // Optimistic: flip the button to Saved at once and validate in the background;
-    // only re-dirty if the seal actually fails (so the button never blocks).
-    setDirty(false);
+    if (saving) return;
+    setSaving(true);
+    // A NON-silent receipt appears the instant you click, so the click always has a
+    // visible response (the global "Saving canvas" toast), resolving to "Canvas
+    // saved" or a clear failure — no silent button flip. The receipt also keeps the
+    // bulk-forget quiesce awaiting this in-flight seal, like note/layout saves.
+    const eventId = vaultData.beginWriteEvent({
+      noteId: canvasContentTag(canvasId),
+      noteTitle: boardTitle,
+      state: { phase: 'certifying' },
+      labels: { pending: 'Saving canvas', success: 'Canvas saved' },
+    });
     void (async () => {
       const deps = getQuiltDeps();
       const index = vaultData.getSnapshot().index;
-      if (!deps || !index) return;
-      // Fast funding check: surface the banner and skip a doomed seal rather than
-      // attempting a write that will fail. Re-dirty so a retry after top-up re-seals.
+      if (!deps || !index) {
+        vaultData.updateWriteEvent(eventId, { phase: 'failed' });
+        setSaving(false);
+        return;
+      }
+      // Funding check first: surface the banner and skip a doomed seal rather than
+      // attempting a write that will fail. `dirty` stays true so a retry after a
+      // top-up re-seals.
       try {
         const pf = await preflight(deps.suiClient, deps.agentSigner.toSuiAddress());
         if (!pf.ok) {
-          setDirty(true);
+          vaultData.updateWriteEvent(eventId, { phase: 'failed' });
           triggerLowBalance();
+          setSaving(false);
           return;
         }
         dismissLowBalance();
@@ -526,18 +542,17 @@ export function Canvas() {
         updateCanvas(canvasId, { title: pendingTitleRef.current });
         pendingTitleRef.current = null;
       }
-      // Silent write-event so the bulk-forget quiesce awaits an in-flight canvas
-      // seal, the same as note/layout saves.
-      const eventId = vaultData.beginWriteEvent({ noteId: canvasContentTag(canvasId), noteTitle: 'Canvas', state: { phase: 'certifying' }, silent: true });
       try {
         const res = await saveCanvasContent(deps, index, canvasId, { elements: elementsForSave(elementsRef.current) });
         vaultData.updateWriteEvent(eventId, { phase: 'certified', blobObjectId: '', provenanceUrl: '' });
         if (res.migrationTx) void runDestructiveTx(res.migrationTx).catch(() => {});
         dismissLowBalance();
+        setDirty(false);
       } catch {
         vaultData.updateWriteEvent(eventId, { phase: 'failed' });
-        setDirty(true);
         triggerLowBalance();
+      } finally {
+        setSaving(false);
       }
     })();
   };
@@ -976,7 +991,11 @@ export function Canvas() {
         <button type="button" className="pgbtn" onClick={() => setSharing(true)}>
           Share
         </button>
-        {dirty ? (
+        {saving ? (
+          <button type="button" className="pgbtn" disabled aria-label="Saving">
+            Saving…
+          </button>
+        ) : dirty ? (
           <button type="button" className="pgbtn primary" onClick={save}>
             Save
           </button>

@@ -61,11 +61,21 @@
   }
 }
 
-/* Top-up modal: current balances + error. */
+/* Top-up modal: current agent balance, what-happens line, error. */
 .topup-bal {
   display: flex;
   gap: 10px;
-  margin: 6px 0 2px;
+  margin: 10px 0 2px;
+}
+.topup-what {
+  margin-top: 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: rgba(22, 24, 29, 0.62);
+}
+.topup-what b {
+  color: var(--ink-900, #16181d);
+  font-weight: 650;
 }
 .topup-bal-i {
   flex: 1;

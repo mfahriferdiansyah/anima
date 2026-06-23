@@ -9,7 +9,6 @@ import type { ToastItem } from '@/components/ToastStack';
 import type { ToastVariant } from '@/components/Toast';
 import { dismissLowBalance } from '@/hooks/useChat';
 import {
-  configureSettingsExec,
   connectExternalAgent,
   refreshBalances,
   refreshMilestones,
@@ -334,19 +333,16 @@ export function Settings() {
   const execRef = useRef(execTx);
   execRef.current = execTx;
 
-  // Wire the wallet-exec adapter into the settings + forget layers and pull live
-  // balances once a vault is ready (preflight on the device agent address). The
-  // forget wiring is set-only (NOT nulled on cleanup): ManageLibrary mounts the
-  // same adapter app-wide via AppShell, so nulling here would clobber it. The
-  // settings exec keeps its null-on-cleanup — that asymmetry is intentional.
+  // Pull live balances + milestones once a vault is ready (preflight on the device
+  // agent address). The wallet-exec adapters for settings AND forget are wired
+  // app-wide by ManageLibrary (mounted via AppShell on every ready route), so they
+  // are available here without this page wiring (or nulling) them itself.
   useEffect(() => {
-    configureSettingsExec((tx) => execRef.current(tx));
     configureForgetExec((tx) => execRef.current(tx));
     if (ready) {
       void refreshBalances();
       void refreshMilestones();
     }
-    return () => configureSettingsExec(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- execTx read via execRef; refetch only when ready flips
   }, [ready?.vault.vaultId]);
 

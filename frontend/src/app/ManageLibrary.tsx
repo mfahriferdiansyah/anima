@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/Button';
 import { Modal } from '@/components/Modal';
 import { configureForgetExec, forgetNotes, setNoteFolder, useVault } from '@/hooks/useVault';
+import { configureSettingsExec } from '@/hooks/useSettings';
 import { useWalletExecTx } from '@/web3/walletExecTx';
 import {
   addFolder,
@@ -41,7 +42,11 @@ export function ManageLibrary({ open, onClose }: { open: boolean; onClose: () =>
   const execRef = useRef(execTx);
   execRef.current = execTx;
   useEffect(() => {
+    // Wire the wallet adapter app-wide (this modal mounts via AppShell on every
+    // ready route), so forget AND top up work from any surface — the funds banner
+    // on the canvas/notes can fund the agent without first visiting Settings.
     configureForgetExec((tx) => execRef.current(tx));
+    configureSettingsExec((tx) => execRef.current(tx));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- execTx read via execRef; register once
   }, []);
 

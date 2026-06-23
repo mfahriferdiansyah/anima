@@ -52,6 +52,9 @@ export interface SettingsState {
 const FUND_AGENT_MIST = 300_000_000n;
 const MIST_PER_SUI = 1e9;
 
+/** The SUI a single top-up transfers from the owner wallet to the agent (for display). */
+export const TOPUP_AGENT_SUI = Number(FUND_AGENT_MIST) / MIST_PER_SUI;
+
 /** A `runWriteTx` that runs a PTB through the wallet, injected by the React layer. */
 type ExecTx = (transaction: unknown) => Promise<unknown>;
 
