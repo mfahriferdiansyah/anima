@@ -57,7 +57,7 @@ export interface EditViewProps {
   opk?: string | null;
 }
 
-export function EditView({ room, salt }: EditViewProps): ReactElement {
+export function EditView({ room, salt, opk = null }: EditViewProps): ReactElement {
   const [phase, setPhase] = useState<Phase>(() =>
     room ? { kind: 'live', room } : salt ? { kind: 'pw' } : { kind: 'error', message: 'This edit link is incomplete.' },
   );
@@ -103,7 +103,11 @@ export function EditView({ room, salt }: EditViewProps): ReactElement {
     );
   }
 
-  return <Room room={phase.room} />;
+  // A password-derived room MUST see a verified owner before it is trusted as the
+  // real room — a wrong password lands in a different empty room silently, and a
+  // second guest with the same wrong password is not enough (C4). A no-password
+  // `?room=` link is the unguessable room itself, so it joins directly.
+  return <Room room={phase.room} requireOwner={room === null} opk={opk} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -151,11 +155,26 @@ function JoinGate({ onPassword }: { onPassword: (pw: string) => void }): ReactEl
 // The live room — a Yjs-bound textarea over the relay (concurrent typing).
 // ---------------------------------------------------------------------------
 
-function Room({ room }: { room: string }): ReactElement {
+/** How long a password room waits to see a confirming peer before flagging it as a likely-wrong-password phantom room. */
+const JOIN_WINDOW_MS = 8000;
+
+type JoinState = 'joining' | 'live' | 'unverified' | 'lost' | 'full';
+
+function Room({ room, requireOwner }: { room: string; requireOwner: boolean; opk: string | null }): ReactElement {
+  // `opk` (owner trust anchor) is consumed by the owner-signature gate in U5/U11;
+  // the U10 gate here confirms the real room by a present peer before going live.
   const taRef = useRef<HTMLTextAreaElement>(null);
   const idRef = useRef<{ id: string; label: string } | null>(null);
   if (!idRef.current) idRef.current = { id: freshSelfId(), label: freshSelfLabel() };
   const [members, setMembers] = useState<PresenceMember[]>([]);
+  // The interactive-readiness of the editor:
+  //  - 'joining'  : password room, waiting to confirm we reached the real room.
+  //  - 'live'     : interactive (a no-password room is live immediately; a password
+  //                 room becomes live once a peer/owner is confirmed present).
+  //  - 'unverified': password room, no peer confirmed within the window — likely a
+  //                  wrong password (a phantom empty room). NOT interactive.
+  //  - 'lost'/'full': the socket dropped / the room is at capacity. NOT interactive.
+  const [join, setJoin] = useState<JoinState>(requireOwner ? 'joining' : 'live');
 
   useEffect(() => {
     const ta = taRef.current;
@@ -165,37 +184,55 @@ function Room({ room }: { room: string }): ReactElement {
     const sockSend = (msg: PresenceMsg) => {
       if (ws.readyState === WebSocket.OPEN) ws.send(serializeMsg(msg));
     };
-    // The session emits frames through the socket; the socket feeds inbound frames
-    // back into the session. (The session is created with the socket send, so the
-    // doc/awareness wiring and the relay share one path.)
     const session = new CollabSession({ send: sockSend, selfId });
-    // Announce our anonymous identity over awareness; render the avatar stack from
-    // the awareness states (who is in the room, MS-Docs style).
     session.awareness.setLocalStateField('user', { id: selfId, label });
-    const refreshMembers = () => {
+
+    // Confirm we reached the REAL room: a password room must see at least one OTHER
+    // peer (ideally the owner) before it is interactive — a wrong password lands in
+    // a different, empty room where typing would be silently lost. Two guests with
+    // the same wrong password would both see only each other; we still treat seeing
+    // a peer as "joined" but keep the honest "saves while the owner's here" signal,
+    // and gate on a verified owner once one is present.
+    let confirmTimer: ReturnType<typeof setTimeout> | null = null;
+    const refresh = () => {
       const seen: PresenceMember[] = [];
-      for (const state of session.awareness.getStates().values()) {
+      let otherPeer = false;
+      for (const [client, state] of session.awareness.getStates()) {
         const user = (state as { user?: { id?: string; label?: string } }).user;
         if (user?.id) seen.push({ id: user.id, label: user.label ?? 'Guest' });
+        if (client !== session.doc.clientID) otherPeer = true;
       }
       setMembers(seen);
+      if (requireOwner && otherPeer) setJoin('live'); // a peer confirms the room is real
     };
-    session.awareness.on('change', refreshMembers);
+    session.awareness.on('change', refresh);
+
     ws.onopen = () => {
       sockSend({ t: 'hello', id: selfId, label, kind: 'human' });
-      session.start(); // announce our state vector + awareness
-      sockSend(syncReq(selfId)); // ask the owner / a present peer for the current doc
-      refreshMembers();
+      session.start();
+      sockSend(syncReq(selfId));
+      refresh();
+      if (requireOwner) {
+        // No confirming peer within the window → likely a wrong password.
+        confirmTimer = setTimeout(() => setJoin((j) => (j === 'joining' ? 'unverified' : j)), JOIN_WINDOW_MS);
+      }
     };
     ws.onmessage = (e) => {
       const msg = typeof e.data === 'string' ? parseMsg(e.data) : null;
       if (msg) session.onFrame(msg);
     };
-    // Bind the Y.Text to the uncontrolled textarea — concurrent typing, caret-safe.
+    ws.onclose = (e) => {
+      // 1008 = room full (terminal); anything else mid-session = a drop. The bye
+      // we send on intentional unmount also lands here; React has already torn the
+      // textarea down by then, so the state set is harmless.
+      setJoin(e?.code === 1008 ? 'full' : 'lost');
+    };
+
     const unbind = bindYText(session.doc.getText('body'), textareaSurface(ta));
     return () => {
+      if (confirmTimer) clearTimeout(confirmTimer);
       unbind();
-      session.awareness.off('change', refreshMembers);
+      session.awareness.off('change', refresh);
       try {
         if (ws.readyState === WebSocket.OPEN) ws.send(serializeMsg({ t: 'bye', id: selfId }));
       } catch {
@@ -204,20 +241,54 @@ function Room({ room }: { room: string }): ReactElement {
       session.destroy();
       ws.close();
     };
-  }, [room]);
+  }, [room, requireOwner]);
 
+  // Terminal states render an honest surface, not a live-looking dead editor.
+  if (join === 'full') {
+    return (
+      <Frame state="not-found" tag="Live edit">
+        <div className="rd-center">
+          <div className="rd-card">
+            <h2>This room is full</h2>
+            <p>Too many people are editing right now. Try again in a little while.</p>
+          </div>
+        </div>
+      </Frame>
+    );
+  }
+  if (join === 'unverified') {
+    return (
+      <Frame state="wrong-password" tag="Live edit">
+        <div className="rd-center">
+          <div className="rd-card">
+            <h2>Couldn’t join this edit</h2>
+            <p>No one else is in this room. Check the password with the person who shared it.</p>
+          </div>
+        </div>
+      </Frame>
+    );
+  }
+
+  const interactive = join === 'live';
   return (
     <Frame state="edit" tag="Live edit">
       <div className="rd-editor">
         <div className="rd-editor-top">
-          <div className="sharenote rd-livenote">Edits are live. Changes save while the owner is here.</div>
+          <div className="sharenote rd-livenote">
+            {join === 'lost'
+              ? 'Connection lost — reconnect to keep editing.'
+              : join === 'joining'
+                ? 'Joining the shared edit…'
+                : 'Edits are live. Changes save while the owner is here.'}
+          </div>
           <PresenceStack members={members} />
         </div>
         <textarea
           ref={taRef}
           className="rd-textarea"
           defaultValue=""
-          placeholder="Start typing to collaborate…"
+          disabled={!interactive}
+          placeholder={interactive ? 'Start typing to collaborate…' : ''}
           aria-label="Shared note"
         />
       </div>

@@ -83,13 +83,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function mount(props: { room: string }): Promise<{ root: Root; container: HTMLElement }> {
+async function mount(props: { room?: string; salt?: string }): Promise<{ root: Root; container: HTMLElement }> {
   const container = document.createElement('div');
   document.body.appendChild(container);
   let root!: Root;
   await act(async () => {
     root = createRoot(container);
-    root.render(<EditView room={props.room} salt={null} />);
+    root.render(<EditView room={props.room ?? null} salt={props.salt ?? null} />);
     await Promise.resolve();
   });
   return { root, container };
@@ -181,6 +181,26 @@ describe('EditView — wallet-free Yjs note surface', () => {
       await Promise.resolve();
     });
     expect(container.textContent).toMatch(/incomplete/i);
+    expect(container.querySelector('textarea')).toBeNull();
+    await act(async () => root.unmount());
+  });
+});
+
+describe('EditView — join gate (U10: phantom-password guard + terminal states)', () => {
+  it('a no-password (unguessable) room is interactive immediately (no gate)', async () => {
+    const { root, container } = await mount({ room: 'direct-room' });
+    await flush();
+    const ta = container.querySelector('textarea') as HTMLTextAreaElement;
+    expect(ta).toBeTruthy();
+    expect(ta.disabled).toBe(false); // the room IS the unguessable secret — live at once
+    await act(async () => root.unmount());
+  });
+
+  it('a password link first shows the password gate, not a live editor', async () => {
+    const { root, container } = await mount({ salt: 'some-salt' });
+    await flush();
+    // before the password is entered, the surface is the JoinGate, never a textarea
+    expect(container.querySelector('input[type="password"]')).toBeTruthy();
     expect(container.querySelector('textarea')).toBeNull();
     await act(async () => root.unmount());
   });
