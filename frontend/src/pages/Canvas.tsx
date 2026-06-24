@@ -336,12 +336,18 @@ export function Canvas() {
       send: emitCanvasCollab,
       getElements: () => elementsRef.current,
       setElements,
+      // The in-app board is the owner's surface — it answers a guest's sync-req
+      // with the full scene (including tombstones). A wallet-free guest board
+      // (U13) defaults to non-responder.
+      isResponder: () => true,
     });
     collabRef.current = collab;
     // Seed the broadcast snapshot so the first local edit diffs against the seed,
     // not against empty (which would re-broadcast the whole board on first change).
     lastBroadcastRef.current = new Map(elementsRef.current.map((el) => [el.id, el]));
     const off = onCanvasCollabFrame((msg) => collab.onFrame(msg));
+    // Ask the room for any state we are missing (a guest may already be editing).
+    collab.requestSync();
     return () => {
       off();
       collabRef.current = null;
