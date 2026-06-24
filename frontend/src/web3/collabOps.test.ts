@@ -16,11 +16,19 @@ import {
   noteOp,
   noteWriting,
   canvasOp,
+  syncReq,
+  ySync,
+  elOp,
+  elChunk,
+  elNeed,
+  bytesToB64,
+  b64ToBytes,
   LOCK_TTL_MS,
   type LockMap,
 } from './collabOps';
 import { parseMsg, serializeMsg } from '../mocks/presenceStore';
 import type { PresenceMsg } from '../../../chain/core/src/index.js';
+import type { CanvasElement } from '../../../chain/core/src/elements.js';
 
 describe('deriveRoomId — password-gated edit room (KTD8 control 3)', () => {
   it('the right password derives the SAME room id; a wrong password a DIFFERENT one', async () => {
@@ -136,5 +144,89 @@ describe('wire codec — content frames round-trip; junk is dropped', () => {
     expect(parseMsg('{"t":"canvas-op","id":"a","canvasId":"c"}')).toBeNull(); // missing layout
     expect(parseMsg('{"t":"totally-unknown","id":"a"}')).toBeNull();
     expect(parseMsg('not json')).toBeNull();
+  });
+});
+
+// ── plan-2026-06-24 collaborative-share frames ──────────────────────────────
+
+const SAMPLE_EL: CanvasElement = {
+  id: 'sh:1',
+  type: 'rect',
+  x: 10,
+  y: 20,
+  w: 100,
+  h: 50,
+  angle: 0,
+  index: 0,
+  version: 3,
+  versionNonce: 12345,
+};
+
+describe('base64 helpers — binary payloads ride inside the JSON frame', () => {
+  it('round-trips arbitrary bytes', () => {
+    const bytes = new Uint8Array([0, 1, 2, 250, 255, 128, 64]);
+    expect([...b64ToBytes(bytesToB64(bytes))]).toEqual([...bytes]);
+  });
+
+  it('an empty payload round-trips to empty', () => {
+    expect(b64ToBytes(bytesToB64(new Uint8Array(0))).length).toBe(0);
+  });
+
+  it('malformed base64 decodes to empty, not a throw', () => {
+    expect(b64ToBytes('!!!not base64!!!').length).toBe(0);
+  });
+});
+
+describe('collaborative-share frames — round-trip + share gating', () => {
+  it('every new frame serializes and parses back identically', () => {
+    const yBytes = new Uint8Array([9, 8, 7, 6]);
+    const chunkBytes = new Uint8Array([1, 2, 3]);
+    const frames: PresenceMsg[] = [
+      syncReq('me'),
+      ySync('me', yBytes),
+      elOp('me', 'board-1', SAMPLE_EL),
+      elChunk('me', 'board-1', 'gen-x', 0, 3, chunkBytes),
+      elNeed('me', 'board-1', 'gen-x', [1, 2]),
+    ];
+    for (const f of frames) {
+      expect(parseMsg(serializeMsg(f))).toEqual(f);
+    }
+  });
+
+  it('the y-sync / el-chunk base64 decodes back to the original bytes', () => {
+    const yBytes = new Uint8Array([42, 0, 255]);
+    const frame = parseMsg(serializeMsg(ySync('me', yBytes)));
+    expect(frame?.t).toBe('y-sync');
+    if (frame?.t === 'y-sync') expect([...b64ToBytes(frame.b)]).toEqual([...yBytes]);
+  });
+
+  it('an el-op carries the full element through the wire', () => {
+    const frame = parseMsg(serializeMsg(elOp('me', 'board-1', SAMPLE_EL)));
+    expect(frame?.t).toBe('el-op');
+    if (frame?.t === 'el-op') expect(frame.el).toEqual(SAMPLE_EL);
+  });
+
+  it('rejects malformed collaborative-share frames (no throw)', () => {
+    expect(parseMsg('{"t":"sync-req"}')).toBeNull(); // missing id
+    expect(parseMsg('{"t":"y-sync","id":"a"}')).toBeNull(); // missing b
+    expect(parseMsg('{"t":"el-op","id":"a","canvasId":"c","el":{}}')).toBeNull(); // el has no id
+    expect(parseMsg('{"t":"el-chunk","id":"a","canvasId":"c","gen":"g","seq":0}')).toBeNull(); // missing total/b
+    expect(parseMsg('{"t":"el-need","id":"a","canvasId":"c","gen":"g","seqs":"nope"}')).toBeNull(); // seqs not array
+  });
+
+  it('isContentOp gates the new collaborative frames so they only flow under an active share', () => {
+    expect(isContentOp(syncReq('a'))).toBe(true);
+    expect(isContentOp(ySync('a', new Uint8Array()))).toBe(true);
+    expect(isContentOp(elOp('a', 'c', SAMPLE_EL))).toBe(true);
+    expect(isContentOp(elChunk('a', 'c', 'g', 0, 1, new Uint8Array()))).toBe(true);
+    expect(isContentOp(elNeed('a', 'c', 'g', [0]))).toBe(true);
+
+    const sent: PresenceMsg[] = [];
+    const gate = makeShareGate((m) => sent.push(m));
+    gate.emit(elOp('a', 'c', SAMPLE_EL)); // inactive → dropped
+    expect(sent).toHaveLength(0);
+    gate.setActive(true);
+    gate.emit(elOp('a', 'c', SAMPLE_EL)); // active → flows
+    expect(sent).toHaveLength(1);
   });
 });

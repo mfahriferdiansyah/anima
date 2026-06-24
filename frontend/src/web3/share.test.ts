@@ -84,6 +84,51 @@ describe('createShareLink edit (instant, no chain write)', () => {
   });
 });
 
+describe('edit link carries kind + owner public key (collaborative-share routing)', () => {
+  it('a note edit link omits kind (clean) and omits opk when no signer is wired', async () => {
+    seedNote('n-1');
+    await createShareLink('n-1', 'edit', 'note');
+    const l = link('n-1')!;
+    expect(l.url).toBe(`/read.html?room=${l.roomId}`); // no &kind, no &opk
+  });
+
+  it('a canvas edit link carries &kind=canvas so the reader mounts the board', async () => {
+    seedNote('c-1');
+    await createShareLink('c-1', 'edit', 'canvas');
+    const l = link('c-1')!;
+    expect(l.kind).toBe('canvas');
+    expect(l.url).toBe(`/read.html?room=${l.roomId}&kind=canvas`);
+  });
+
+  it('bakes the owner agent public key as &opk=<hex> when a signer is wired (the guest trust anchor)', async () => {
+    seedNote('n-2');
+    const pub = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+    vi.mocked(getQuiltDeps).mockReturnValue({
+      suiClient: {},
+      agentSigner: { getPublicKey: () => ({ toRawBytes: () => pub }) },
+      walletAddress: '0xowner',
+      vaultId: '0xv',
+    } as never);
+    await createShareLink('n-2', 'edit', 'note');
+    const l = link('n-2')!;
+    expect(l.url).toBe(`/read.html?room=${l.roomId}&opk=deadbeef`);
+  });
+
+  it('a password canvas link carries the salt, kind, and opk together', async () => {
+    seedNote('c-2');
+    vi.mocked(getQuiltDeps).mockReturnValue({
+      suiClient: {},
+      agentSigner: { getPublicKey: () => ({ toRawBytes: () => new Uint8Array([0x01, 0x02]) }) },
+      walletAddress: '0xowner',
+      vaultId: '0xv',
+    } as never);
+    await createShareLink('c-2', 'edit', 'canvas');
+    await setLinkPassword('c-2', 'pw');
+    const l = link('c-2')!;
+    expect(l.url).toBe(`/read.html?salt=${l.salt}&edit=1&kind=canvas&opk=0102`);
+  });
+});
+
 describe('createShareLink view is local — no publish until generateView', () => {
   it('selecting view does NOT publish; the blob is written only on an explicit generateView', async () => {
     seedNote('n-1');

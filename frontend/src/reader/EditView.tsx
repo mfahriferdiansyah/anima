@@ -53,7 +53,16 @@ type Phase =
   | { kind: 'live'; room: string }
   | { kind: 'error'; message: string };
 
-export function EditView({ room, salt }: { room: string | null; salt: string | null }): ReactElement {
+export interface EditViewProps {
+  room: string | null;
+  salt: string | null;
+  /** which surface the link opens: a note editor (default) or a board. */
+  editKind?: 'note' | 'canvas';
+  /** the owner's agent public key (hex) — the guest's trust anchor for verifying the owner. */
+  opk?: string | null;
+}
+
+export function EditView({ room, salt }: EditViewProps): ReactElement {
   const [phase, setPhase] = useState<Phase>(() =>
     room ? { kind: 'live', room } : salt ? { kind: 'pw' } : { kind: 'error', message: 'This edit link is incomplete.' },
   );

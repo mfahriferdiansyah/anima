@@ -24,6 +24,7 @@
 import { marked } from 'marked';
 import createDOMPurify from 'dompurify';
 import type { PresenceMsg, CanvasLayout } from '../../../chain/core/src/index.js';
+import type { CanvasElement } from '../../../chain/core/src/elements.js';
 
 const te = new TextEncoder();
 
@@ -94,7 +95,17 @@ export function randomShareId(bytes = 16): string {
 // 3. Share gate — emit content ops ONLY while a share is active.
 // ---------------------------------------------------------------------------
 
-const CONTENT_OPS = new Set(['note-op', 'canvas-op', 'note-writing']);
+const CONTENT_OPS = new Set([
+  'note-op',
+  'canvas-op',
+  'note-writing',
+  // plan-2026-06-24 collaborative-share ops — also share-gated.
+  'sync-req',
+  'y-sync',
+  'el-op',
+  'el-chunk',
+  'el-need',
+]);
 export const isContentOp = (msg: PresenceMsg): boolean => CONTENT_OPS.has(msg.t);
 
 export interface ShareGate {
@@ -177,3 +188,58 @@ export function takeOver(locks: LockMap, noteId: string): LockMap {
 export const noteOp = (id: string, noteId: string, body: string): PresenceMsg => ({ t: 'note-op', id, noteId, body });
 export const noteWriting = (id: string, noteId: string, on: boolean): PresenceMsg => ({ t: 'note-writing', id, noteId, on });
 export const canvasOp = (id: string, canvasId: string, layout: CanvasLayout): PresenceMsg => ({ t: 'canvas-op', id, canvasId, layout });
+
+// ---------------------------------------------------------------------------
+// 6. Base64 for binary payloads — the relay protocol is JSON text, Yjs is
+//    binary, so a `y-sync` / `el-chunk` payload rides as base64. Pure, no DOM.
+// ---------------------------------------------------------------------------
+
+/** Encode bytes to a base64 string (browser btoa-free; works in node tests too). */
+export function bytesToB64(bytes: Uint8Array): string {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  // btoa exists in the browser + jsdom; a node-only fallback via Buffer keeps the
+  // pure cores testable without a DOM.
+  const g = globalThis as { btoa?: (s: string) => string };
+  if (g.btoa) return g.btoa(bin);
+  return Buffer.from(bytes).toString('base64');
+}
+
+/** Decode a base64 string back to bytes. Returns an empty array on malformed input. */
+export function b64ToBytes(b64: string): Uint8Array {
+  const g = globalThis as { atob?: (s: string) => string };
+  try {
+    const bin = g.atob ? g.atob(b64) : Buffer.from(b64, 'base64').toString('binary');
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  } catch {
+    return new Uint8Array(0);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 7. Collaborative-share frame builders (plan 2026-06-24).
+// ---------------------------------------------------------------------------
+
+/** "I just joined this room — current state, please." Broadcast on join; the owner (or a present-peer fallback) answers. */
+export const syncReq = (id: string): PresenceMsg => ({ t: 'sync-req', id });
+
+/** A Yjs sync/awareness binary frame for note co-editing, carried as base64. */
+export const ySync = (id: string, payload: Uint8Array): PresenceMsg => ({ t: 'y-sync', id, b: bytesToB64(payload) });
+
+/** One full board element for canvas co-editing (applied through reconcile after sanitize). */
+export const elOp = (id: string, canvasId: string, el: CanvasElement): PresenceMsg => ({ t: 'el-op', id, canvasId, el });
+
+/** A chunk of a large board resync snapshot; `gen` tags one snapshot generation so chunks never interleave. */
+export const elChunk = (
+  id: string,
+  canvasId: string,
+  gen: string,
+  seq: number,
+  total: number,
+  payload: Uint8Array,
+): PresenceMsg => ({ t: 'el-chunk', id, canvasId, gen, seq, total, b: bytesToB64(payload) });
+
+/** A selective re-request for the missing chunk seqs of one snapshot generation. */
+export const elNeed = (id: string, canvasId: string, gen: string, seqs: number[]): PresenceMsg => ({ t: 'el-need', id, canvasId, gen, seqs });
