@@ -386,6 +386,33 @@ a.btn {
   margin-bottom: 14px;
 }
 
+/* The live note editor reuses the in-app document column (.pgcol / .edtype from
+   kit.css) so a shared edit looks EXACTLY like the real editor. The reader's main
+   column padding is dropped here — .pgcol owns its own centering + padding. */
+.rd-main:has(.pged-scroll) {
+  padding: 0;
+  align-items: stretch;
+}
+.rd-main .pged-scroll {
+  width: 100%;
+  overflow: visible;
+}
+
+/* the quiet live-status bar above the document, aligned to the .pgcol measure */
+.rd-livebar {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 22px 64px 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-sizing: border-box;
+}
+.rd-livebar .rd-livenote {
+  margin-bottom: 0;
+}
+
 /* owner can't save (out of funds) — the warm low-funds aesthetic (mirrors
    FundsBanner: warm strip, warm text), built on the neutral .sharenote base so it
    is not an invented panel. */

@@ -21,7 +21,7 @@ import { Frame } from './Frame';
 import { parseMsg, serializeMsg } from '../mocks/presenceStore';
 import { deriveRoomId, syncReq } from '../web3/collabOps';
 import { CollabSession } from '../web3/collabSession';
-import { bindYText, textareaSurface } from '../web3/collabTextBinding';
+import { bindYText, contentEditableSurface } from '../web3/collabTextBinding';
 import { PresenceStack, type PresenceMember } from '../components/PresenceStack';
 import { guestSaveSignal, guestSaveText, type GuestSaveSignal } from '../web3/collabIdentity';
 import { CanvasEditRoom } from './CanvasEditRoom';
@@ -166,7 +166,9 @@ type JoinState = 'joining' | 'live' | 'unverified' | 'lost' | 'full';
 function Room({ room, requireOwner }: { room: string; requireOwner: boolean; opk: string | null }): ReactElement {
   // `opk` (owner trust anchor) is consumed by the owner-signature gate in U5/U11;
   // the U10 gate here confirms the real room by a present peer before going live.
-  const taRef = useRef<HTMLTextAreaElement>(null);
+  // The body is the SAME contenteditable `.edtype` the in-app NoteEditor uses, so a
+  // shared edit looks exactly like the real editor — not a generic textarea.
+  const taRef = useRef<HTMLDivElement>(null);
   const idRef = useRef<{ id: string; label: string } | null>(null);
   if (!idRef.current) idRef.current = { id: freshSelfId(), label: freshSelfLabel() };
   const [members, setMembers] = useState<PresenceMember[]>([]);
@@ -237,7 +239,7 @@ function Room({ room, requireOwner }: { room: string; requireOwner: boolean; opk
       setJoin(e?.code === 1008 ? 'full' : 'lost');
     };
 
-    const unbind = bindYText(session.doc.getText('body'), textareaSurface(ta));
+    const unbind = bindYText(session.doc.getText('body'), contentEditableSurface(ta));
     return () => {
       if (confirmTimer) clearTimeout(confirmTimer);
       unbind();
@@ -281,25 +283,32 @@ function Room({ room, requireOwner }: { room: string; requireOwner: boolean; opk
   const interactive = join === 'live';
   return (
     <Frame state="edit" tag="Live edit">
-      <div className="rd-editor">
-        <div className="rd-editor-top">
-          <div className={saveSignal === 'owner-cant-save' ? 'sharenote rd-livenote rd-cantsave' : 'sharenote rd-livenote'}>
-            {join === 'lost'
-              ? 'Connection lost — reconnect to keep editing.'
-              : join === 'joining'
-                ? 'Joining the shared edit…'
-                : guestSaveText(saveSignal)}
-          </div>
-          <PresenceStack members={members} />
+      {/* the live status + avatar stack, on a quiet bar above the document */}
+      <div className="rd-livebar">
+        <div className={saveSignal === 'owner-cant-save' ? 'sharenote rd-livenote rd-cantsave' : 'sharenote rd-livenote'}>
+          {join === 'lost'
+            ? 'Connection lost — reconnect to keep editing.'
+            : join === 'joining'
+              ? 'Joining the shared edit…'
+              : guestSaveText(saveSignal)}
         </div>
-        <textarea
-          ref={taRef}
-          className="rd-textarea"
-          defaultValue=""
-          disabled={!interactive}
-          placeholder={interactive ? 'Start typing to collaborate…' : ''}
-          aria-label="Shared note"
-        />
+        <PresenceStack members={members} />
+      </div>
+      {/* the body is the EXACT in-app editor surface: a centered .pgcol column with
+          the .edtype contentEditable (kit.css), bound to the shared Y.Text (U3). */}
+      <div className="pged-scroll">
+        <div className="pgcol">
+          <div
+            ref={taRef}
+            className="edtype"
+            contentEditable={interactive}
+            suppressContentEditableWarning
+            spellCheck={false}
+            role="textbox"
+            aria-label="Shared note"
+            data-ph={interactive ? 'Write your note…' : ''}
+          />
+        </div>
       </div>
     </Frame>
   );

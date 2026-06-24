@@ -98,15 +98,21 @@ async function mount(props: { room?: string; salt?: string }): Promise<{ root: R
 // Drain both the microtask queue and the setTimeout(0) macrotask (the fake
 // socket opens on a 0-delay timer), then let React commit.
 const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); await Promise.resolve(); });
-const textarea = (c: HTMLElement) => c.querySelector('textarea') as HTMLTextAreaElement;
+// The live note body is the in-app `.edtype` contenteditable (not a textarea), so
+// it looks exactly like the real editor. Drive it via textContent + an input event.
+const editor = (c: HTMLElement) => c.querySelector('.edtype') as HTMLElement;
+const typeInto = (el: HTMLElement, text: string) => {
+  el.textContent = text;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+};
 
 describe('EditView — wallet-free Yjs note surface', () => {
-  it('mounts a live textarea with no wallet/connect prompt (AE9)', async () => {
+  it('mounts the in-app editor surface with no wallet/connect prompt (AE9)', async () => {
     const { root, container } = await mount({ room: 'room-A' });
     await flush();
-    const ta = textarea(container);
-    expect(ta).toBeTruthy();
-    expect(ta.disabled).toBe(false); // no soft-lock disabling
+    const ed = editor(container);
+    expect(ed).toBeTruthy();
+    expect(ed.getAttribute('contenteditable')).toBe('true'); // interactive, not disabled
     // the live notice uses the neutral .sharenote (kit), not an invented tint
     expect(container.querySelector('.sharenote')).toBeTruthy();
     // no "connect wallet" / "sign in" affordance on the guest surface
@@ -120,30 +126,28 @@ describe('EditView — wallet-free Yjs note surface', () => {
     await flush();
     await flush();
 
-    const taA = textarea(a.container);
-    const taB = textarea(b.container);
+    const edA = editor(a.container);
+    const edB = editor(b.container);
 
     // guest A types
     await act(async () => {
-      taA.value = 'hello from A';
-      taA.dispatchEvent(new Event('input', { bubbles: true }));
+      typeInto(edA, 'hello from A');
       await Promise.resolve();
     });
     await flush();
 
     // B sees A's text (sync over the fake relay)
-    expect(taB.value).toBe('hello from A');
+    expect(edB.textContent).toBe('hello from A');
 
     // guest B appends — both converge
     await act(async () => {
-      taB.value = 'hello from A + B';
-      taB.dispatchEvent(new Event('input', { bubbles: true }));
+      typeInto(edB, 'hello from A + B');
       await Promise.resolve();
     });
     await flush();
 
-    expect(taA.value).toBe('hello from A + B');
-    expect(taA.value).toBe(taB.value);
+    expect(edA.textContent).toBe('hello from A + B');
+    expect(edA.textContent).toBe(edB.textContent);
 
     await act(async () => a.root.unmount());
     await act(async () => b.root.unmount());
@@ -152,10 +156,9 @@ describe('EditView — wallet-free Yjs note surface', () => {
   it('a late joiner hydrates from a present peer (sync-req → state)', async () => {
     const a = await mount({ room: 'room-late' });
     await flush();
-    const taA = textarea(a.container);
+    const edA = editor(a.container);
     await act(async () => {
-      taA.value = 'content that existed before the late joiner';
-      taA.dispatchEvent(new Event('input', { bubbles: true }));
+      typeInto(edA, 'content that existed before the late joiner');
       await Promise.resolve();
     });
     await flush();
@@ -164,8 +167,8 @@ describe('EditView — wallet-free Yjs note surface', () => {
     const b = await mount({ room: 'room-late' });
     await flush();
     await flush();
-    const taB = textarea(b.container);
-    expect(taB.value).toBe('content that existed before the late joiner');
+    const edB = editor(b.container);
+    expect(edB.textContent).toBe('content that existed before the late joiner');
 
     await act(async () => a.root.unmount());
     await act(async () => b.root.unmount());
@@ -181,7 +184,7 @@ describe('EditView — wallet-free Yjs note surface', () => {
       await Promise.resolve();
     });
     expect(container.textContent).toMatch(/incomplete/i);
-    expect(container.querySelector('textarea')).toBeNull();
+    expect(container.querySelector('.edtype')).toBeNull();
     await act(async () => root.unmount());
   });
 });
@@ -190,18 +193,18 @@ describe('EditView — join gate (U10: phantom-password guard + terminal states)
   it('a no-password (unguessable) room is interactive immediately (no gate)', async () => {
     const { root, container } = await mount({ room: 'direct-room' });
     await flush();
-    const ta = container.querySelector('textarea') as HTMLTextAreaElement;
-    expect(ta).toBeTruthy();
-    expect(ta.disabled).toBe(false); // the room IS the unguessable secret — live at once
+    const ed = container.querySelector('.edtype') as HTMLElement;
+    expect(ed).toBeTruthy();
+    expect(ed.getAttribute('contenteditable')).toBe('true'); // the room IS the secret — live at once
     await act(async () => root.unmount());
   });
 
   it('a password link first shows the password gate, not a live editor', async () => {
     const { root, container } = await mount({ salt: 'some-salt' });
     await flush();
-    // before the password is entered, the surface is the JoinGate, never a textarea
+    // before the password is entered, the surface is the JoinGate, never the editor
     expect(container.querySelector('input[type="password"]')).toBeTruthy();
-    expect(container.querySelector('textarea')).toBeNull();
+    expect(container.querySelector('.edtype')).toBeNull();
     await act(async () => root.unmount());
   });
 });
