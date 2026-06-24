@@ -23,6 +23,7 @@ import { deriveRoomId, syncReq } from '../web3/collabOps';
 import { CollabSession } from '../web3/collabSession';
 import { bindYText, textareaSurface } from '../web3/collabTextBinding';
 import { PresenceStack, type PresenceMember } from '../components/PresenceStack';
+import { CanvasEditRoom } from './CanvasEditRoom';
 import type { PresenceMsg } from '../../../chain/core/src/index.js';
 
 // The relay base mirrors presenceStore.backendWsUrl (a Vite env, default localhost).
@@ -57,7 +58,7 @@ export interface EditViewProps {
   opk?: string | null;
 }
 
-export function EditView({ room, salt, opk = null }: EditViewProps): ReactElement {
+export function EditView({ room, salt, editKind = 'note', opk = null }: EditViewProps): ReactElement {
   const [phase, setPhase] = useState<Phase>(() =>
     room ? { kind: 'live', room } : salt ? { kind: 'pw' } : { kind: 'error', message: 'This edit link is incomplete.' },
   );
@@ -107,6 +108,7 @@ export function EditView({ room, salt, opk = null }: EditViewProps): ReactElemen
   // real room — a wrong password lands in a different empty room silently, and a
   // second guest with the same wrong password is not enough (C4). A no-password
   // `?room=` link is the unguessable room itself, so it joins directly.
+  if (editKind === 'canvas') return <CanvasEditRoom room={phase.room} />;
   return <Room room={phase.room} requireOwner={room === null} opk={opk} />;
 }
 

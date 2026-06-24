@@ -1,0 +1,79 @@
+/* Wallet-free editable board (plan 2026-06-24 U8). The board fills the bleed
+   frame; a bottom-centered pill toolbar holds the tools (kit tokens, no invented
+   tints — mirrors the reader chrome, not a generic floating panel). */
+
+.ce-board {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle, var(--gray-200) 1px, transparent 1px) 0 0 / 22px 22px;
+  background-color: #fff;
+  touch-action: none;
+  cursor: default;
+}
+.ce-board[data-tool='select'] {
+  cursor: grab;
+}
+.ce-board[data-tool='draw'],
+.ce-board[data-tool='rect'],
+.ce-board[data-tool='ellipse'],
+.ce-board[data-tool='arrow'],
+.ce-board[data-tool='text'] {
+  cursor: crosshair;
+}
+
+.ce-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.ce-ink {
+  position: absolute;
+  overflow: visible;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+/* bottom-centered pill toolbar */
+.ce-toolbar {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  box-shadow: 0 6px 24px rgba(22, 24, 29, 0.12);
+}
+.ce-tool {
+  border: none;
+  background: transparent;
+  border-radius: 9px;
+  padding: 6px 11px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray-700, #4b5563);
+  cursor: pointer;
+  text-transform: capitalize;
+}
+.ce-tool:hover {
+  background: var(--gray-100);
+}
+.ce-tool.on {
+  background: var(--blue-100);
+  color: var(--blue-700);
+}
+.ce-del {
+  color: var(--red-500);
+}
+.ce-del:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
