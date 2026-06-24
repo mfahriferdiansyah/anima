@@ -1,0 +1,41 @@
+/* Avatar stack (plan 2026-06-24 U9). Overlapping colored circles, kit tokens only.
+   The owner circle is ringed; overflow collapses to a neutral "+N" chip. */
+
+.pstack {
+  display: inline-flex;
+  align-items: center;
+  flex-direction: row-reverse; /* so earlier members sit on top of later ones */
+}
+
+.pstack-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: #fff;
+  border: 2px solid var(--surface, #fff);
+  margin-left: -8px; /* overlap */
+  box-sizing: border-box;
+  user-select: none;
+}
+
+.pstack-dot:last-child {
+  margin-left: 0;
+}
+
+/* the verified owner — a distinct ring so guests know who controls persistence */
+.pstack-owner {
+  box-shadow: 0 0 0 2px var(--ink-900, #16181d);
+}
+
+/* the overflow chip — neutral gray, not a palette identity color */
+.pstack-more {
+  background: var(--gray-200);
+  color: var(--gray-700, #4b5563);
+}

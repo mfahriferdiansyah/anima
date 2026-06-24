@@ -22,6 +22,7 @@ import { parseMsg, serializeMsg } from '../mocks/presenceStore';
 import { deriveRoomId, syncReq } from '../web3/collabOps';
 import { CollabSession } from '../web3/collabSession';
 import { bindYText, textareaSurface } from '../web3/collabTextBinding';
+import { PresenceStack, type PresenceMember } from '../components/PresenceStack';
 import type { PresenceMsg } from '../../../chain/core/src/index.js';
 
 // The relay base mirrors presenceStore.backendWsUrl (a Vite env, default localhost).
@@ -154,6 +155,7 @@ function Room({ room }: { room: string }): ReactElement {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const idRef = useRef<{ id: string; label: string } | null>(null);
   if (!idRef.current) idRef.current = { id: freshSelfId(), label: freshSelfLabel() };
+  const [members, setMembers] = useState<PresenceMember[]>([]);
 
   useEffect(() => {
     const ta = taRef.current;
@@ -167,10 +169,23 @@ function Room({ room }: { room: string }): ReactElement {
     // back into the session. (The session is created with the socket send, so the
     // doc/awareness wiring and the relay share one path.)
     const session = new CollabSession({ send: sockSend, selfId });
+    // Announce our anonymous identity over awareness; render the avatar stack from
+    // the awareness states (who is in the room, MS-Docs style).
+    session.awareness.setLocalStateField('user', { id: selfId, label });
+    const refreshMembers = () => {
+      const seen: PresenceMember[] = [];
+      for (const state of session.awareness.getStates().values()) {
+        const user = (state as { user?: { id?: string; label?: string } }).user;
+        if (user?.id) seen.push({ id: user.id, label: user.label ?? 'Guest' });
+      }
+      setMembers(seen);
+    };
+    session.awareness.on('change', refreshMembers);
     ws.onopen = () => {
       sockSend({ t: 'hello', id: selfId, label, kind: 'human' });
-      session.start(); // announce our state vector
+      session.start(); // announce our state vector + awareness
       sockSend(syncReq(selfId)); // ask the owner / a present peer for the current doc
+      refreshMembers();
     };
     ws.onmessage = (e) => {
       const msg = typeof e.data === 'string' ? parseMsg(e.data) : null;
@@ -180,6 +195,7 @@ function Room({ room }: { room: string }): ReactElement {
     const unbind = bindYText(session.doc.getText('body'), textareaSurface(ta));
     return () => {
       unbind();
+      session.awareness.off('change', refreshMembers);
       try {
         if (ws.readyState === WebSocket.OPEN) ws.send(serializeMsg({ t: 'bye', id: selfId }));
       } catch {
@@ -193,7 +209,10 @@ function Room({ room }: { room: string }): ReactElement {
   return (
     <Frame state="edit" tag="Live edit">
       <div className="rd-editor">
-        <div className="sharenote rd-livenote">Edits are live. Changes save while the owner is here.</div>
+        <div className="rd-editor-top">
+          <div className="sharenote rd-livenote">Edits are live. Changes save while the owner is here.</div>
+          <PresenceStack members={members} />
+        </div>
         <textarea
           ref={taRef}
           className="rd-textarea"

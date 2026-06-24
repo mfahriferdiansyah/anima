@@ -373,6 +373,16 @@ a.btn {
 /* The live-edit notice reuses the app's neutral .sharenote (kit tokens) — no
    invented tints — and just needs reader spacing above the editor. */
 .rd-livenote {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+/* the live-edit header: the notice + the avatar stack of who's in the room */
+.rd-editor-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   margin-bottom: 14px;
 }
 

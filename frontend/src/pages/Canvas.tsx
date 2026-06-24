@@ -18,6 +18,8 @@ import {
 } from '@/hooks/usePresence';
 import type { Peer } from '@/hooks/usePresence';
 import { makeCanvasCollab, type CanvasCollab } from '@/canvas/canvasCollab';
+import { PresenceStack } from '@/components/PresenceStack';
+import { identityFor } from '@/web3/collabIdentity';
 import { scheduleAgentNote } from '@/hooks/useAgentTimeline';
 import { useVaultSession } from '@/hooks/useVaultSession';
 import {
@@ -157,9 +159,12 @@ function isBindableLinear(el: CanvasElement): el is BindableLinear {
 function PeerCursor({ peer }: { peer: Peer }) {
   const style = { transform: `translate(${peer.x}px, ${peer.y}px)` };
   if (peer.kind === 'human') {
+    // Deterministic per-peer color (the same identity as the avatar stack), so a
+    // cursor and its circle match. Falls back through the kit palette, no new hue.
+    const { color } = identityFor(peer.id);
     return (
       <div className="pgcv-cursor human" style={style} aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path fill="#FF4D8D" d="M5 3l14 7-6.5 1.5L9 18z" /></svg>
+        <svg viewBox="0 0 24 24"><path fill={color} d="M5 3l14 7-6.5 1.5L9 18z" /></svg>
         <span>{peer.label}</span>
       </div>
     );
@@ -1034,6 +1039,9 @@ export function Canvas() {
           </button>
         </span>
         <span className="sp" />
+        {isShared && peers.length > 0 ? (
+          <PresenceStack members={peers.map((p) => ({ id: p.id, label: p.label }))} />
+        ) : null}
         {isShared && connection !== 'live' ? (
           <span
             role="status"
