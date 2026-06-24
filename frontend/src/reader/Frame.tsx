@@ -23,6 +23,7 @@ export function Frame({
   state,
   tag = 'Shared with you',
   bleed = false,
+  headerExtra,
   children,
 }: {
   state: ReaderStateAttr;
@@ -30,6 +31,8 @@ export function Frame({
   tag?: string;
   /** Full-bleed content (no centered padding) — for the pannable board surface. */
   bleed?: boolean;
+  /** Optional content in the header, to the LEFT of the tag (e.g. the live avatar stack). */
+  headerExtra?: ReactNode;
   children: ReactNode;
 }): ReactElement {
   // `data-reader-state` lets a screenshot agent / the jsdom smoke read a verdict.
@@ -40,7 +43,10 @@ export function Frame({
         <a className="rd-top-brand" href="/" aria-label="Anima home">
           anima<i aria-hidden="true">✦</i>
         </a>
-        <span className="rd-top-tag">{tag}</span>
+        <span className="rd-top-right">
+          {headerExtra}
+          <span className="rd-top-tag">{tag}</span>
+        </span>
       </header>
       <main className={bleed ? 'rd-main rd-main-bleed' : 'rd-main'}>{children}</main>
       <a className="rd-orb" href="/" aria-label="Open Anima" title="Open Anima">

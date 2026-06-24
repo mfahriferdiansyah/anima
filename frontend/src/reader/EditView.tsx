@@ -58,9 +58,25 @@ export interface EditViewProps {
   editKind?: 'note' | 'canvas';
   /** the owner's agent public key (hex) — the guest's trust anchor for verifying the owner. */
   opk?: string | null;
+  /** the note header, baked into the link so the document chrome shows immediately. */
+  title?: string | null;
+  cover?: string | null;
+  updated?: string | null;
+  rev?: string | null;
+  sealed?: string | null;
 }
 
-export function EditView({ room, salt, editKind = 'note', opk = null }: EditViewProps): ReactElement {
+export function EditView({
+  room,
+  salt,
+  editKind = 'note',
+  opk = null,
+  title = null,
+  cover = null,
+  updated = null,
+  rev = null,
+  sealed = null,
+}: EditViewProps): ReactElement {
   const [phase, setPhase] = useState<Phase>(() =>
     room ? { kind: 'live', room } : salt ? { kind: 'pw' } : { kind: 'error', message: 'This edit link is incomplete.' },
   );
@@ -106,12 +122,14 @@ export function EditView({ room, salt, editKind = 'note', opk = null }: EditView
     );
   }
 
-  // A password-derived room MUST see a verified owner before it is trusted as the
-  // real room — a wrong password lands in a different empty room silently, and a
-  // second guest with the same wrong password is not enough (C4). A no-password
-  // `?room=` link is the unguessable room itself, so it joins directly.
   if (editKind === 'canvas') return <CanvasEditRoom room={phase.room} />;
-  return <Room room={phase.room} requireOwner={room === null} opk={opk} />;
+  return (
+    <Room
+      room={phase.room}
+      opk={opk}
+      meta={{ title, cover, updated, rev, sealed }}
+    />
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -156,35 +174,47 @@ function JoinGate({ onPassword }: { onPassword: (pw: string) => void }): ReactEl
 }
 
 // ---------------------------------------------------------------------------
-// The live room — a Yjs-bound textarea over the relay (concurrent typing).
+// The live room — a Yjs-bound contenteditable over the relay (concurrent typing).
+// Editing is NEVER blocked on owner presence: a guest can always type; the durable
+// save just happens while the owner is present (an honest, non-blocking notice).
 // ---------------------------------------------------------------------------
 
-/** How long a password room waits to see a confirming peer before flagging it as a likely-wrong-password phantom room. */
-const JOIN_WINDOW_MS = 8000;
+type Conn = 'connecting' | 'live' | 'lost' | 'full';
 
-type JoinState = 'joining' | 'live' | 'unverified' | 'lost' | 'full';
+interface DocMeta {
+  title: string;
+  cover: string | null;
+  updated: string;
+  rev: string;
+  sealed: string;
+}
 
-function Room({ room, requireOwner }: { room: string; requireOwner: boolean; opk: string | null }): ReactElement {
-  // `opk` (owner trust anchor) is consumed by the owner-signature gate in U5/U11;
-  // the U10 gate here confirms the real room by a present peer before going live.
-  // The body is the SAME contenteditable `.edtype` the in-app NoteEditor uses, so a
-  // shared edit looks exactly like the real editor — not a generic textarea.
+function Room({
+  room,
+  meta,
+}: {
+  room: string;
+  opk: string | null;
+  meta: { title: string | null; cover: string | null; updated: string | null; rev: string | null; sealed: string | null };
+}): ReactElement {
+  // The body is the SAME contenteditable `.edtype` the in-app NoteEditor uses, and
+  // the same title + props (updated / sealed) + divider chrome, so a shared edit
+  // looks EXACTLY like the real editor.
   const taRef = useRef<HTMLDivElement>(null);
   const idRef = useRef<{ id: string; label: string } | null>(null);
   if (!idRef.current) idRef.current = { id: freshSelfId(), label: freshSelfLabel() };
   const [members, setMembers] = useState<PresenceMember[]>([]);
   const [saveSignal, setSaveSignal] = useState<GuestSaveSignal>('not-started');
-  // The shared document header (title + a preset-safe cover), adopted from the
-  // owner's awareness so the guest's edit page matches the in-app editor.
-  const [docMeta, setDocMeta] = useState<{ title: string; cover: string | null }>({ title: '', cover: null });
-  // The interactive-readiness of the editor:
-  //  - 'joining'  : password room, waiting to confirm we reached the real room.
-  //  - 'live'     : interactive (a no-password room is live immediately; a password
-  //                 room becomes live once a peer/owner is confirmed present).
-  //  - 'unverified': password room, no peer confirmed within the window — likely a
-  //                  wrong password (a phantom empty room). NOT interactive.
-  //  - 'lost'/'full': the socket dropped / the room is at capacity. NOT interactive.
-  const [join, setJoin] = useState<JoinState>(requireOwner ? 'joining' : 'live');
+  const [conn, setConn] = useState<Conn>('connecting');
+  // The document header shows IMMEDIATELY from the link; a live owner can refine it
+  // via awareness, but it never waits for the owner.
+  const [docMeta, setDocMeta] = useState<DocMeta>(() => ({
+    title: meta.title ?? '',
+    cover: presetCover(meta.cover ?? undefined),
+    updated: meta.updated ?? '',
+    rev: meta.rev ?? '',
+    sealed: meta.sealed ?? '',
+  }));
 
   useEffect(() => {
     const ta = taRef.current;
@@ -197,19 +227,11 @@ function Room({ room, requireOwner }: { room: string; requireOwner: boolean; opk
     const session = new CollabSession({ send: sockSend, selfId });
     session.awareness.setLocalStateField('user', { id: selfId, label });
 
-    // Confirm we reached the REAL room: a password room must see at least one OTHER
-    // peer (ideally the owner) before it is interactive — a wrong password lands in
-    // a different, empty room where typing would be silently lost. Two guests with
-    // the same wrong password would both see only each other; we still treat seeing
-    // a peer as "joined" but keep the honest "saves while the owner's here" signal,
-    // and gate on a verified owner once one is present.
-    let confirmTimer: ReturnType<typeof setTimeout> | null = null;
     let ownerEverPresent = false;
     const refresh = () => {
       const seen: PresenceMember[] = [];
-      let otherPeer = false;
       const states: { user?: { owner?: boolean }; seal?: string }[] = [];
-      for (const [client, state] of session.awareness.getStates()) {
+      for (const [, state] of session.awareness.getStates()) {
         const s = state as {
           user?: { id?: string; label?: string; owner?: boolean };
           seal?: string;
@@ -218,42 +240,35 @@ function Room({ room, requireOwner }: { room: string; requireOwner: boolean; opk
         if (s.user?.id) seen.push({ id: s.user.id, label: s.user.label ?? 'Guest', isOwner: s.user.owner });
         if (s.user?.owner) {
           ownerEverPresent = true;
-          // adopt the owner's shared document header (title + preset-safe cover)
-          if (s.doc) setDocMeta({ title: s.doc.title ?? '', cover: presetCover(s.doc.cover) });
+          // a live owner can refine the header (e.g. a title typed after sharing)
+          if (s.doc) setDocMeta((m) => ({ ...m, title: s.doc!.title ?? m.title, cover: presetCover(s.doc!.cover) ?? m.cover }));
         }
-        if (client !== session.doc.clientID) otherPeer = true;
         states.push(s);
       }
       setMembers(seen);
       setSaveSignal(guestSaveSignal(states, ownerEverPresent));
-      if (requireOwner && otherPeer) setJoin('live'); // a peer confirms the room is real
     };
     session.awareness.on('change', refresh);
 
     ws.onopen = () => {
+      setConn('live');
       sockSend({ t: 'hello', id: selfId, label, kind: 'human' });
       session.start();
       sockSend(syncReq(selfId));
       refresh();
-      if (requireOwner) {
-        // No confirming peer within the window → likely a wrong password.
-        confirmTimer = setTimeout(() => setJoin((j) => (j === 'joining' ? 'unverified' : j)), JOIN_WINDOW_MS);
-      }
     };
     ws.onmessage = (e) => {
       const msg = typeof e.data === 'string' ? parseMsg(e.data) : null;
       if (msg) session.onFrame(msg);
     };
     ws.onclose = (e) => {
-      // 1008 = room full (terminal); anything else mid-session = a drop. The bye
-      // we send on intentional unmount also lands here; React has already torn the
-      // textarea down by then, so the state set is harmless.
-      setJoin(e?.code === 1008 ? 'full' : 'lost');
+      // 1008 = room full (terminal); any other mid-session close = a drop. The bye
+      // we send on intentional unmount also lands here, harmlessly post-teardown.
+      setConn(e?.code === 1008 ? 'full' : 'lost');
     };
 
     const unbind = bindYText(session.doc.getText('body'), contentEditableSurface(ta));
     return () => {
-      if (confirmTimer) clearTimeout(confirmTimer);
       unbind();
       session.awareness.off('change', refresh);
       try {
@@ -264,12 +279,13 @@ function Room({ room, requireOwner }: { room: string; requireOwner: boolean; opk
       session.destroy();
       ws.close();
     };
-  }, [room, requireOwner]);
+  }, [room]);
 
-  // Terminal states render an honest surface, not a live-looking dead editor.
-  if (join === 'full') {
+  // A full room is the one terminal state (no point editing into a void); a drop is
+  // recoverable so the editor stays usable, just flagged.
+  if (conn === 'full') {
     return (
-      <Frame state="not-found" tag="Live edit">
+      <Frame state="not-found" tag="LIVE EDIT">
         <div className="rd-center">
           <div className="rd-card">
             <h2>This room is full</h2>
@@ -279,37 +295,28 @@ function Room({ room, requireOwner }: { room: string; requireOwner: boolean; opk
       </Frame>
     );
   }
-  if (join === 'unverified') {
-    return (
-      <Frame state="wrong-password" tag="Live edit">
-        <div className="rd-center">
-          <div className="rd-card">
-            <h2>Couldn’t join this edit</h2>
-            <p>No one else is in this room. Check the password with the person who shared it.</p>
-          </div>
-        </div>
-      </Frame>
-    );
-  }
 
-  const interactive = join === 'live';
+  // The honest, NON-BLOCKING status — a running-text banner. Editing is always on.
+  const statusText =
+    conn === 'lost'
+      ? 'Connection lost — reconnect to keep editing.'
+      : conn === 'connecting'
+        ? 'Connecting to the shared edit…'
+        : guestSaveText(saveSignal);
+
   return (
-    <Frame state="edit" tag="Live edit">
-      {/* the live status + avatar stack, on a quiet bar above the document */}
-      <div className="rd-livebar">
-        <div className={saveSignal === 'owner-cant-save' ? 'sharenote rd-livenote rd-cantsave' : 'sharenote rd-livenote'}>
-          {join === 'lost'
-            ? 'Connection lost — reconnect to keep editing.'
-            : join === 'joining'
-              ? 'Joining the shared edit…'
-              : guestSaveText(saveSignal)}
+    <Frame state="edit" tag="LIVE EDIT" headerExtra={<PresenceStack members={members} />}>
+      {/* a running-text status banner (marquee) — informational, never blocks editing */}
+      <div className={saveSignal === 'owner-cant-save' ? 'rd-marquee rd-marquee-warn' : 'rd-marquee'} role="status">
+        <div className="rd-marquee-track">
+          <span>{statusText}</span>
+          <span aria-hidden="true">{statusText}</span>
         </div>
-        <PresenceStack members={members} />
       </div>
-      {/* the body is the EXACT in-app editor surface: the cover banner + a centered
-          .pgcol column with the title and the .edtype contentEditable (kit.css),
-          bound to the shared Y.Text (U3). The cover is preset-allowlisted; a sealed
-          cover the wallet-free reader can't resolve simply doesn't render. */}
+      {/* the EXACT in-app editor surface: the cover banner + a centered .pgcol column
+          with the title and the .edtype contentEditable (kit.css), bound to the
+          shared Y.Text (U3). The cover is preset-allowlisted; a sealed cover the
+          wallet-free reader can't resolve simply doesn't render. */}
       <div className="pged-scroll">
         {docMeta.cover ? (
           <div className="pgbanner-wrap">
@@ -319,16 +326,41 @@ function Room({ room, requireOwner }: { room: string; requireOwner: boolean; opk
           </div>
         ) : null}
         <div className={docMeta.cover ? 'pgcol haz' : 'pgcol'}>
-          {docMeta.title ? <h1 className="pgtitle">{docMeta.title}</h1> : null}
+          <h1 className="pgtitle">{docMeta.title || 'Untitled'}</h1>
+          {/* the same props block + bottom divider as the in-app editor */}
+          {docMeta.updated || docMeta.sealed ? (
+            <div className="props">
+              {docMeta.updated ? (
+                <div className="proprow">
+                  <span className="pk">updated</span>
+                  <span className="pv">
+                    <span className="mono">{docMeta.updated}</span>
+                  </span>
+                </div>
+              ) : null}
+              {docMeta.sealed || docMeta.rev ? (
+                <div className="proprow">
+                  <span className="pk">sealed</span>
+                  <span className="pv">
+                    <span className="mono">
+                      <span style={{ color: 'var(--teal-500)' }} aria-hidden="true">✦</span>
+                      {docMeta.rev ? ` rev ${docMeta.rev}` : ''}
+                      {docMeta.sealed ? ` · ${docMeta.sealed}` : ''}
+                    </span>
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <div
             ref={taRef}
-            className="edtype"
-            contentEditable={interactive}
+            className="edtype edcontent"
+            contentEditable
             suppressContentEditableWarning
             spellCheck={false}
             role="textbox"
             aria-label="Shared note"
-            data-ph={interactive ? 'Write your note…' : ''}
+            data-ph="Write your note…"
           />
         </div>
       </div>

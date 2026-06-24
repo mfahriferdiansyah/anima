@@ -112,9 +112,9 @@ describe('EditView — wallet-free Yjs note surface', () => {
     await flush();
     const ed = editor(container);
     expect(ed).toBeTruthy();
-    expect(ed.getAttribute('contenteditable')).toBe('true'); // interactive, not disabled
-    // the live notice uses the neutral .sharenote (kit), not an invented tint
-    expect(container.querySelector('.sharenote')).toBeTruthy();
+    expect(ed.getAttribute('contenteditable')).toBe('true'); // always editable, never blocked on the owner
+    // the running-text status banner is present (informational, non-blocking)
+    expect(container.querySelector('.rd-marquee')).toBeTruthy();
     // no "connect wallet" / "sign in" affordance on the guest surface
     expect(container.textContent).not.toMatch(/connect|sign in|wallet/i);
     await act(async () => root.unmount());

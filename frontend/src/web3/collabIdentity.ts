@@ -21,8 +21,10 @@ import { b64ToBytes, bytesToB64 } from './collabOps';
  */
 export const IDENTITY_COLORS = ['var(--blue-600)', 'var(--orange-500)', 'var(--pink-500)', 'var(--teal-500)', 'var(--red-500)'];
 
-/** The glyph alphabet — uppercase + digits, an unambiguous 2-char tag. */
-const GLYPH_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1 (look-alikes)
+/** Glyph letters (no I/O look-alikes). The FIRST char is always a letter so a tag
+ *  never reads as a number/count (e.g. "98"); the second adds digits for variety. */
+const GLYPH_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const GLYPH_SECOND = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/1 look-alikes
 
 /** A small, stable, non-cryptographic hash of a string → unsigned 32-bit int. */
 function hashId(id: string): number {
@@ -43,8 +45,8 @@ export interface CollabIdentity {
 export function identityFor(peerId: string): CollabIdentity {
   const h = hashId(peerId);
   const color = IDENTITY_COLORS[h % IDENTITY_COLORS.length];
-  const a = GLYPH_ALPHABET[(h >>> 3) % GLYPH_ALPHABET.length];
-  const b = GLYPH_ALPHABET[(h >>> 8) % GLYPH_ALPHABET.length];
+  const a = GLYPH_LETTERS[(h >>> 3) % GLYPH_LETTERS.length]; // always a letter
+  const b = GLYPH_SECOND[(h >>> 8) % GLYPH_SECOND.length];
   return { color, glyph: `${a}${b}` };
 }
 

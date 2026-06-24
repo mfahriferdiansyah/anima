@@ -91,13 +91,18 @@ describe('parseRoute', () => {
     expect(parseRoute('?b=BLOB&locked=1', '')).toEqual({ mode: 'view', blobId: 'BLOB', locked: true });
   });
   it('?room= and ?salt=&edit=1 → edit (default note kind, no opk); they exclude ?b=', () => {
-    expect(parseRoute('?room=R', '')).toEqual({ mode: 'edit', room: 'R', salt: null, editKind: 'note', opk: null });
-    expect(parseRoute('?salt=S&edit=1', '')).toEqual({ mode: 'edit', room: null, salt: 'S', editKind: 'note', opk: null });
+    expect(parseRoute('?room=R', '')).toEqual({ mode: 'edit', room: 'R', salt: null, editKind: 'note', opk: null, title: null, cover: null, updated: null, rev: null, sealed: null });
+    expect(parseRoute('?salt=S&edit=1', '')).toEqual({ mode: 'edit', room: null, salt: 'S', editKind: 'note', opk: null, title: null, cover: null, updated: null, rev: null, sealed: null });
   });
   it('?kind=canvas routes the edit link to the board; ?opk carries the owner trust anchor', () => {
-    expect(parseRoute('?room=R&kind=canvas', '')).toEqual({ mode: 'edit', room: 'R', salt: null, editKind: 'canvas', opk: null });
-    expect(parseRoute('?room=R&opk=deadbeef', '')).toEqual({ mode: 'edit', room: 'R', salt: null, editKind: 'note', opk: 'deadbeef' });
-    expect(parseRoute('?salt=S&edit=1&kind=canvas&opk=0102', '')).toEqual({ mode: 'edit', room: null, salt: 'S', editKind: 'canvas', opk: '0102' });
+    expect(parseRoute('?room=R&kind=canvas', '')).toEqual({ mode: 'edit', room: 'R', salt: null, editKind: 'canvas', opk: null, title: null, cover: null, updated: null, rev: null, sealed: null });
+    expect(parseRoute('?room=R&opk=deadbeef', '')).toEqual({ mode: 'edit', room: 'R', salt: null, editKind: 'note', opk: 'deadbeef', title: null, cover: null, updated: null, rev: null, sealed: null });
+    expect(parseRoute('?salt=S&edit=1&kind=canvas&opk=0102', '')).toEqual({ mode: 'edit', room: null, salt: 'S', editKind: 'canvas', opk: '0102', title: null, cover: null, updated: null, rev: null, sealed: null });
+  });
+  it('?t= and ?cv= bake the document header (title + cover) into the link', () => {
+    expect(parseRoute('?room=R&t=My%20Note&cv=%2Fcovers%2Forbit.svg', '')).toEqual({
+      mode: 'edit', room: 'R', salt: null, editKind: 'note', opk: null, title: 'My Note', cover: '/covers/orbit.svg', updated: null, rev: null, sealed: null,
+    });
   });
   it('?fixture=1 or #fixture → the no-network fixture', () => {
     expect(parseRoute('?fixture=1', '')).toEqual({ mode: 'fixture' });
