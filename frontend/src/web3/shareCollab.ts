@@ -1,29 +1,29 @@
 /**
- * Owner-side anonymous-collab wiring (plan 008 AE4 / R27). The reader's EditView
- * gives GUESTS a live multiplayer editor; this is the OWNER's counterpart: while
- * an edit share is active for the open note, the owner client joins the same
- * relay room, is the allowlisted writer, and turns inbound guest edits into
- * sealed, wallet-owned snapshots (the durable artifact of an anonymous session,
- * never produced by the keyless backend).
+ * Owner-side note co-edit (plan 2026-06-24 U5) — the OWNER's counterpart to the
+ * guest editor (reader/EditView, U4). While an `edit` share is active for the open
+ * note, the owner joins the same relay room as the AUTHORITATIVE Yjs sync responder
+ * and the SINGLE durable sealer.
  *
- * The persist path doubles as the apply path: an inbound guest `note-op` is
- * debounce-persisted via `persistGuestSnapshot`, which upserts the vault index,
- * which re-renders the editor with the guest's body. So we never push remote text
- * into the block editor's internal state mid-edit (a fragile live two-way sync);
- * the owner sees a guest edit once it lands as a real sealed version, attributed
- * to the guest label. The owner's own edits are broadcast to guests so the loop
- * closes, with a guard so a just-persisted guest body is not echoed back.
+ * It speaks the same CRDT as the guest (CollabSession / y-sync, U2) — the plan-008
+ * whole-body LWW `makeOwnerCollab` is replaced, since a guest now speaks Yjs and the
+ * two must interoperate. The owner's Y.Text is seeded from the durable note body and
+ * its updates flatten-to-markdown and seal on room-wide idle (sealOnIdle, U5),
+ * cross-tab single-sealer-elected via the Web Locks lease (ownerLock, U5). The seal
+ * is a PURE read of the Y.Text → the existing sealed write path, so it cannot loop.
  *
- * Concurrency is last-write-wins per note (no CRDT, disclosed). The relay drops
- * frames and never replays, so a snapshot is the owner's observed state (KTD3).
+ * Custody is unchanged: only the owner's device seals; guests are live-only.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useShare } from '../hooks/useShare';
 import { persistGuestSnapshot } from '../hooks/useVault';
 import { vaultData } from './vaultData';
 import { serializeMsg, parseMsg } from '../mocks/presenceStore';
-import { deriveRoomId, noteOp } from './collabOps';
-import { makeCollabPersister, type CollabPersister } from './collabPersist';
+import { deriveRoomId, syncReq } from './collabOps';
+import { CollabSession } from './collabSession';
+import { bindYText, contentEditableSurface } from './collabTextBinding';
+import { makeSealController } from './sealOnIdle';
+import { acquireSealLease } from './ownerLock';
+import { isInsufficientFunds } from './session';
 import type { PresenceMsg } from '../../../chain/core/src/index.js';
 
 /** The relay URL for a share room (mirrors EditView): rooms key on an unguessable id. */
@@ -33,69 +33,28 @@ function relayUrl(room: string): string {
   return `${ws}/presence?room=${encodeURIComponent(room)}`;
 }
 
-// ---------------------------------------------------------------------------
-// Pure controller — node-testable (injected send + persister).
-// ---------------------------------------------------------------------------
-
-export interface OwnerCollab {
-  /** An inbound relay frame. */
-  onFrame(msg: PresenceMsg): void;
-  /** The owner's note body changed locally (read from the vault index). */
-  onOwnerBody(body: string): void;
+export interface ShareCollabState {
   /** How many guests are currently in the room. */
-  guestCount(): number;
-  dispose(): void;
+  guestCount: number;
+  /** True while the owner is connected to the live room. */
+  live: boolean;
+  /** True while a durable seal is in flight (drives the saving/saved UI). */
+  saving: boolean;
+  /** Set when the last seal failed because the agent is out of funds (drives the funds notice + the guest signal, U11). */
+  needsFunds: boolean;
 }
-
-export function makeOwnerCollab(opts: {
-  noteId: string;
-  selfId: string;
-  send: (msg: PresenceMsg) => void;
-  persister: CollabPersister;
-}): OwnerCollab {
-  const { noteId, selfId, send, persister } = opts;
-  const labels = new Map<string, string>(); // guest id -> label
-  let suppress: string | null = null; // a guest body just handed to the persister; do not echo it
-
-  return {
-    onFrame(msg) {
-      if (msg.t === 'hello' && msg.id !== selfId) {
-        labels.set(msg.id, msg.label || 'Guest');
-      } else if (msg.t === 'bye') {
-        labels.delete(msg.id);
-      } else if (msg.t === 'note-op' && msg.id !== selfId) {
-        // a guest edit: remember it (so the persist-driven index change does not
-        // bounce back out), then debounce-persist a sealed snapshot attributed to
-        // the guest. The owner being present is what makes this persist (AE4).
-        suppress = msg.body;
-        persister.onGuestEdit(noteId, msg.body, labels.get(msg.id) ?? 'Guest');
-      }
-    },
-    onOwnerBody(body) {
-      if (body === suppress) {
-        suppress = null; // this change came from a guest op we persisted; do not re-broadcast
-        return;
-      }
-      send(noteOp(selfId, noteId, body));
-    },
-    guestCount: () => labels.size,
-    dispose() {
-      labels.clear();
-    },
-  };
-}
-
-// ---------------------------------------------------------------------------
-// The hook — connects the owner to the active edit-share room.
-// ---------------------------------------------------------------------------
 
 /**
- * While an `edit` share is active for `noteId`, keep the owner connected to its
- * relay room as the allowlisted writer (persisting guest edits as sealed
- * snapshots, broadcasting the owner's edits). A no-op when there is no active
- * edit share. Returns the live-guest count + connection state for a small UI hint.
+ * While an `edit` share is active for `noteId`, keep the owner connected as the
+ * authoritative Yjs responder + single sealer. A no-op when there is no active
+ * edit share. Optionally binds the editor's contenteditable surface to the live
+ * Y.Text so the owner types into the same CRDT as the guests.
+ *
+ * @param noteId the open note
+ * @param editorRef a ref to the in-app editor's source-mode contenteditable (optional;
+ *        when present the owner's typing drives the shared Y.Text directly)
  */
-export function useShareCollab(noteId: string): { guestCount: number; live: boolean } {
+export function useShareCollab(noteId: string, editorRef?: React.RefObject<HTMLElement | null>): ShareCollabState {
   const { links } = useShare();
   const link = links.find((l) => l.noteId === noteId && l.access === 'edit') ?? null;
   const linkRoomId = link?.roomId ?? null;
@@ -105,20 +64,19 @@ export function useShareCollab(noteId: string): { guestCount: number; live: bool
   const [room, setRoom] = useState<string | null>(null);
   const [guestCount, setGuestCount] = useState(0);
   const [live, setLive] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [needsFunds, setNeedsFunds] = useState(false);
+  // A stable owner id across reconnects (no ghost owners). Derived once per mount;
+  // the cross-tab single-sealer is the Web Locks lease, not this id.
+  const selfIdRef = useRef<string | null>(null);
+  if (!selfIdRef.current) selfIdRef.current = `own-${Math.random().toString(36).slice(2, 10)}`;
 
-  // resolve the room id: a plain id for a no-password edit link, or the
-  // PBKDF2(password, salt) derivation the owner can compute (it set the password).
+  // Resolve the room id: a plain id for a no-password edit link, or PBKDF2(password, salt).
   useEffect(() => {
     let cancelled = false;
-    if (linkRoomId) {
-      setRoom(linkRoomId);
-    } else if (linkSalt && linkPassword) {
-      void deriveRoomId(linkPassword, linkSalt).then((id) => {
-        if (!cancelled) setRoom(id);
-      });
-    } else {
-      setRoom(null);
-    }
+    if (linkRoomId) setRoom(linkRoomId);
+    else if (linkSalt && linkPassword) void deriveRoomId(linkPassword, linkSalt).then((id) => !cancelled && setRoom(id));
+    else setRoom(null);
     return () => {
       cancelled = true;
     };
@@ -130,58 +88,89 @@ export function useShareCollab(noteId: string): { guestCount: number; live: bool
       setGuestCount(0);
       return;
     }
-    const selfId = `own-${Math.random().toString(36).slice(2, 10)}`;
+    const selfId = selfIdRef.current!;
     const ws = new WebSocket(relayUrl(room));
-    const persister = makeCollabPersister({
-      persistSnapshot: (id, body, label) => persistGuestSnapshot(id, body, label),
-    });
-    const collab = makeOwnerCollab({
-      noteId,
-      selfId,
-      send: (m) => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(serializeMsg(m));
-      },
-      persister,
-    });
+    const sockSend = (msg: PresenceMsg) => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(serializeMsg(msg));
+    };
+    const session = new CollabSession({ send: sockSend, selfId });
+    session.authoritative = true; // the owner answers a guest's sync-req with the current doc
+    const yText = session.doc.getText('body');
 
-    let lastBody = vaultData.getSnapshot().index?.get(noteId)?.note.body ?? '';
+    // Seed the CRDT from the durable note body (the owner brings the saved state).
+    const seedBody = vaultData.getSnapshot().index?.get(noteId)?.note.body ?? '';
+    if (seedBody) yText.insert(0, seedBody);
+
+    // Cross-tab single-sealer: exactly one owner tab seals (Web Locks; auto-released
+    // on tab death). A non-leader tab observes and never seals.
+    const lease = acquireSealLease(room);
+
+    // Seal on room-wide idle: flatten the Y.Text to markdown and persist it via the
+    // existing sealed write path (attributed to the live session). A PURE read — it
+    // never mutates the doc, so it cannot loop.
+    const seal = makeSealController({
+      readBody: () => yText.toString(),
+      seal: async (body) => {
+        if (!lease.isHeld()) return; // only the elected sealer writes
+        try {
+          await persistGuestSnapshot(noteId, body, 'Live edit');
+          setNeedsFunds(false);
+        } catch (e) {
+          if (isInsufficientFunds(e)) setNeedsFunds(true);
+          throw e;
+        }
+      },
+      onSealingChange: setSaving,
+      onError: () => {
+        /* surfaced via needsFunds / the saving state */
+      },
+    });
+    session.doc.on('update', seal.bump);
+
+    // Bind the in-app editor's contenteditable to the shared Y.Text (if provided),
+    // so the owner types into the same CRDT as the guests.
+    let unbind: (() => void) | null = null;
+    const el = editorRef?.current;
+    if (el) unbind = bindYText(yText, contentEditableSurface(el));
+
+    const refreshGuests = () => {
+      let n = 0;
+      for (const client of session.awareness.getStates().keys()) if (client !== session.doc.clientID) n++;
+      setGuestCount(n);
+    };
+    session.awareness.on('change', refreshGuests);
+    session.awareness.setLocalStateField('user', { id: selfId, label: 'Owner', owner: true });
 
     ws.onopen = () => {
-      ws.send(serializeMsg({ t: 'hello', id: selfId, label: 'Owner', kind: 'human' }));
-      persister.setWriterPresent(true); // the owner is the allowlisted writer
+      sockSend({ t: 'hello', id: selfId, label: 'Owner', kind: 'human' });
+      session.start();
+      sockSend(syncReq(selfId));
       setLive(true);
-      collab.onOwnerBody(lastBody); // seed late guests with the current body
     };
     ws.onmessage = (e) => {
       const msg = typeof e.data === 'string' ? parseMsg(e.data) : null;
-      if (!msg) return;
-      collab.onFrame(msg);
-      setGuestCount(collab.guestCount());
+      if (msg) session.onFrame(msg);
     };
     ws.onclose = () => setLive(false);
 
-    // the owner's local edits (any change to this note's body in the index) → guests
-    const unsub = vaultData.subscribe(() => {
-      const b = vaultData.getSnapshot().index?.get(noteId)?.note.body ?? '';
-      if (b !== lastBody) {
-        lastBody = b;
-        collab.onOwnerBody(b);
-      }
-    });
-
     return () => {
-      unsub();
-      persister.setWriterPresent(false);
-      persister.dispose();
-      collab.dispose();
+      // Share end: flush any un-settled edits BEFORE tearing down, so no burst is
+      // stranded between the live seal and the manual Save.
+      seal.flushNow();
+      unbind?.();
+      session.awareness.off('change', refreshGuests);
+      session.doc.off('update', seal.bump);
+      seal.dispose();
+      lease.release();
       try {
         if (ws.readyState === WebSocket.OPEN) ws.send(serializeMsg({ t: 'bye', id: selfId }));
       } catch {
         /* closing anyway */
       }
+      session.destroy();
       ws.close();
     };
-  }, [room, noteId]);
+  }, [room, noteId, editorRef]);
 
-  return { guestCount, live };
+  return { guestCount, live, saving, needsFunds };
 }
