@@ -46,14 +46,19 @@ function pointer(el: Element, type: string, x: number, y: number) {
   el.dispatchEvent(ev);
 }
 
+/** Find a toolbar button by its aria-label (the toolbar is icon-based, like the app). */
+const toolBtn = (c: HTMLElement, label: string) =>
+  [...c.querySelectorAll('.pgcv-tools button')].find((b) => b.getAttribute('aria-label') === label) as HTMLButtonElement;
+
 describe('CanvasEdit — wallet-free editable board', () => {
-  it('mounts a board with a toolbar and no wallet/connect prompt (AE9)', () => {
+  it('mounts a board with the in-app icon toolbar and no wallet/connect prompt (AE9)', () => {
     const { container, root } = mount();
     expect(container.querySelector('.ce-board')).toBeTruthy();
-    expect(container.querySelector('.ce-toolbar')).toBeTruthy();
-    // the tool grammar is present
-    const tools = [...container.querySelectorAll('.ce-tool')].map((b) => b.textContent);
-    expect(tools).toEqual(expect.arrayContaining(['select', 'draw', 'rect', 'ellipse', 'arrow', 'text', 'delete']));
+    // reuses the in-app .pgcv-tools toolbar (icons), not a text strip
+    expect(container.querySelector('.pgcv-tools')).toBeTruthy();
+    for (const label of ['Select', 'Pan', 'Draw', 'Arrow', 'Rectangle', 'Ellipse', 'Text', 'Delete selection']) {
+      expect(toolBtn(container, label)).toBeTruthy();
+    }
     // wallet-free: no connect/sign affordance
     expect(container.textContent).not.toMatch(/connect|sign in|wallet/i);
     act(() => root.unmount());
@@ -64,9 +69,7 @@ describe('CanvasEdit — wallet-free editable board', () => {
     const { container, root } = mount((el) => (edited = el));
     const board = container.querySelector('.ce-board')!;
 
-    // choose the rect tool
-    const rectBtn = [...container.querySelectorAll('.ce-tool')].find((b) => b.textContent === 'rect')!;
-    act(() => (rectBtn as HTMLButtonElement).click());
+    act(() => toolBtn(container, 'Rectangle').click());
 
     // drag from (100,100) to (180,160)
     act(() => {
@@ -86,8 +89,7 @@ describe('CanvasEdit — wallet-free editable board', () => {
     let edited: CanvasElement | null = null;
     const { container, root } = mount((el) => (edited = el));
     const board = container.querySelector('.ce-board')!;
-    const textBtn = [...container.querySelectorAll('.ce-tool')].find((b) => b.textContent === 'text')!;
-    act(() => (textBtn as HTMLButtonElement).click());
+    act(() => toolBtn(container, 'Text').click());
     act(() => pointer(board, 'pointerdown', 50, 50));
     expect(container.querySelector('.cv-text')).toBeTruthy();
     expect(edited!.type).toBe('text');
@@ -96,8 +98,7 @@ describe('CanvasEdit — wallet-free editable board', () => {
 
   it('delete is disabled with nothing selected', () => {
     const { container, root } = mount();
-    const del = [...container.querySelectorAll('.ce-tool')].find((b) => b.textContent === 'delete') as HTMLButtonElement;
-    expect(del.disabled).toBe(true);
+    expect(toolBtn(container, 'Delete selection').disabled).toBe(true);
     act(() => root.unmount());
   });
 });

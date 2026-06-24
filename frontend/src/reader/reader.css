@@ -460,11 +460,11 @@ a.btn {
   overflow: hidden;
   white-space: nowrap;
   padding: 9px 0;
-  box-shadow: 0 1px 0 var(--gray-200);
+  box-shadow: 0 -1px 0 var(--gray-200), 0 1px 0 var(--gray-200); /* top + bottom hairline */
 }
 .rd-marquee-warn {
   background: #fff4e5;
-  box-shadow: 0 1px 0 rgba(180, 35, 31, 0.16);
+  box-shadow: 0 -1px 0 rgba(180, 35, 31, 0.16), 0 1px 0 rgba(180, 35, 31, 0.16);
 }
 .rd-marquee-track {
   display: inline-block;

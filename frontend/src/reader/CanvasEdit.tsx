@@ -18,6 +18,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
   type ReactElement,
+  type ReactNode,
 } from 'react';
 import {
   commonBounds,
@@ -33,11 +34,31 @@ import { Frame } from './Frame';
 import './canvas-edit.css';
 
 const INK = '#16181D';
-type Tool = 'select' | 'draw' | 'rect' | 'ellipse' | 'arrow' | 'text';
+type Tool = 'select' | 'hand' | 'draw' | 'arrow' | 'rect' | 'ellipse' | 'text';
 interface Pt {
   x: number;
   y: number;
 }
+
+/** The same icon wrapper the in-app Canvas toolbar uses. */
+function ToolIcon({ children }: { children: ReactNode }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {children}
+    </svg>
+  );
+}
+
+/** Tool set + icons mirrored from the in-app Canvas (pages/Canvas.tsx TOOLS). */
+const TOOLS: Array<{ id: Tool; label: string; icon: ReactNode }> = [
+  { id: 'select', label: 'Select', icon: <ToolIcon><path d="M5 3l14 7-6.5 1.5L9 18z" /></ToolIcon> },
+  { id: 'hand', label: 'Pan', icon: <ToolIcon><path d="M18 11V6a2 2 0 0 0-4 0v5" /><path d="M14 10V4a2 2 0 0 0-4 0v6" /><path d="M10 10.5V6a2 2 0 0 0-4 0v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" /></ToolIcon> },
+  { id: 'draw', label: 'Draw', icon: <ToolIcon><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></ToolIcon> },
+  { id: 'arrow', label: 'Arrow', icon: <ToolIcon><line x1="5" y1="19" x2="19" y2="5" /><polyline points="9 5 19 5 19 15" /></ToolIcon> },
+  { id: 'rect', label: 'Rectangle', icon: <ToolIcon><rect x="3" y="3" width="18" height="18" rx="2" /></ToolIcon> },
+  { id: 'ellipse', label: 'Ellipse', icon: <ToolIcon><ellipse cx="12" cy="12" rx="9" ry="9" /></ToolIcon> },
+  { id: 'text', label: 'Text', icon: <ToolIcon><polyline points="4 7 4 4 20 4 20 7" /><line x1="9" y1="20" x2="15" y2="20" /><line x1="12" y1="4" x2="12" y2="20" /></ToolIcon> },
+];
 
 function makeBase(): Pick<CanvasElement, 'id' | 'angle' | 'index' | 'version' | 'versionNonce'> {
   return { id: newElementId(), angle: 0, index: 0, version: 1, versionNonce: newVersionNonce() };
@@ -145,6 +166,12 @@ export function CanvasEdit({ elements, onElementsChange: setElements, onLocalEdi
     e.currentTarget.setPointerCapture?.(e.pointerId);
     const wp = toWorld(e);
     const live = elements.filter((el) => !el.isDeleted);
+
+    if (tool === 'hand') {
+      // the pan tool always pans, regardless of what's under the pointer
+      panRef.current = { sx: e.clientX, sy: e.clientY, ox: pan.x, oy: pan.y };
+      return;
+    }
 
     if (tool === 'select') {
       const hit = hitTopElement(wp, live);
@@ -258,14 +285,19 @@ export function CanvasEdit({ elements, onElementsChange: setElements, onLocalEdi
             ))}
         </div>
       </div>
-      <div className="ce-toolbar" role="toolbar" aria-label="Board tools">
-        {(['select', 'draw', 'rect', 'ellipse', 'arrow', 'text'] as Tool[]).map((t) => (
-          <button key={t} type="button" className={tool === t ? 'ce-tool on' : 'ce-tool'} aria-pressed={tool === t} onClick={() => setTool(t)}>
-            {t}
+      {/* the SAME icon toolbar as the in-app Canvas (.pgcv-tools from kit.css) */}
+      <div className="pgcv-tools" aria-label="Board tools">
+        {TOOLS.map((t) => (
+          <button key={t.id} type="button" className={tool === t.id ? 'on' : undefined} aria-label={t.label} aria-pressed={tool === t.id} onClick={() => setTool(t.id)}>
+            {t.icon}
           </button>
         ))}
-        <button type="button" className="ce-tool ce-del" onClick={remove} disabled={!selectedId} aria-label="Delete selection">
-          delete
+        <span className="tsep" />
+        <button type="button" aria-label="Delete selection" disabled={!selectedId} onClick={remove}>
+          <ToolIcon>
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          </ToolIcon>
         </button>
       </div>
     </Frame>
