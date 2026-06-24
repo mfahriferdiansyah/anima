@@ -23,6 +23,7 @@ import {
   elNeed,
   bytesToB64,
   b64ToBytes,
+  sanitizeElement,
   LOCK_TTL_MS,
   type LockMap,
 } from './collabOps';
@@ -228,5 +229,77 @@ describe('collaborative-share frames — round-trip + share gating', () => {
     gate.setActive(true);
     gate.emit(elOp('a', 'c', SAMPLE_EL)); // active → flows
     expect(sent).toHaveLength(1);
+  });
+});
+
+// ── sanitizeElement — the canvas XSS / exfiltration chokepoint (U6) ──────────
+
+describe('sanitizeElement — runs before reconcile / render', () => {
+  const valid = (over: Record<string, unknown>) => ({ ...SAMPLE_EL, ...over });
+
+  it('passes a clean rect through, preserving geometry + version', () => {
+    const el = sanitizeElement(valid({ type: 'rect', strokeColor: '#ff0000' }));
+    expect(el).not.toBeNull();
+    expect(el!.type).toBe('rect');
+    expect(el!.version).toBe(3);
+    expect((el as { strokeColor?: string }).strokeColor).toBe('#ff0000');
+  });
+
+  it('drops a non-allowlisted strokeColor (no url()/expression in a style attr)', () => {
+    const el = sanitizeElement(valid({ type: 'rect', strokeColor: 'url(javascript:alert(1))' }));
+    expect(el).not.toBeNull();
+    expect((el as { strokeColor?: string }).strokeColor).toBeUndefined();
+  });
+
+  it('clamps and strips control chars from text', () => {
+    const el = sanitizeElement(valid({ type: 'text', text: 'hi  there' }));
+    expect((el as { text: string }).text).toBe('hi there');
+  });
+
+  it('rejects an unknown element type (dropped, not rendered)', () => {
+    expect(sanitizeElement(valid({ type: 'iframe-bomb' }))).toBeNull();
+  });
+
+  it('rejects an element with no id', () => {
+    const noId = valid({ type: 'rect' });
+    delete (noId as Record<string, unknown>).id;
+    expect(sanitizeElement(noId)).toBeNull();
+  });
+
+  it('DROPS an image with a remote ref (tracking-pixel / exfil vector)', () => {
+    expect(sanitizeElement(valid({ type: 'image', ref: 'https://attacker.example/pixel.gif' }))).toBeNull();
+  });
+
+  it('DROPS an image with a javascript: / data:text/html ref (injection)', () => {
+    expect(sanitizeElement(valid({ type: 'image', ref: 'javascript:alert(1)' }))).toBeNull();
+    expect(sanitizeElement(valid({ type: 'image', ref: 'data:text/html,<script>x</script>' }))).toBeNull();
+  });
+
+  it('ACCEPTS an image with an app-internal ref (blob: / data:image / seal:)', () => {
+    expect(sanitizeElement(valid({ type: 'image', ref: 'blob:abc' }))).not.toBeNull();
+    expect(sanitizeElement(valid({ type: 'image', ref: 'data:image/png;base64,AAAA' }))).not.toBeNull();
+    expect(sanitizeElement(valid({ type: 'image', ref: 'seal:0xblob' }))).not.toBeNull();
+  });
+
+  it('coerces non-finite geometry to a finite number (no NaN into the renderer)', () => {
+    const el = sanitizeElement(valid({ type: 'rect', x: Number.NaN, w: Infinity }));
+    expect(Number.isFinite(el!.x)).toBe(true);
+    expect(Number.isFinite(el!.w)).toBe(true);
+  });
+
+  it('preserves a tombstone so a delete is not resurrected', () => {
+    const el = sanitizeElement(valid({ type: 'rect', isDeleted: true }));
+    expect((el as { isDeleted?: boolean }).isDeleted).toBe(true);
+  });
+
+  it('clamps an over-long points array (draw/arrow polyline cap)', () => {
+    const el = sanitizeElement(valid({ type: 'draw', points: new Array(200_000).fill(1) }));
+    expect((el as { points: number[] }).points.length).toBeLessThanOrEqual(100_000);
+  });
+
+  it('rejects a non-object / null entirely', () => {
+    expect(sanitizeElement(null)).toBeNull();
+    expect(sanitizeElement('a string')).toBeNull();
+    expect(sanitizeElement(42)).toBeNull();
   });
 });

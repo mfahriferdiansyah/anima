@@ -243,3 +243,107 @@ export const elChunk = (
 
 /** A selective re-request for the missing chunk seqs of one snapshot generation. */
 export const elNeed = (id: string, canvasId: string, gen: string, seqs: number[]): PresenceMsg => ({ t: 'el-need', id, canvasId, gen, seqs });
+
+// ---------------------------------------------------------------------------
+// 8. sanitizeElement — the canvas counterpart of sanitizeNoteHtml.
+//    An inbound el-op carries attacker-controllable fields that render straight
+//    into the DOM (text/label as content, colors as CSS, an image `ref` as an
+//    <img src>). The agent key is the decrypt identity, so an unsanitized field
+//    is an XSS / exfiltration path. This runs BEFORE reconcile on every inbound op.
+// ---------------------------------------------------------------------------
+
+const ELEMENT_TYPES = new Set(['note', 'rect', 'ellipse', 'text', 'image', 'draw', 'arrow', 'line']);
+const STROKE_STYLES = new Set(['solid', 'dashed', 'dotted']);
+/** A CSS color we will write into a style attribute: hex, rgb()/rgba(), or a plain keyword. No url(), no expression(). */
+const SAFE_COLOR = /^(#[0-9a-fA-F]{3,8}|rgba?\([\d.,\s%]+\)|[a-zA-Z]{1,20})$/;
+const MAX_TEXT = 20_000; // a generous cap on a single element's text/label
+const MAX_POINTS = 100_000; // a draw/arrow polyline length cap
+
+/** Validate a CSS color field, or undefined if absent/invalid (drop rather than render). */
+function safeColor(c: unknown): string | undefined {
+  return typeof c === 'string' && c.length <= 64 && SAFE_COLOR.test(c) ? c : undefined;
+}
+
+/** Clamp a string field to the max length and strip control chars (sanitizeNoteHtml handles markdown rendering). */
+function safeText(s: unknown, max = MAX_TEXT): string {
+  if (typeof s !== 'string') return '';
+  // eslint-disable-next-line no-control-regex
+  return s.slice(0, max).replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+}
+
+/** Image refs we will accept as an <img src>: app-internal blob/data-image only — NOT remote URLs (pixel/exfil) or data:text/html / javascript:. */
+const SAFE_IMAGE_REF = /^(blob:|data:image\/(png|jpe?g|gif|webp)[;,]|seal:|walrus:)/i;
+
+/**
+ * Sanitize an inbound element before it is reconciled / rendered. Returns a NEW
+ * cleaned element, or null when the element is malformed (dropped, not rendered).
+ * Numeric geometry is coerced to finite numbers; colors are allowlisted; text is
+ * clamped; an image `ref` must be an app-internal scheme (a remote/`javascript:`
+ * ref is dropped — the tracking-pixel / injection vector). For v1, image elements
+ * with an unacceptable ref are dropped entirely (a guest can't do the wallet-bound
+ * image write anyway).
+ */
+export function sanitizeElement(raw: unknown): CanvasElement | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const e = raw as Record<string, unknown>;
+  if (typeof e.id !== 'string' || !e.id) return null;
+  if (typeof e.type !== 'string' || !ELEMENT_TYPES.has(e.type)) return null;
+
+  const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
+
+  const base = {
+    id: e.id,
+    x: num(e.x),
+    y: num(e.y),
+    w: num(e.w),
+    h: num(e.h),
+    angle: num(e.angle),
+    index: num(e.index),
+    version: num(e.version),
+    versionNonce: num(e.versionNonce),
+    ...(e.isDeleted === true ? { isDeleted: true } : {}),
+    // style fields — color allowlisted, width clamped, style enum-checked
+    ...(safeColor(e.strokeColor) ? { strokeColor: safeColor(e.strokeColor) } : {}),
+    ...(safeColor(e.backgroundColor) ? { backgroundColor: safeColor(e.backgroundColor) } : {}),
+    ...(typeof e.strokeWidth === 'number' && Number.isFinite(e.strokeWidth)
+      ? { strokeWidth: Math.max(0, Math.min(64, e.strokeWidth)) }
+      : {}),
+    ...(typeof e.strokeStyle === 'string' && STROKE_STYLES.has(e.strokeStyle)
+      ? { strokeStyle: e.strokeStyle as 'solid' | 'dashed' | 'dotted' }
+      : {}),
+  };
+
+  const safePoints = (p: unknown): number[] => {
+    if (!Array.isArray(p)) return [];
+    return p.slice(0, MAX_POINTS).map((n) => (typeof n === 'number' && Number.isFinite(n) ? n : 0));
+  };
+
+  switch (e.type) {
+    case 'note':
+      if (typeof e.noteId !== 'string') return null;
+      return { ...base, type: 'note', noteId: e.noteId } as CanvasElement;
+    case 'rect':
+    case 'ellipse':
+      return { ...base, type: e.type, ...(e.label != null ? { label: safeText(e.label, 2_000) } : {}) } as CanvasElement;
+    case 'text':
+      return { ...base, type: 'text', text: safeText(e.text) } as CanvasElement;
+    case 'image': {
+      // Drop an image whose ref is not an app-internal scheme (remote/js/data:html = exfil/XSS).
+      if (typeof e.ref !== 'string' || !SAFE_IMAGE_REF.test(e.ref)) return null;
+      return { ...base, type: 'image', ref: e.ref } as CanvasElement;
+    }
+    case 'draw':
+      return { ...base, type: 'draw', points: safePoints(e.points) } as CanvasElement;
+    case 'arrow':
+    case 'line':
+      return {
+        ...base,
+        type: e.type,
+        points: safePoints(e.points),
+        ...(e.startBinding && typeof e.startBinding === 'object' ? { startBinding: e.startBinding as never } : {}),
+        ...(e.endBinding && typeof e.endBinding === 'object' ? { endBinding: e.endBinding as never } : {}),
+      } as CanvasElement;
+    default:
+      return null;
+  }
+}

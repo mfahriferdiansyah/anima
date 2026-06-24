@@ -330,8 +330,39 @@ function send(msg: PresenceMsg): void {
   if (socket && socket.readyState === WebSocket.OPEN) socket.send(serializeMsg(msg));
 }
 
+// ── canvas co-edit el-op pub/sub (plan 2026-06-24 U6) ───────────────────────
+// The live board (Canvas.tsx) subscribes to inbound el-op / sync-req frames and
+// emits its own. The relay carries them opaquely; the apply/reconcile logic lives
+// in canvas/canvasCollab.ts. Kept as a thin pub/sub here so the single live socket
+// is reused (the per-room manager generalizes this in U9).
+
+type CollabFrameHandler = (msg: PresenceMsg) => void;
+const collabHandlers = new Set<CollabFrameHandler>();
+
+/** Subscribe to inbound collaborative-canvas frames (el-op / el-chunk / el-need / sync-req). Returns an unsubscribe. */
+export function onCanvasCollabFrame(handler: CollabFrameHandler): () => void {
+  collabHandlers.add(handler);
+  return () => collabHandlers.delete(handler);
+}
+
+/** Emit a collaborative-canvas frame through the live presence socket. */
+export function emitCanvasCollab(msg: PresenceMsg): void {
+  send(msg);
+}
+
+/** This client's presence session id (so the board can filter its own echoes). */
+export function presenceSelfId(): string {
+  return SELF_ID;
+}
+
+const CANVAS_COLLAB_FRAMES = new Set(['el-op', 'el-chunk', 'el-need', 'sync-req']);
+
 /** Apply a received frame to the store (peers + materialize). */
 function onFrame(msg: PresenceMsg): void {
+  if (CANVAS_COLLAB_FRAMES.has(msg.t)) {
+    for (const h of collabHandlers) h(msg);
+    return; // these carry document state, not peer state
+  }
   if (msg.t === 'note-created') {
     store.update((prev) => ({
       ...prev,

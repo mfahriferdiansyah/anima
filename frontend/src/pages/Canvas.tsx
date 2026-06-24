@@ -7,8 +7,17 @@ import { SHARED_CANVAS_ID, updateCanvas, useCanvases } from '@/hooks/useCanvases
 import { CoverPicker } from '@/components/CoverPicker';
 import { CanvasHome } from './CanvasHome';
 import { ShareDialog } from './ShareDialog';
-import { moveCursor, startPresence, stopPresence, usePresence } from '@/hooks/usePresence';
+import {
+  moveCursor,
+  startPresence,
+  stopPresence,
+  usePresence,
+  onCanvasCollabFrame,
+  emitCanvasCollab,
+  presenceSelfId,
+} from '@/hooks/usePresence';
 import type { Peer } from '@/hooks/usePresence';
+import { makeCanvasCollab, type CanvasCollab } from '@/canvas/canvasCollab';
 import { scheduleAgentNote } from '@/hooks/useAgentTimeline';
 import { useVaultSession } from '@/hooks/useVaultSession';
 import {
@@ -313,6 +322,49 @@ export function Canvas() {
     return () => stopPresence();
   }, [isShared, readyVaultId, canvasId]);
 
+  // Live element co-edit (plan 2026-06-24 U6): apply inbound el-ops through the
+  // reconcile core, and broadcast locally-changed elements. The controller reads
+  // the live elements ref and writes back via setElements; broadcasting is driven
+  // by the dedicated effect below (diffing against the last broadcast snapshot).
+  const collabRef = useRef<CanvasCollab | null>(null);
+  const lastBroadcastRef = useRef<Map<string, CanvasElement>>(new Map());
+  useEffect(() => {
+    if (!isShared || !canvasId) return;
+    const collab = makeCanvasCollab({
+      selfId: presenceSelfId(),
+      canvasId,
+      send: emitCanvasCollab,
+      getElements: () => elementsRef.current,
+      setElements,
+    });
+    collabRef.current = collab;
+    // Seed the broadcast snapshot so the first local edit diffs against the seed,
+    // not against empty (which would re-broadcast the whole board on first change).
+    lastBroadcastRef.current = new Map(elementsRef.current.map((el) => [el.id, el]));
+    const off = onCanvasCollabFrame((msg) => collab.onFrame(msg));
+    return () => {
+      off();
+      collabRef.current = null;
+    };
+  }, [isShared, canvasId]);
+
+  // Broadcast elements that changed locally (a new/edited/deleted element whose
+  // version advanced past the last broadcast). Skips remote-applied changes — the
+  // reconcile apply leaves the element's version as the remote peer set it, which
+  // already matches what we'd broadcast, so it is a no-op diff (no echo storm).
+  useEffect(() => {
+    const collab = collabRef.current;
+    if (!collab) return;
+    const last = lastBroadcastRef.current;
+    for (const el of elements) {
+      const prev = last.get(el.id);
+      if (!prev || prev.version !== el.version || prev.versionNonce !== el.versionNonce) {
+        collab.broadcast(el);
+        last.set(el.id, el);
+      }
+    }
+  }, [elements]);
+
   // Seed this board's elements from its durable content note. Disarms the seal
   // guard until the seed lands in `elements`. Re-seeds when the rebuilt index
   // publishes (hard reload straight into a board mounts before the rebuild).
@@ -325,7 +377,8 @@ export function Canvas() {
     // would clobber unsaved local placements mid-edit ("the note jumped back"). The
     // empty-board case still re-seeds so a hard reload (mount before the rebuild
     // publishes → empty seed) fills in once the rebuilt index lands. Live merge of a
-    // concurrent remote edit is U16 (relay) territory, deliberately not done here.
+    // concurrent remote edit now flows through the U6 el-op collab effect (above),
+    // which reconciles inbound elements into the live list without re-seeding here.
     const canvasChanged = lastSeededCanvasRef.current !== canvasId;
     if (!canvasChanged && elementsRef.current.length > 0) return;
     lastSeededCanvasRef.current = canvasId;
