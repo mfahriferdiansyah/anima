@@ -1,36 +1,27 @@
 /**
- * The anonymous multiplayer editor (plan 008 U3, R26/R32) — loaded behind a
- * DYNAMIC import from `ReaderView` so it (and `presenceStore`'s transitive
- * `@mysten` graph) lands in a SEPARATE async chunk, keeping the view read chunk
- * `@mysten`-free (KTD6). The edit chunk MAY contain `@mysten`; only the view path
- * must not.
+ * The anonymous multiplayer editor (plan 2026-06-24 U4) — loaded behind a DYNAMIC
+ * import from `ReaderView` so its yjs + `@mysten` graph lands in a SEPARATE async
+ * chunk, keeping the view read chunk `@mysten`- AND yjs-free (KTD6 / U2 byte-grep).
  *
  * A guest joins the relay room directly by its unguessable id:
- *  - `?room=<id>`         → join that room.
+ *  - `?room=<id>`          → join that room.
  *  - `?salt=<salt>&edit=1` → prompt for the password, derive `room-id =
  *    PBKDF2(password, salt)` (U1), and join that room. A wrong password computes
  *    a different, empty room — the relay does no token check.
  *
- * Concurrency is the U1 soft-lock: a `note-writing` ping claims the note; a peer
- * who does not hold the lock sees a non-editable body + a "Someone is editing"
- * banner with a take-over affordance (auto-releases ~5s after the last ping). The
- * editable text lives in REACT STATE (never innerHTML) — only the read view uses
- * `dangerouslySetInnerHTML`, and only through `sanitizeNoteHtml`. A late guest
- * with no owner present sees the live state only (the relay never replays).
+ * Concurrency is now a real CRDT (Yjs): the note body is a `Y.Text` bound to an
+ * uncontrolled textarea (U3), so multiple guests type at once with no lost
+ * keystrokes — the plan-008 whole-body LWW + soft-lock path is REPLACED. On join
+ * the session broadcasts `sync-req`; the owner (or a present peer) answers with
+ * the current state, so a late guest hydrates instead of starting blank. Wallet-
+ * free: the guest never imports the session/agent stack.
  */
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Frame } from './Frame';
 import { parseMsg, serializeMsg } from '../mocks/presenceStore';
-import {
-  deriveRoomId,
-  reduceLocks,
-  lockedBy,
-  takeOver,
-  noteOp,
-  noteWriting,
-  LOCK_TTL_MS,
-  type LockMap,
-} from '../web3/collabOps';
+import { deriveRoomId, syncReq } from '../web3/collabOps';
+import { CollabSession } from '../web3/collabSession';
+import { bindYText, textareaSurface } from '../web3/collabTextBinding';
 import type { PresenceMsg } from '../../../chain/core/src/index.js';
 
 // The relay base mirrors presenceStore.backendWsUrl (a Vite env, default localhost).
@@ -40,12 +31,15 @@ function relayUrl(room: string): string {
   return `${ws}/presence?room=${encodeURIComponent(room)}`;
 }
 
-// A non-identifying session handle — NEVER a wallet address or a real name.
-const SELF_ID = `read-${Math.random().toString(36).slice(2, 10)}`;
-const SELF_LABEL = `Guest ${Math.random().toString(36).slice(2, 6)}`;
-// One shared note per live edit room (the reader edits a single doc).
-const NOTE_ID = 'shared';
-const WRITING_OFF_MS = 1200; // stop the "writing" ping this long after the last keystroke
+// A non-identifying session handle — NEVER a wallet address or a real name. Minted
+// PER ROOM mount (not module-level) so two rooms in one process — and any future
+// multi-room surface — don't collide on one id and drop each other as self-echoes.
+function freshSelfId(): string {
+  return `read-${Math.random().toString(36).slice(2, 10)}`;
+}
+function freshSelfLabel(): string {
+  return `Guest ${Math.random().toString(36).slice(2, 6)}`;
+}
 
 type Phase =
   | { kind: 'pw' } // a salted link awaiting its password
@@ -153,93 +147,58 @@ function JoinGate({ onPassword }: { onPassword: (pw: string) => void }): ReactEl
 }
 
 // ---------------------------------------------------------------------------
-// The live room — a textarea over the relay, with the soft-lock banner.
+// The live room — a Yjs-bound textarea over the relay (concurrent typing).
 // ---------------------------------------------------------------------------
 
 function Room({ room }: { room: string }): ReactElement {
-  const [text, setText] = useState('');
-  const [locks, setLocks] = useState<LockMap>({});
-  const [, tick] = useState(0); // re-render to re-evaluate lock staleness
-  const socketRef = useRef<WebSocket | null>(null);
-  const writingOffTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const idRef = useRef<{ id: string; label: string } | null>(null);
+  if (!idRef.current) idRef.current = { id: freshSelfId(), label: freshSelfLabel() };
 
-  // Connect the relay room directly by its unguessable id (no wallet, no session).
   useEffect(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    const { id: selfId, label } = idRef.current!;
     const ws = new WebSocket(relayUrl(room));
-    socketRef.current = ws;
+    const sockSend = (msg: PresenceMsg) => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(serializeMsg(msg));
+    };
+    // The session emits frames through the socket; the socket feeds inbound frames
+    // back into the session. (The session is created with the socket send, so the
+    // doc/awareness wiring and the relay share one path.)
+    const session = new CollabSession({ send: sockSend, selfId });
     ws.onopen = () => {
-      ws.send(serializeMsg({ t: 'hello', id: SELF_ID, label: SELF_LABEL, kind: 'human' }));
+      sockSend({ t: 'hello', id: selfId, label, kind: 'human' });
+      session.start(); // announce our state vector
+      sockSend(syncReq(selfId)); // ask the owner / a present peer for the current doc
     };
     ws.onmessage = (e) => {
       const msg = typeof e.data === 'string' ? parseMsg(e.data) : null;
-      if (!msg) return;
-      // A peer's body snapshot is the document state — applied through REACT STATE
-      // (never innerHTML). Ignore our own echoes.
-      if (msg.t === 'note-op' && msg.id !== SELF_ID) setText(msg.body);
-      if (msg.t === 'note-writing') setLocks((prev) => reduceLocks(prev, msg, Date.now()));
+      if (msg) session.onFrame(msg);
     };
+    // Bind the Y.Text to the uncontrolled textarea — concurrent typing, caret-safe.
+    const unbind = bindYText(session.doc.getText('body'), textareaSurface(ta));
     return () => {
+      unbind();
       try {
-        if (ws.readyState === WebSocket.OPEN) ws.send(serializeMsg({ t: 'bye', id: SELF_ID }));
+        if (ws.readyState === WebSocket.OPEN) ws.send(serializeMsg({ t: 'bye', id: selfId }));
       } catch {
         /* closing anyway */
       }
+      session.destroy();
       ws.close();
-      socketRef.current = null;
     };
   }, [room]);
-
-  // Re-evaluate the soft-lock staleness on a timer (the holder may have gone quiet).
-  useEffect(() => {
-    const h = setInterval(() => tick((n) => n + 1), 1000);
-    return () => clearInterval(h);
-  }, []);
-
-  const holder = lockedBy(locks, NOTE_ID, SELF_ID, Date.now(), LOCK_TTL_MS);
-  const locked = holder !== null;
-
-  function send(msg: PresenceMsg): void {
-    const ws = socketRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send(serializeMsg(msg));
-  }
-
-  function onChange(next: string): void {
-    setText(next);
-    // claim the soft lock + broadcast the body snapshot (LWW per note)
-    send(noteWriting(SELF_ID, NOTE_ID, true));
-    send(noteOp(SELF_ID, NOTE_ID, next));
-    if (writingOffTimer.current) clearTimeout(writingOffTimer.current);
-    writingOffTimer.current = setTimeout(() => {
-      send(noteWriting(SELF_ID, NOTE_ID, false));
-    }, WRITING_OFF_MS);
-  }
-
-  function reclaim(): void {
-    setLocks((prev) => takeOver(prev, NOTE_ID));
-    send(noteWriting(SELF_ID, NOTE_ID, true)); // immediately assert our claim
-  }
 
   return (
     <Frame state="edit" tag="Live edit">
       <div className="rd-editor">
-        {locked ? (
-          <div className="rd-lockbanner">
-            <span>Someone is editing — wait or take over.</span>
-            <button className="btn btn-sm" onClick={reclaim}>
-              Take over
-            </button>
-          </div>
-        ) : (
-          <div className="rd-notsaved">
-            Edits are live but not saved — the owner must be present to persist them.
-          </div>
-        )}
+        <div className="sharenote rd-livenote">Edits are live. Changes save while the owner is here.</div>
         <textarea
+          ref={taRef}
           className="rd-textarea"
-          value={text}
-          disabled={locked}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={locked ? '' : 'Start typing to collaborate…'}
+          defaultValue=""
+          placeholder="Start typing to collaborate…"
           aria-label="Shared note"
         />
       </div>

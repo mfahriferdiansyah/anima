@@ -370,6 +370,12 @@ a.btn {
   font-size: 0.9rem;
 }
 
+/* The live-edit notice reuses the app's neutral .sharenote (kit tokens) — no
+   invented tints — and just needs reader spacing above the editor. */
+.rd-livenote {
+  margin-bottom: 14px;
+}
+
 .rd-textarea {
   width: 100%;
   min-height: 440px;
