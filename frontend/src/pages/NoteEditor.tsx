@@ -108,9 +108,11 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
   const [dirty, setDirty] = useState(false);
 
   // While an edit share is active for this note, the owner joins the live room as
-  // the allowlisted writer: guest edits become sealed, wallet-owned snapshots
-  // (008 AE4). A no-op when nothing is shared.
-  const { guestCount } = useShareCollab(note.noteId);
+  // the authoritative Yjs responder + single sealer. Passing `typeRef` binds the
+  // editor's contenteditable to the shared Y.Text, so the owner types into the SAME
+  // CRDT as the guests (owner edits show up live in their browser). A no-op when
+  // nothing is shared.
+  const { guestCount } = useShareCollab(note.noteId, typeRef);
 
   // Resolve note.cover (a ref: preset path, seal:, or blob:) to a renderable URL.
   // Falls back to note.image for fixture demo notes that predate the cover field.

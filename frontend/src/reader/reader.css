@@ -398,6 +398,34 @@ a.btn {
   overflow: visible;
 }
 
+/* Notion-style click-to-edit: the whole document column shows a TEXT cursor (not
+   an arrow), so it reads as typeable, and the body fills the column so a click
+   anywhere lands the caret. */
+.rd-main .pgcol {
+  cursor: text;
+}
+.rd-main .pgcol .edtype {
+  min-height: 60vh; /* the editable zone fills the page — click low and still type */
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 0 -10px;
+  transition: background 120ms ease;
+}
+/* a soft hover wash on the editable block — the "you can click + edit this" tell */
+.rd-main .pgcol .edtype:hover {
+  background: rgba(22, 24, 29, 0.025);
+}
+.rd-main .pgcol .edtype:focus {
+  background: transparent;
+}
+/* a non-interactive (joining / lost) body reverts to the read cursor */
+.rd-main .pgcol .edtype[contenteditable='false'] {
+  cursor: default;
+}
+.rd-main .pgcol .edtype[contenteditable='false']:hover {
+  background: transparent;
+}
+
 /* the quiet live-status bar above the document, aligned to the .pgcol measure */
 .rd-livebar {
   width: 100%;

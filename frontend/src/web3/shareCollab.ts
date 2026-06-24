@@ -98,7 +98,8 @@ export function useShareCollab(noteId: string, editorRef?: React.RefObject<HTMLE
     const yText = session.doc.getText('body');
 
     // Seed the CRDT from the durable note body (the owner brings the saved state).
-    const seedBody = vaultData.getSnapshot().index?.get(noteId)?.note.body ?? '';
+    const seedNote = vaultData.getSnapshot().index?.get(noteId)?.note;
+    const seedBody = seedNote?.body ?? '';
     if (seedBody) yText.insert(0, seedBody);
 
     // Cross-tab single-sealer: exactly one owner tab seals (Web Locks; auto-released
@@ -152,6 +153,10 @@ export function useShareCollab(noteId: string, editorRef?: React.RefObject<HTMLE
     };
     session.awareness.on('change', refreshGuests);
     session.awareness.setLocalStateField('user', { id: selfId, label: 'Owner', owner: true });
+    // Share the note's title + cover ref so the guest's edit page shows the same
+    // document header as the in-app editor (the cover is preset-allowlisted on the
+    // reader, so a sealed/uploaded ref simply doesn't render — wallet-free safe).
+    session.awareness.setLocalStateField('doc', { title: seedNote?.title ?? '', cover: seedNote?.cover ?? '' });
 
     ws.onopen = () => {
       sockSend({ t: 'hello', id: selfId, label: 'Owner', kind: 'human' });

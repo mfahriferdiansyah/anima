@@ -24,6 +24,7 @@ import { CollabSession } from '../web3/collabSession';
 import { bindYText, contentEditableSurface } from '../web3/collabTextBinding';
 import { PresenceStack, type PresenceMember } from '../components/PresenceStack';
 import { guestSaveSignal, guestSaveText, type GuestSaveSignal } from '../web3/collabIdentity';
+import { presetCover } from './ReaderView';
 import { CanvasEditRoom } from './CanvasEditRoom';
 import type { PresenceMsg } from '../../../chain/core/src/index.js';
 
@@ -173,6 +174,9 @@ function Room({ room, requireOwner }: { room: string; requireOwner: boolean; opk
   if (!idRef.current) idRef.current = { id: freshSelfId(), label: freshSelfLabel() };
   const [members, setMembers] = useState<PresenceMember[]>([]);
   const [saveSignal, setSaveSignal] = useState<GuestSaveSignal>('not-started');
+  // The shared document header (title + a preset-safe cover), adopted from the
+  // owner's awareness so the guest's edit page matches the in-app editor.
+  const [docMeta, setDocMeta] = useState<{ title: string; cover: string | null }>({ title: '', cover: null });
   // The interactive-readiness of the editor:
   //  - 'joining'  : password room, waiting to confirm we reached the real room.
   //  - 'live'     : interactive (a no-password room is live immediately; a password
@@ -206,9 +210,17 @@ function Room({ room, requireOwner }: { room: string; requireOwner: boolean; opk
       let otherPeer = false;
       const states: { user?: { owner?: boolean }; seal?: string }[] = [];
       for (const [client, state] of session.awareness.getStates()) {
-        const s = state as { user?: { id?: string; label?: string; owner?: boolean }; seal?: string };
+        const s = state as {
+          user?: { id?: string; label?: string; owner?: boolean };
+          seal?: string;
+          doc?: { title?: string; cover?: string };
+        };
         if (s.user?.id) seen.push({ id: s.user.id, label: s.user.label ?? 'Guest', isOwner: s.user.owner });
-        if (s.user?.owner) ownerEverPresent = true;
+        if (s.user?.owner) {
+          ownerEverPresent = true;
+          // adopt the owner's shared document header (title + preset-safe cover)
+          if (s.doc) setDocMeta({ title: s.doc.title ?? '', cover: presetCover(s.doc.cover) });
+        }
         if (client !== session.doc.clientID) otherPeer = true;
         states.push(s);
       }
@@ -294,10 +306,20 @@ function Room({ room, requireOwner }: { room: string; requireOwner: boolean; opk
         </div>
         <PresenceStack members={members} />
       </div>
-      {/* the body is the EXACT in-app editor surface: a centered .pgcol column with
-          the .edtype contentEditable (kit.css), bound to the shared Y.Text (U3). */}
+      {/* the body is the EXACT in-app editor surface: the cover banner + a centered
+          .pgcol column with the title and the .edtype contentEditable (kit.css),
+          bound to the shared Y.Text (U3). The cover is preset-allowlisted; a sealed
+          cover the wallet-free reader can't resolve simply doesn't render. */}
       <div className="pged-scroll">
-        <div className="pgcol">
+        {docMeta.cover ? (
+          <div className="pgbanner-wrap">
+            <div className="pgbanner">
+              <img src={docMeta.cover} alt="" />
+            </div>
+          </div>
+        ) : null}
+        <div className={docMeta.cover ? 'pgcol haz' : 'pgcol'}>
+          {docMeta.title ? <h1 className="pgtitle">{docMeta.title}</h1> : null}
           <div
             ref={taRef}
             className="edtype"
