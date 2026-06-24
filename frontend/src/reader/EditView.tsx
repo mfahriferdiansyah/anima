@@ -23,6 +23,7 @@ import { deriveRoomId, syncReq } from '../web3/collabOps';
 import { CollabSession } from '../web3/collabSession';
 import { bindYText, textareaSurface } from '../web3/collabTextBinding';
 import { PresenceStack, type PresenceMember } from '../components/PresenceStack';
+import { guestSaveSignal, guestSaveText, type GuestSaveSignal } from '../web3/collabIdentity';
 import { CanvasEditRoom } from './CanvasEditRoom';
 import type { PresenceMsg } from '../../../chain/core/src/index.js';
 
@@ -169,6 +170,7 @@ function Room({ room, requireOwner }: { room: string; requireOwner: boolean; opk
   const idRef = useRef<{ id: string; label: string } | null>(null);
   if (!idRef.current) idRef.current = { id: freshSelfId(), label: freshSelfLabel() };
   const [members, setMembers] = useState<PresenceMember[]>([]);
+  const [saveSignal, setSaveSignal] = useState<GuestSaveSignal>('not-started');
   // The interactive-readiness of the editor:
   //  - 'joining'  : password room, waiting to confirm we reached the real room.
   //  - 'live'     : interactive (a no-password room is live immediately; a password
@@ -196,15 +198,20 @@ function Room({ room, requireOwner }: { room: string; requireOwner: boolean; opk
     // a peer as "joined" but keep the honest "saves while the owner's here" signal,
     // and gate on a verified owner once one is present.
     let confirmTimer: ReturnType<typeof setTimeout> | null = null;
+    let ownerEverPresent = false;
     const refresh = () => {
       const seen: PresenceMember[] = [];
       let otherPeer = false;
+      const states: { user?: { owner?: boolean }; seal?: string }[] = [];
       for (const [client, state] of session.awareness.getStates()) {
-        const user = (state as { user?: { id?: string; label?: string } }).user;
-        if (user?.id) seen.push({ id: user.id, label: user.label ?? 'Guest' });
+        const s = state as { user?: { id?: string; label?: string; owner?: boolean }; seal?: string };
+        if (s.user?.id) seen.push({ id: s.user.id, label: s.user.label ?? 'Guest', isOwner: s.user.owner });
+        if (s.user?.owner) ownerEverPresent = true;
         if (client !== session.doc.clientID) otherPeer = true;
+        states.push(s);
       }
       setMembers(seen);
+      setSaveSignal(guestSaveSignal(states, ownerEverPresent));
       if (requireOwner && otherPeer) setJoin('live'); // a peer confirms the room is real
     };
     session.awareness.on('change', refresh);
@@ -276,12 +283,12 @@ function Room({ room, requireOwner }: { room: string; requireOwner: boolean; opk
     <Frame state="edit" tag="Live edit">
       <div className="rd-editor">
         <div className="rd-editor-top">
-          <div className="sharenote rd-livenote">
+          <div className={saveSignal === 'owner-cant-save' ? 'sharenote rd-livenote rd-cantsave' : 'sharenote rd-livenote'}>
             {join === 'lost'
               ? 'Connection lost — reconnect to keep editing.'
               : join === 'joining'
                 ? 'Joining the shared edit…'
-                : 'Edits are live. Changes save while the owner is here.'}
+                : guestSaveText(saveSignal)}
           </div>
           <PresenceStack members={members} />
         </div>

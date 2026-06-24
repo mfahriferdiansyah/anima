@@ -11,6 +11,8 @@ import {
   ownerChallenge,
   signOwnerProof,
   verifyOwnerProof,
+  guestSaveSignal,
+  guestSaveText,
 } from './collabIdentity';
 
 describe('identityFor — deterministic color + glyph', () => {
@@ -70,5 +72,33 @@ describe('owner anti-spoof — signature verification', () => {
 
   it('the challenge is the room-bound tag', () => {
     expect(new TextDecoder().decode(ownerChallenge('xyz'))).toBe('anima-owner:xyz');
+  });
+});
+
+describe('guestSaveSignal — the honest guest save banner (U11)', () => {
+  it('reflects the owner seal-state when a verified owner is present', () => {
+    const owner = (seal: string) => [{ user: { owner: true }, seal }];
+    expect(guestSaveSignal(owner('saving'), true)).toBe('owner-saving');
+    expect(guestSaveSignal(owner('saved'), true)).toBe('owner-saved');
+    expect(guestSaveSignal(owner('cant-save'), true)).toBe('owner-cant-save');
+  });
+
+  it('distinguishes owner-never-joined (not-started) from owner-stepped-away (absent)', () => {
+    expect(guestSaveSignal([{ user: { owner: false } }], false)).toBe('not-started');
+    expect(guestSaveSignal([{ user: { owner: false } }], true)).toBe('owner-absent');
+  });
+
+  it('a guest spoofing owner=false does not flip the signal to a saved state', () => {
+    // only a verified-owner entry (user.owner true) is believed; a guest can claim
+    // a label but the owner flag here stands in for the U9 signature gate.
+    const states = [{ user: { owner: false }, seal: 'saved' }];
+    expect(guestSaveSignal(states, false)).toBe('not-started');
+  });
+
+  it('every signal has banner text', () => {
+    for (const s of ['owner-saving', 'owner-saved', 'owner-cant-save', 'owner-absent', 'not-started'] as const) {
+      expect(guestSaveText(s).length).toBeGreaterThan(0);
+    }
+    expect(guestSaveText('owner-cant-save')).toMatch(/can.?t save/i);
   });
 });

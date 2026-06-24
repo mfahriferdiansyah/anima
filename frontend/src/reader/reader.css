@@ -386,6 +386,15 @@ a.btn {
   margin-bottom: 14px;
 }
 
+/* owner can't save (out of funds) — the warm low-funds aesthetic (mirrors
+   FundsBanner: warm strip, warm text), built on the neutral .sharenote base so it
+   is not an invented panel. */
+.rd-cantsave {
+  background: #fff4e5;
+  border-color: rgba(180, 35, 31, 0.16);
+  color: #7a3b12;
+}
+
 .rd-textarea {
   width: 100%;
   min-height: 440px;

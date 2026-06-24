@@ -81,6 +81,47 @@ export async function verifyOwnerProof(roomId: string, proofB64: string, opkHex:
   }
 }
 
+// ── guest-visible save signal (U11) ─────────────────────────────────────────
+
+/** The honest save signal a guest shows, derived from the owner's presence + seal-state. */
+export type GuestSaveSignal = 'owner-saving' | 'owner-saved' | 'owner-cant-save' | 'owner-absent' | 'not-started';
+
+/**
+ * Derive the guest's honest save banner from the awareness states. The owner's
+ * entry carries `{ user: { owner: true }, seal }`; a guest believes it only on the
+ * verified-owner entry (U9). `ownerEverPresent` distinguishes "session not started"
+ * (owner never joined) from "owner stepped away" (was present, now gone).
+ */
+export function guestSaveSignal(
+  states: Iterable<{ user?: { owner?: boolean }; seal?: string }>,
+  ownerEverPresent: boolean,
+): GuestSaveSignal {
+  for (const s of states) {
+    if (s.user?.owner) {
+      if (s.seal === 'cant-save') return 'owner-cant-save';
+      if (s.seal === 'saving') return 'owner-saving';
+      return 'owner-saved';
+    }
+  }
+  return ownerEverPresent ? 'owner-absent' : 'not-started';
+}
+
+/** The human-readable banner text for each guest save signal. */
+export function guestSaveText(signal: GuestSaveSignal): string {
+  switch (signal) {
+    case 'owner-saving':
+      return 'Saving your changes…';
+    case 'owner-saved':
+      return 'Edits are live. Changes save while the owner is here.';
+    case 'owner-cant-save':
+      return "The owner can't save right now — changes stay live but aren't saved yet.";
+    case 'owner-absent':
+      return 'The owner stepped away — changes save when they return.';
+    case 'not-started':
+      return "Waiting for the owner — changes save once they're here.";
+  }
+}
+
 function hexToBytes(hex: string): Uint8Array {
   if (hex.length % 2 !== 0) return new Uint8Array(0);
   const out = new Uint8Array(hex.length / 2);

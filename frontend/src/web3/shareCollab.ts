@@ -108,6 +108,11 @@ export function useShareCollab(noteId: string, editorRef?: React.RefObject<HTMLE
     // Seal on room-wide idle: flatten the Y.Text to markdown and persist it via the
     // existing sealed write path (attributed to the live session). A PURE read — it
     // never mutates the doc, so it cannot loop.
+    // Broadcast the owner's seal-state over awareness so guests render an HONEST
+    // signal (saving / saved / can't-save). A guest can't fake this: it is on the
+    // verified-owner's awareness entry (the owner badge is signature-gated, U9).
+    const setSealState = (state: 'saving' | 'saved' | 'cant-save') => session.awareness.setLocalStateField('seal', state);
+
     const seal = makeSealController({
       readBody: () => yText.toString(),
       seal: async (body) => {
@@ -115,14 +120,21 @@ export function useShareCollab(noteId: string, editorRef?: React.RefObject<HTMLE
         try {
           await persistGuestSnapshot(noteId, body, 'Live edit');
           setNeedsFunds(false);
+          setSealState('saved');
         } catch (e) {
-          if (isInsufficientFunds(e)) setNeedsFunds(true);
+          if (isInsufficientFunds(e)) {
+            setNeedsFunds(true);
+            setSealState('cant-save'); // the guest banner flips to "owner can't save right now"
+          }
           throw e;
         }
       },
-      onSealingChange: setSaving,
+      onSealingChange: (s) => {
+        setSaving(s);
+        if (s) setSealState('saving');
+      },
       onError: () => {
-        /* surfaced via needsFunds / the saving state */
+        /* surfaced via needsFunds + the seal-state awareness field */
       },
     });
     session.doc.on('update', seal.bump);
