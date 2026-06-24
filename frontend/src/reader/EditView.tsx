@@ -306,11 +306,16 @@ function Room({
 
   return (
     <Frame state="edit" tag="LIVE EDIT" headerExtra={<PresenceStack members={members} />}>
-      {/* a running-text status banner (marquee) — informational, never blocks editing */}
-      <div className={saveSignal === 'owner-cant-save' ? 'rd-marquee rd-marquee-warn' : 'rd-marquee'} role="status">
-        <div className="rd-marquee-track">
-          <span>{statusText}</span>
-          <span aria-hidden="true">{statusText}</span>
+      {/* a running-text status banner — informational, never blocks editing. Mirrors
+          the landing marquee: 6 identical copies shifted exactly -50% (3 copies) for
+          a seamless, gap-free, truly-infinite loop. */}
+      <div className={saveSignal === 'owner-cant-save' ? 'rd-marquee rd-marquee-warn' : 'rd-marquee'} role="status" aria-label={statusText}>
+        <div className="rd-marquee-track" aria-hidden="true">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <span className="rd-mqset" key={i}>
+              {statusText} <em>✦</em>{' '}
+            </span>
+          ))}
         </div>
       </div>
       {/* the EXACT in-app editor surface: the cover banner + a centered .pgcol column

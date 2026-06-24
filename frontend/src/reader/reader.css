@@ -451,34 +451,46 @@ a.btn {
   padding-top: 30px;
 }
 
-/* the running-text status banner — informational, never blocks editing. A quiet
-   marquee that loops the live status (e.g. "Changes save while the owner is here").
-   Neutral .sharenote-style strip; the cant-save variant uses the warm funds tone. */
+/* the running-text status banner — informational, never blocks editing. Mirrors
+   the landing marquee (.lp-mq): a quiet hairline strip whose track is 6 identical
+   copies shifted exactly -50% for a SEAMLESS, gap-free, infinite loop. Brand
+   typography (Space Grotesk, tracked), muted ink; the cant-save variant warms it. */
 .rd-marquee {
   width: 100%;
   overflow: hidden;
-  background: var(--gray-100);
-  box-shadow: 0 -1px 0 var(--gray-200), 0 1px 0 var(--gray-200);
-  font-size: 12.5px;
-  color: var(--gray-600);
+  white-space: nowrap;
+  padding: 9px 0;
+  box-shadow: 0 1px 0 var(--gray-200);
 }
 .rd-marquee-warn {
   background: #fff4e5;
-  color: #7a3b12;
-  box-shadow: 0 -1px 0 rgba(180, 35, 31, 0.16), 0 1px 0 rgba(180, 35, 31, 0.16);
+  box-shadow: 0 1px 0 rgba(180, 35, 31, 0.16);
 }
 .rd-marquee-track {
-  display: inline-flex;
-  white-space: nowrap;
-  padding: 7px 0;
-  animation: rd-marquee 22s linear infinite;
+  display: inline-block;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: rgba(22, 24, 29, 0.42);
+  will-change: transform;
+  animation: rd-marquee 60s linear infinite;
 }
-.rd-marquee-track span {
-  padding: 0 2.5rem;
+.rd-marquee-warn .rd-marquee-track {
+  color: #9a5524;
+}
+.rd-mqset {
+  display: inline-block;
+}
+.rd-mqset em {
+  font-style: normal;
+  color: var(--orange-500);
+  margin: 0 14px;
 }
 .rd-marquee:hover .rd-marquee-track {
   animation-play-state: paused;
 }
+/* seamless loop: 6 identical copies, shift exactly half (3 copies) */
 @keyframes rd-marquee {
   from { transform: translateX(0); }
   to { transform: translateX(-50%); }
