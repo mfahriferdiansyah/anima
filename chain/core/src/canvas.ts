@@ -9,6 +9,7 @@
  * the backend WS relay. This module only handles durable state + freshness.
  */
 import type { Note, IndexedNote } from './types.js';
+import type { CanvasElement } from './elements.js';
 import { newNote, editedNote } from './notes.js';
 import { writeTurn, listVaultQuilts, readAll, type QuiltDeps } from './quilts.js';
 import { VaultIndex } from './vaultIndex.js';
@@ -77,11 +78,23 @@ export async function syncNewQuilts(
  * Presence wire format (relayed by the backend hub; never persisted).
  *
  * The first five frames are the always-on canvas presence (cursors, pings). The
- * last three are LIVE-COLLABORATION content ops (plan 008): they only flow while
- * a share is active and carry plaintext document state through the relay — a
- * `note-op` is a last-write-wins body snapshot, `note-writing` drives the
- * per-note soft-lock, `canvas-op` is a last-write-wins layout snapshot. Inbound
- * content frames are sanitized before they touch the DOM (see `web3/collabOps`).
+ * legacy three (`note-op`/`note-writing`/`canvas-op`) are the plan-008 LWW content
+ * ops; `note-op`/`note-writing`/soft-lock are SUPERSEDED by the CRDT path below
+ * but kept on the wire for back-compat decoding.
+ *
+ * The plan-2026-06-24 collaborative-share frames carry the real-time editing model:
+ *  - `sync-req`  — "I just joined this room, please send me the current state."
+ *  - `y-sync`    — a Yjs sync/awareness binary frame for NOTE co-editing (the CRDT).
+ *                  `b` is base64 (the relay protocol is JSON text; Yjs is binary).
+ *  - `el-op`     — one full `CanvasElement` for BOARD co-editing; applied through
+ *                  the version+nonce reconcile core. `el` is sanitized before it
+ *                  touches the DOM (see `web3/collabOps` `sanitizeElement`).
+ *  - `el-chunk`  — a chunk of a large board resync snapshot (`gen`-tagged so two
+ *                  snapshot generations never interleave; `seq`/`total` order them).
+ *  - `el-need`   — a selective re-request for missing chunk seqs of one `gen`.
+ *
+ * All of these flow only while a share is active and are relayed opaquely; the
+ * relay holds nothing. Binary payloads ride as base64 inside the JSON frame.
  */
 export type PresenceMsg =
   | { t: 'hello'; id: string; label: string; kind: 'human' | 'agent' }
@@ -91,4 +104,9 @@ export type PresenceMsg =
   | { t: 'bye'; id: string }
   | { t: 'note-op'; id: string; noteId: string; body: string }
   | { t: 'note-writing'; id: string; noteId: string; on: boolean }
-  | { t: 'canvas-op'; id: string; canvasId: string; layout: CanvasLayout };
+  | { t: 'canvas-op'; id: string; canvasId: string; layout: CanvasLayout }
+  | { t: 'sync-req'; id: string }
+  | { t: 'y-sync'; id: string; b: string }
+  | { t: 'el-op'; id: string; canvasId: string; el: CanvasElement }
+  | { t: 'el-chunk'; id: string; canvasId: string; gen: string; seq: number; total: number; b: string }
+  | { t: 'el-need'; id: string; canvasId: string; gen: string; seqs: number[] };

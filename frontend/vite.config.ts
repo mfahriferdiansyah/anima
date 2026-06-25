@@ -9,6 +9,19 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, 'src'),
     },
+    // A single yjs instance across the chunk graph — two copies trip the
+    // "Yjs was already imported" constructor-check error (a dynamic-import hazard).
+    dedupe: ['yjs'],
+  },
+  // Pre-bundle the CRDT deps so the dynamic collab chunk resolves them cleanly.
+  optimizeDeps: {
+    include: ['yjs', 'y-protocols/sync', 'y-protocols/awareness', 'lib0/encoding', 'lib0/decoding'],
+  },
+  // lib0 ships an exports map with only import/module/require conditions; under
+  // vitest's SSR resolver that map is otherwise skipped (the real browser build
+  // honors it fine), so force the CRDT stack through vite's transform.
+  ssr: {
+    noExternal: ['yjs', 'y-protocols', 'lib0'],
   },
   build: {
     rollupOptions: {

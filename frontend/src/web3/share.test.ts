@@ -43,12 +43,19 @@ const DEPS = { suiClient: {}, agentSigner: {}, walletAddress: '0xowner', vaultId
 const links = () => shareStore.getSnapshot().links;
 const link = (noteId: string) => links().find((l) => l.noteId === noteId);
 
-/** Seed one note into the live vault index so publishView can find it. */
-function seedNote(noteId: string) {
-  const note = newNote({ noteId, title: 'My note', body: 'hello', author: 'owner' });
+/** Seed one note into the live vault index so publishView can find it. Title is
+ *  empty by default so edit-link URL assertions stay clean; pass a title to test
+ *  the header baked into the link. A fixed `updatedAt` keeps the baked `&up=`
+ *  deterministic, and the seed location has no blobObjectId so no `&sl=` is added.
+ *  Note: a baked edit link always carries `&up=<date>&rv=1` (the note's header). */
+function seedNote(noteId: string, title = '') {
+  const note = newNote({ noteId, title, body: 'hello', author: 'owner', updatedAt: '2026-06-22T00:00:00.000Z' });
   vaultData.publish(VaultIndex.fromEntries([{ note, location: { quiltPatchId: '', quiltBlobId: '', blobObjectId: '' } }]));
   return note;
 }
+
+/** The header suffix every baked note edit link carries (updated + rev; no seal id without a blob). */
+const META = '&up=2026-06-22&rv=1';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -65,7 +72,7 @@ describe('createShareLink edit (instant, no chain write)', () => {
     await createShareLink('n-1', 'edit');
     const l = link('n-1')!;
     expect(l.access).toBe('edit');
-    expect(l.url).toMatch(/^\/read\.html\?room=[0-9a-f]{32}$/);
+    expect(l.url).toBe(`/read.html?room=${l.roomId}${META}`);
     expect(l.roomId).toMatch(/^[0-9a-f]{32}$/);
     expect(l.blobObjectId).toBeUndefined();
     expect(publishNote).not.toHaveBeenCalled();
@@ -76,11 +83,64 @@ describe('createShareLink edit (instant, no chain write)', () => {
     await createShareLink('n-1', 'edit');
     await setLinkPassword('n-1', 'hunter2');
     const l = link('n-1')!;
-    expect(l.url).toMatch(/^\/read\.html\?salt=[0-9a-f]{32}&edit=1$/);
+    expect(l.url).toBe(`/read.html?salt=${l.salt}&edit=1${META}`);
     expect(l.salt).toMatch(/^[0-9a-f]{32}$/);
     expect(l.roomId).toBeUndefined();
     expect(l.password).toBe('hunter2');
     expect(publishNote).not.toHaveBeenCalled(); // edit password is a relay gate, no blob
+  });
+});
+
+describe('edit link carries kind + owner public key (collaborative-share routing)', () => {
+  it('a note edit link omits kind (clean) and omits opk when no signer is wired', async () => {
+    seedNote('n-1');
+    await createShareLink('n-1', 'edit', 'note');
+    const l = link('n-1')!;
+    expect(l.url).toBe(`/read.html?room=${l.roomId}${META}`); // no &kind, no &opk (just the header)
+  });
+
+  it('a canvas edit link carries &kind=canvas so the reader mounts the board', async () => {
+    seedNote('c-1');
+    await createShareLink('c-1', 'edit', 'canvas');
+    const l = link('c-1')!;
+    expect(l.kind).toBe('canvas');
+    // a canvas link carries no note header (title/updated/rev are note-only)
+    expect(l.url).toBe(`/read.html?room=${l.roomId}&kind=canvas`);
+  });
+
+  it('bakes the note title into the link (&t=) so the header shows without waiting for the owner', async () => {
+    seedNote('n-title', 'Roadmap Meeting');
+    await createShareLink('n-title', 'edit', 'note');
+    const l = link('n-title')!;
+    expect(l.url).toBe(`/read.html?room=${l.roomId}&t=Roadmap%20Meeting${META}`);
+  });
+
+  it('bakes the owner agent public key as &opk=<hex> when a signer is wired (the guest trust anchor)', async () => {
+    seedNote('n-2');
+    const pub = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+    vi.mocked(getQuiltDeps).mockReturnValue({
+      suiClient: {},
+      agentSigner: { getPublicKey: () => ({ toRawBytes: () => pub }) },
+      walletAddress: '0xowner',
+      vaultId: '0xv',
+    } as never);
+    await createShareLink('n-2', 'edit', 'note');
+    const l = link('n-2')!;
+    expect(l.url).toBe(`/read.html?room=${l.roomId}&opk=deadbeef${META}`);
+  });
+
+  it('a password canvas link carries the salt, kind, and opk together', async () => {
+    seedNote('c-2');
+    vi.mocked(getQuiltDeps).mockReturnValue({
+      suiClient: {},
+      agentSigner: { getPublicKey: () => ({ toRawBytes: () => new Uint8Array([0x01, 0x02]) }) },
+      walletAddress: '0xowner',
+      vaultId: '0xv',
+    } as never);
+    await createShareLink('c-2', 'edit', 'canvas');
+    await setLinkPassword('c-2', 'pw');
+    const l = link('c-2')!;
+    expect(l.url).toBe(`/read.html?salt=${l.salt}&edit=1&kind=canvas&opk=0102`);
   });
 });
 
@@ -350,7 +410,7 @@ describe('absolute links — the browser origin is stamped so a copied link has 
     g.window = { location: { origin: 'https://anima.app' } };
     try {
       await createShareLink('n-1', 'edit');
-      expect(link('n-1')!.url).toBe(`https://anima.app/read.html?room=${link('n-1')!.roomId}`);
+      expect(link('n-1')!.url).toBe(`https://anima.app/read.html?room=${link('n-1')!.roomId}${META}`);
 
       await setLinkAccess('n-1', 'view');
       await generateView('n-1');

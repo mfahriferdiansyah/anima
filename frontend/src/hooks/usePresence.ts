@@ -13,5 +13,8 @@ export {
   moveCursor,
   setWriting,
   resetPresenceStore,
+  onCanvasCollabFrame,
+  emitCanvasCollab,
+  presenceSelfId,
 } from '../mocks/presenceStore';
 export type { PresenceState, Peer, ConnectionState } from '../mocks/presenceStore';

@@ -129,19 +129,90 @@ function withOrigin(path: string): string {
 
 // ── edit-link url helpers (no blob is published for edit links) ──────────────
 
+/**
+ * Extra query for a collaborative edit link:
+ *  - `&kind=canvas` routes the reader to the board surface (note is the default,
+ *    omitted to keep note links — and their tests — clean).
+ *  - `&opk=<hex>` is the owner's agent PUBLIC key: the wallet-free guest's trust
+ *    anchor for verifying the owner's signed presence (public material, no secret).
+ *  - `&t=` / `&cv=` carry the note's title + cover ref so the document HEADER shows
+ *    immediately on open, without waiting for the owner to join (the cover is
+ *    preset-allowlisted on the reader, so a sealed ref simply won't render).
+ *  All omitted when their source is absent (the node tests have no session).
+ */
+function editExtra(kind: 'note' | 'canvas', meta?: NoteMeta): string {
+  const opk = ownerAgentPubKeyHex();
+  let extra = kind === 'canvas' ? '&kind=canvas' : '';
+  if (opk) extra += `&opk=${opk}`;
+  if (meta?.title) extra += `&t=${encodeURIComponent(meta.title)}`;
+  if (meta?.cover) extra += `&cv=${encodeURIComponent(meta.cover)}`;
+  if (meta?.updated) extra += `&up=${encodeURIComponent(meta.updated)}`;
+  if (meta?.rev != null) extra += `&rv=${meta.rev}`;
+  if (meta?.sealed) extra += `&sl=${encodeURIComponent(meta.sealed)}`;
+  return extra;
+}
+
+/** The note header baked into an edit link so the guest sees the full document chrome immediately. */
+interface NoteMeta {
+  title?: string;
+  cover?: string;
+  updated?: string; // YYYY-MM-DD
+  rev?: number;
+  sealed?: string; // short seal id (e.g. "0x5d71…0000")
+}
+
 /** A no-password edit link: an unguessable room id. */
-const editRoomUrl = (roomId: string): string => withOrigin(`/read.html?room=${encodeURIComponent(roomId)}`);
+const editRoomUrl = (roomId: string, kind: 'note' | 'canvas', meta?: NoteMeta): string =>
+  withOrigin(`/read.html?room=${encodeURIComponent(roomId)}${editExtra(kind, meta)}`);
 /** A password-gated edit link: carries the SALT (room id derived client-side at join), never the room id. */
-const editSaltUrl = (salt: string): string => withOrigin(`/read.html?salt=${encodeURIComponent(salt)}&edit=1`);
+const editSaltUrl = (salt: string, kind: 'note' | 'canvas', meta?: NoteMeta): string =>
+  withOrigin(`/read.html?salt=${encodeURIComponent(salt)}&edit=1${editExtra(kind, meta)}`);
+
+/** The note's header fields from the live vault index, for baking into the link. */
+function noteMeta(noteId: string): NoteMeta {
+  const note = vaultData.getSnapshot().notes.find((n) => n.noteId === noteId) as
+    | { title?: string; cover?: string; updatedAt?: string; version?: number; blobObjectId?: string }
+    | undefined;
+  return {
+    title: note?.title,
+    cover: note?.cover,
+    updated: note?.updatedAt?.slice(0, 10),
+    rev: note?.version,
+    sealed: note?.blobObjectId ? shortSeal(note.blobObjectId) : undefined,
+  };
+}
+
+/** A short seal id (first/last) — mirrors the in-app `shortId` for the props row. */
+function shortSeal(id: string): string {
+  return id.length > 12 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id;
+}
 
 /** Build the edit link fields for the given password state (instant, no chain). */
-function editFields(password: string | null): Pick<ShareLink, 'url' | 'roomId' | 'salt'> {
+function editFields(password: string | null, kind: 'note' | 'canvas', noteId?: string): Pick<ShareLink, 'url' | 'roomId' | 'salt'> {
+  const meta = kind === 'note' && noteId ? noteMeta(noteId) : undefined;
   if (password) {
     const salt = randomShareId();
-    return { url: editSaltUrl(salt), roomId: undefined, salt };
+    return { url: editSaltUrl(salt, kind, meta), roomId: undefined, salt };
   }
   const roomId = randomShareId();
-  return { url: editRoomUrl(roomId), roomId, salt: undefined };
+  return { url: editRoomUrl(roomId, kind, meta), roomId, salt: undefined };
+}
+
+/**
+ * The owner's agent PUBLIC key as hex, read from the live session (no chain call —
+ * it's a pure read of the already-loaded device keypair). Returns undefined when
+ * no session is wired (node tests, or before connect), so the link simply omits
+ * the trust anchor in those contexts.
+ */
+function ownerAgentPubKeyHex(): string | undefined {
+  try {
+    const deps = getQuiltDeps();
+    if (!deps) return undefined;
+    const bytes = deps.agentSigner.getPublicKey().toRawBytes();
+    return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return undefined;
+  }
 }
 
 // ── publish (view) ───────────────────────────────────────────────────────
@@ -267,7 +338,7 @@ export async function createShareLink(
 ): Promise<void> {
   if (findLink(noteId)) return; // one link per note/canvas
   const base: ShareLink = { noteId, access, kind, title, password: null, url: '' };
-  const fields = access === 'edit' ? editFields(null) : {};
+  const fields = access === 'edit' ? editFields(null, kind, noteId) : {};
   store.update((prev) => ({ links: [{ ...base, ...fields }, ...prev.links] }));
 }
 
@@ -289,9 +360,10 @@ export async function setLinkAccess(noteId: string, access: LinkAccess): Promise
     // reuse the link's existing room/salt so the edit link is stable across switches;
     // mint one only if this link has never had an edit room.
     const haveRoom = link.password ? !!link.salt : !!link.roomId;
+    const meta = link.kind === 'note' ? noteMeta(noteId) : undefined;
     const fields = haveRoom
-      ? { url: link.password ? editSaltUrl(link.salt!) : editRoomUrl(link.roomId!) }
-      : editFields(link.password);
+      ? { url: link.password ? editSaltUrl(link.salt!, link.kind, meta) : editRoomUrl(link.roomId!, link.kind, meta) }
+      : editFields(link.password, link.kind, noteId);
     patchLink(noteId, { access, error: undefined, ...fields });
     return;
   }
@@ -315,7 +387,7 @@ export async function setLinkPassword(noteId: string, password: string | null): 
     patchLink(noteId, { password, url: '', viewUrl: undefined, error: undefined });
     return;
   }
-  patchLink(noteId, { password, ...editFields(password) });
+  patchLink(noteId, { password, ...editFields(password, link.kind, noteId) });
 }
 
 /**

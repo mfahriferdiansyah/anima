@@ -47,7 +47,18 @@ type ViewState =
 
 type Route =
   | { mode: 'view'; blobId: string; locked: boolean }
-  | { mode: 'edit'; room: string | null; salt: string | null }
+  | {
+      mode: 'edit';
+      room: string | null;
+      salt: string | null;
+      editKind: 'note' | 'canvas';
+      opk: string | null;
+      title: string | null;
+      cover: string | null;
+      updated: string | null;
+      rev: string | null;
+      sealed: string | null;
+    }
   | { mode: 'fixture' }
   | { mode: 'fixture-locked' }
   | { mode: 'fixture-canvas' }
@@ -65,7 +76,24 @@ export function parseRoute(search: string, hash: string): Route {
 
   const room = q.get('room');
   const salt = q.get('salt');
-  if (room || (salt && q.get('edit') === '1')) return { mode: 'edit', room, salt };
+  if (room || (salt && q.get('edit') === '1')) {
+    // `&kind=canvas` routes to the board surface (default note); `&opk=` is the
+    // owner's agent public key (trust anchor); `&t=`/`&cv=` are the document header
+    // (title + cover ref) so it shows immediately, without waiting for the owner.
+    const editKind = q.get('kind') === 'canvas' ? 'canvas' : 'note';
+    return {
+      mode: 'edit',
+      room,
+      salt,
+      editKind,
+      opk: q.get('opk'),
+      title: q.get('t'),
+      cover: q.get('cv'),
+      updated: q.get('up'),
+      rev: q.get('rv'),
+      sealed: q.get('sl'),
+    };
+  }
 
   return { mode: 'none' };
 }
@@ -343,19 +371,31 @@ function ViewReader({ blobId, locked }: { blobId: string; locked: boolean }): Re
 // so its code (and any transitive `@mysten`) is a SEPARATE async chunk (KTD6).
 // ---------------------------------------------------------------------------
 
-function EditReader({ room, salt }: { room: string | null; salt: string | null }): ReactElement {
-  const [El, setEl] = useState<null | ((p: { room: string | null; salt: string | null }) => ReactElement)>(null);
+interface EditReaderProps {
+  room: string | null;
+  salt: string | null;
+  editKind: 'note' | 'canvas';
+  opk: string | null;
+  title: string | null;
+  cover: string | null;
+  updated: string | null;
+  rev: string | null;
+  sealed: string | null;
+}
+
+function EditReader(props: EditReaderProps): ReactElement {
+  const [El, setEl] = useState<null | ((p: EditReaderProps) => ReactElement)>(null);
   useEffect(() => {
     let on = true;
     void import('./EditView').then((m) => {
-      if (on) setEl(() => m.EditView);
+      if (on) setEl(() => m.EditView as (p: EditReaderProps) => ReactElement);
     });
     return () => {
       on = false;
     };
   }, []);
   if (!El) return <LoadingDoc />;
-  return <El room={room} salt={salt} />;
+  return <El {...props} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -438,7 +478,19 @@ export function ReaderView(): ReactElement {
     case 'view':
       return <ViewReader blobId={route.blobId} locked={route.locked} />;
     case 'edit':
-      return <EditReader room={route.room} salt={route.salt} />;
+      return (
+        <EditReader
+          room={route.room}
+          salt={route.salt}
+          editKind={route.editKind}
+          opk={route.opk}
+          title={route.title}
+          cover={route.cover}
+          updated={route.updated}
+          rev={route.rev}
+          sealed={route.sealed}
+        />
+      );
     case 'none':
       return <NotFound />;
   }

@@ -29,6 +29,7 @@ import {
   type CanvasLayout,
   type PresenceMsg,
 } from '../../../chain/core/src/index.js';
+import type { CanvasElement } from '../../../chain/core/src/elements.js';
 import { getQuiltDeps } from '../web3/session';
 import { runDestructiveTx } from '../hooks/useVault';
 import { vaultData } from '../web3/vaultData';
@@ -130,6 +131,52 @@ export function parseMsg(raw: string): PresenceMsg | null {
         return { t: 'canvas-op', id: m.id, canvasId: m.canvasId, layout: m.layout as Record<string, { x: number; y: number }> };
       }
       return null;
+    // ── plan-2026-06-24 collaborative-share frames ──────────────────────────
+    case 'sync-req':
+      if (typeof m.id === 'string') return { t: 'sync-req', id: m.id };
+      return null;
+    case 'y-sync':
+      // a Yjs binary frame (base64); the doc layer validates the bytes, here we
+      // only confirm the envelope shape so a malformed frame is dropped.
+      if (typeof m.id === 'string' && typeof m.b === 'string') return { t: 'y-sync', id: m.id, b: m.b };
+      return null;
+    case 'el-op':
+      // one full CanvasElement; the element is re-validated + sanitized before
+      // it reaches reconcile/the DOM (web3/collabOps sanitizeElement), so here we
+      // only require the envelope + an object payload with a string id.
+      if (
+        typeof m.id === 'string' &&
+        typeof m.canvasId === 'string' &&
+        m.el &&
+        typeof m.el === 'object' &&
+        typeof (m.el as { id?: unknown }).id === 'string'
+      ) {
+        return { t: 'el-op', id: m.id, canvasId: m.canvasId, el: m.el as CanvasElement };
+      }
+      return null;
+    case 'el-chunk':
+      if (
+        typeof m.id === 'string' &&
+        typeof m.canvasId === 'string' &&
+        typeof m.gen === 'string' &&
+        typeof m.seq === 'number' &&
+        typeof m.total === 'number' &&
+        typeof m.b === 'string'
+      ) {
+        return { t: 'el-chunk', id: m.id, canvasId: m.canvasId, gen: m.gen, seq: m.seq, total: m.total, b: m.b };
+      }
+      return null;
+    case 'el-need':
+      if (
+        typeof m.id === 'string' &&
+        typeof m.canvasId === 'string' &&
+        typeof m.gen === 'string' &&
+        Array.isArray(m.seqs) &&
+        m.seqs.every((s) => typeof s === 'number')
+      ) {
+        return { t: 'el-need', id: m.id, canvasId: m.canvasId, gen: m.gen, seqs: m.seqs as number[] };
+      }
+      return null;
     default:
       return null;
   }
@@ -179,7 +226,14 @@ export function reducePeers(peers: Peer[], msg: PresenceMsg): Peer[] {
     case 'note-op':
     case 'note-writing':
     case 'canvas-op':
-      // content ops carry document state, not peer state — the peer list is unchanged.
+    // plan-2026-06-24 collaborative-share frames also carry document/sync state,
+    // not peer state — the peer list is unchanged (presence rides `awareness`,
+    // handled by the collab session, not this legacy peer reducer).
+    case 'sync-req':
+    case 'y-sync':
+    case 'el-op':
+    case 'el-chunk':
+    case 'el-need':
       return peers;
   }
 }
@@ -276,8 +330,39 @@ function send(msg: PresenceMsg): void {
   if (socket && socket.readyState === WebSocket.OPEN) socket.send(serializeMsg(msg));
 }
 
+// ── canvas co-edit el-op pub/sub (plan 2026-06-24 U6) ───────────────────────
+// The live board (Canvas.tsx) subscribes to inbound el-op / sync-req frames and
+// emits its own. The relay carries them opaquely; the apply/reconcile logic lives
+// in canvas/canvasCollab.ts. Kept as a thin pub/sub here so the single live socket
+// is reused (the per-room manager generalizes this in U9).
+
+type CollabFrameHandler = (msg: PresenceMsg) => void;
+const collabHandlers = new Set<CollabFrameHandler>();
+
+/** Subscribe to inbound collaborative-canvas frames (el-op / el-chunk / el-need / sync-req). Returns an unsubscribe. */
+export function onCanvasCollabFrame(handler: CollabFrameHandler): () => void {
+  collabHandlers.add(handler);
+  return () => collabHandlers.delete(handler);
+}
+
+/** Emit a collaborative-canvas frame through the live presence socket. */
+export function emitCanvasCollab(msg: PresenceMsg): void {
+  send(msg);
+}
+
+/** This client's presence session id (so the board can filter its own echoes). */
+export function presenceSelfId(): string {
+  return SELF_ID;
+}
+
+const CANVAS_COLLAB_FRAMES = new Set(['el-op', 'el-chunk', 'el-need', 'sync-req']);
+
 /** Apply a received frame to the store (peers + materialize). */
 function onFrame(msg: PresenceMsg): void {
+  if (CANVAS_COLLAB_FRAMES.has(msg.t)) {
+    for (const h of collabHandlers) h(msg);
+    return; // these carry document state, not peer state
+  }
   if (msg.t === 'note-created') {
     store.update((prev) => ({
       ...prev,

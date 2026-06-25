@@ -7,8 +7,23 @@ import { SHARED_CANVAS_ID, updateCanvas, useCanvases } from '@/hooks/useCanvases
 import { CoverPicker } from '@/components/CoverPicker';
 import { CanvasHome } from './CanvasHome';
 import { ShareDialog } from './ShareDialog';
-import { moveCursor, startPresence, stopPresence, usePresence } from '@/hooks/usePresence';
+import {
+  moveCursor,
+  startPresence,
+  stopPresence,
+  usePresence,
+  onCanvasCollabFrame,
+  emitCanvasCollab,
+  presenceSelfId,
+} from '@/hooks/usePresence';
 import type { Peer } from '@/hooks/usePresence';
+import { makeCanvasCollab, type CanvasCollab } from '@/canvas/canvasCollab';
+import { PresenceStack } from '@/components/PresenceStack';
+import { identityFor } from '@/web3/collabIdentity';
+import { useShare } from '@/hooks/useShare';
+import { deriveRoomId, syncReq } from '@/web3/collabOps';
+import { serializeMsg, parseMsg } from '@/mocks/presenceStore';
+import type { PresenceMsg } from '../../../chain/core/src/index.js';
 import { scheduleAgentNote } from '@/hooks/useAgentTimeline';
 import { useVaultSession } from '@/hooks/useVaultSession';
 import {
@@ -148,9 +163,12 @@ function isBindableLinear(el: CanvasElement): el is BindableLinear {
 function PeerCursor({ peer }: { peer: Peer }) {
   const style = { transform: `translate(${peer.x}px, ${peer.y}px)` };
   if (peer.kind === 'human') {
+    // Deterministic per-peer color (the same identity as the avatar stack), so a
+    // cursor and its circle match. Falls back through the kit palette, no new hue.
+    const { color } = identityFor(peer.id);
     return (
       <div className="pgcv-cursor human" style={style} aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path fill="#FF4D8D" d="M5 3l14 7-6.5 1.5L9 18z" /></svg>
+        <svg viewBox="0 0 24 24"><path fill={color} d="M5 3l14 7-6.5 1.5L9 18z" /></svg>
         <span>{peer.label}</span>
       </div>
     );
@@ -313,6 +331,117 @@ export function Canvas() {
     return () => stopPresence();
   }, [isShared, readyVaultId, canvasId]);
 
+  // Live element co-edit (plan 2026-06-24 U6): apply inbound el-ops through the
+  // reconcile core, and broadcast locally-changed elements. The controller reads
+  // the live elements ref and writes back via setElements; broadcasting is driven
+  // by the dedicated effect below (diffing against the last broadcast snapshot).
+  const collabRef = useRef<CanvasCollab | null>(null);
+  const lastBroadcastRef = useRef<Map<string, CanvasElement>>(new Map());
+  // The owner's responder on the SHARE-LINK room (a wallet-free guest's `?room=`).
+  const shareCollabRef = useRef<{ collab: CanvasCollab; roomId: string } | null>(null);
+  const { links } = useShare();
+  useEffect(() => {
+    if (!isShared || !canvasId) return;
+    const collab = makeCanvasCollab({
+      selfId: presenceSelfId(),
+      canvasId,
+      send: emitCanvasCollab,
+      getElements: () => elementsRef.current,
+      setElements,
+      // The in-app board is the owner's surface — it answers a guest's sync-req
+      // with the full scene (including tombstones). A wallet-free guest board
+      // (U13) defaults to non-responder.
+      isResponder: () => true,
+    });
+    collabRef.current = collab;
+    // Seed the broadcast snapshot so the first local edit diffs against the seed,
+    // not against empty (which would re-broadcast the whole board on first change).
+    lastBroadcastRef.current = new Map(elementsRef.current.map((el) => [el.id, el]));
+    const off = onCanvasCollabFrame((msg) => collab.onFrame(msg));
+    // Ask the room for any state we are missing (a guest may already be editing).
+    collab.requestSync();
+    return () => {
+      off();
+      collabRef.current = null;
+    };
+  }, [isShared, canvasId]);
+
+  // Live SHARE-LINK co-edit: when this board has an active `edit` share, the owner
+  // joins the share room (`?room=`) as the AUTHORITATIVE responder + broadcaster,
+  // so a wallet-free guest opening the link hydrates the SAVED board (not a blank
+  // one) and edits sync both ways. The guest's `CanvasEditRoom` uses `canvasId =
+  // <roomId>`, so the owner must too for el-ops to match.
+  const shareLink = links.find((l) => l.noteId === canvasId && l.access === 'edit' && l.kind === 'canvas') ?? null;
+  const shareRoomKey = shareLink ? (shareLink.roomId ?? (shareLink.salt ? `salt:${shareLink.salt}:${shareLink.password ?? ''}` : null)) : null;
+  useEffect(() => {
+    if (!canvasId || !shareLink) return;
+    let cancelled = false;
+    let ws: WebSocket | null = null;
+    let detach: (() => void) | null = null;
+
+    void (async () => {
+      // resolve the room id: a plain id, or PBKDF2(password, salt) the owner can compute
+      const roomId = shareLink.roomId ?? (shareLink.salt && shareLink.password ? await deriveRoomId(shareLink.password, shareLink.salt) : null);
+      if (!roomId || cancelled) return;
+      const base = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8080';
+      ws = new WebSocket(`${base.replace(/^http/, 'ws')}/presence?room=${encodeURIComponent(roomId)}`);
+      const selfId = `own-${presenceSelfId()}`;
+      const send = (m: PresenceMsg) => ws && ws.readyState === WebSocket.OPEN && ws.send(serializeMsg(m));
+      const collab = makeCanvasCollab({
+        selfId,
+        canvasId: roomId, // the guest keys el-ops on the room id
+        send,
+        getElements: () => elementsRef.current,
+        setElements,
+        isResponder: () => true, // the owner serves the saved board to late joiners
+      });
+      shareCollabRef.current = { collab, roomId };
+      ws.onopen = () => {
+        send({ t: 'hello', id: selfId, label: 'Owner', kind: 'human' });
+        send(syncReq(selfId));
+      };
+      ws.onmessage = (e) => {
+        const m = typeof e.data === 'string' ? parseMsg(e.data) : null;
+        if (m) collab.onFrame(m);
+      };
+      detach = () => {
+        try {
+          if (ws && ws.readyState === WebSocket.OPEN) ws.send(serializeMsg({ t: 'bye', id: selfId }));
+        } catch {
+          /* closing anyway */
+        }
+      };
+    })();
+
+    return () => {
+      cancelled = true;
+      detach?.();
+      ws?.close();
+      shareCollabRef.current = null;
+    };
+    // re-run when the share room changes (created / revoked / password set)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvasId, shareRoomKey]);
+
+  // Broadcast elements that changed locally (a new/edited/deleted element whose
+  // version advanced past the last broadcast). Skips remote-applied changes — the
+  // reconcile apply leaves the element's version as the remote peer set it, which
+  // already matches what we'd broadcast, so it is a no-op diff (no echo storm).
+  useEffect(() => {
+    const collab = collabRef.current;
+    const shareCollab = shareCollabRef.current?.collab ?? null;
+    if (!collab && !shareCollab) return;
+    const last = lastBroadcastRef.current;
+    for (const el of elements) {
+      const prev = last.get(el.id);
+      if (!prev || prev.version !== el.version || prev.versionNonce !== el.versionNonce) {
+        collab?.broadcast(el); // the auto-shared-board presence room
+        shareCollab?.broadcast(el); // the share-link room (wallet-free guests)
+        last.set(el.id, el);
+      }
+    }
+  }, [elements]);
+
   // Seed this board's elements from its durable content note. Disarms the seal
   // guard until the seed lands in `elements`. Re-seeds when the rebuilt index
   // publishes (hard reload straight into a board mounts before the rebuild).
@@ -325,7 +454,8 @@ export function Canvas() {
     // would clobber unsaved local placements mid-edit ("the note jumped back"). The
     // empty-board case still re-seeds so a hard reload (mount before the rebuild
     // publishes → empty seed) fills in once the rebuilt index lands. Live merge of a
-    // concurrent remote edit is U16 (relay) territory, deliberately not done here.
+    // concurrent remote edit now flows through the U6 el-op collab effect (above),
+    // which reconciles inbound elements into the live list without re-seeding here.
     const canvasChanged = lastSeededCanvasRef.current !== canvasId;
     if (!canvasChanged && elementsRef.current.length > 0) return;
     lastSeededCanvasRef.current = canvasId;
@@ -975,6 +1105,9 @@ export function Canvas() {
           </button>
         </span>
         <span className="sp" />
+        {isShared && peers.length > 0 ? (
+          <PresenceStack members={peers.map((p) => ({ id: p.id, label: p.label }))} />
+        ) : null}
         {isShared && connection !== 'live' ? (
           <span
             role="status"
