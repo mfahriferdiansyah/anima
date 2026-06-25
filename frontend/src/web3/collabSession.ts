@@ -32,7 +32,7 @@
  */
 import * as Y from 'yjs';
 import { Awareness, encodeAwarenessUpdate, applyAwarenessUpdate, removeAwarenessStates } from 'y-protocols/awareness';
-import { bytesToB64, b64ToBytes } from './collabOps';
+import { bytesToB64, b64ToBytes, roomState } from './collabOps';
 import type { PresenceMsg } from '../../../chain/core/src/index.js';
 
 /** The 1-byte kind at the head of a `y-sync` binary payload. */
@@ -84,6 +84,8 @@ export class CollabSession {
   private destroyed = false;
   /** When true, this peer answers a `sync-req` with the full STEP2 (the owner / present-peer responder). */
   authoritative = false;
+  /** Monotonic room-state seq, seeded from a wall-clock base so a reloaded owner's snapshot supersedes its older one. */
+  private roomStateSeq = Date.now();
 
   constructor(opts: CollabSessionOpts) {
     this.doc = new Y.Doc();
@@ -137,9 +139,18 @@ export class CollabSession {
 
   // ── inbound ─────────────────────────────────────────────────────────────
 
-  /** Feed an inbound `y-sync` or `sync-req` frame. Ignores our own echoes and other frame kinds. */
+  /** Feed an inbound `y-sync`, `sync-req`, or `room-state` frame. Ignores our own echoes and other frame kinds. */
   onFrame(msg: PresenceMsg): void {
     if (this.destroyed) return;
+    if (msg.t === 'room-state') {
+      // The relay's stored snapshot, handed to us on join (the owner may be
+      // offline). Apply exactly like a STEP2 — a Yjs update merged with the REMOTE
+      // origin so the echo guard doesn't re-broadcast it. CRDT-merge makes this
+      // idempotent and safe alongside a present owner's STEP2.
+      if (msg.id === this.selfId) return;
+      Y.applyUpdate(this.doc, b64ToBytes(msg.b), REMOTE);
+      return;
+    }
     if (msg.t === 'sync-req') {
       // A late joiner asks for state. Only the authoritative responder answers
       // with the full STEP2 (avoids the N-peer state storm on a broadcast bus);
@@ -172,6 +183,17 @@ export class CollabSession {
 
   private sendStep2(stateVector: Uint8Array): void {
     this.emitSync(tagged(Tag.Step2, Y.encodeStateAsUpdate(this.doc, stateVector)));
+  }
+
+  /**
+   * Push the whole doc to the relay as the room's stored catch-up snapshot
+   * (`room-state`), so a guest who joins while we're offline hydrates the saved
+   * note. Authoritative-only (the owner is the snapshot authority); the caller
+   * gates it further behind the seal lease so exactly one owner tab posts.
+   */
+  postRoomState(): void {
+    if (this.destroyed || !this.authoritative) return;
+    this.send(roomState(this.selfId, ++this.roomStateSeq, Y.encodeStateAsUpdate(this.doc)));
   }
 
   // ── loss recovery ─────────────────────────────────────────────────────────

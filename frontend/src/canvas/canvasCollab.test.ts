@@ -5,10 +5,13 @@
  * AE5 (same-element convergence + tombstone no-resurrect), the sanitize chokepoint,
  * and self / other-canvas filtering.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { makeCanvasCollab } from './canvasCollab';
+import { roomState } from '../web3/collabOps';
 import type { CanvasElement } from '../../../chain/core/src/elements.js';
 import type { PresenceMsg } from '../../../chain/core/src/index.js';
+
+const enc = new TextEncoder();
 
 function el(id: string, over: Partial<CanvasElement> = {}): CanvasElement {
   return {
@@ -221,6 +224,107 @@ describe('makeCanvasCollab — late-joiner chunked resync (U7)', () => {
     // owner resends the missing chunk → late joiner completes
     late.feed(chunks[dropIdx]);
     expect(late.elements.length).toBe(big.length);
+  });
+});
+
+describe('makeCanvasCollab — room-state catch-up (owner-offline) + reconcile', () => {
+  it('a guest hydrates from a relay room-state snapshot, sanitizing each element', () => {
+    let elements: CanvasElement[] = [];
+    const collab = makeCanvasCollab({
+      selfId: 'GUEST',
+      canvasId: 'board-1',
+      send: () => {},
+      getElements: () => elements,
+      setElements: (n) => (elements = n),
+      isResponder: () => false,
+      reconcileMs: 0,
+    });
+    const snapshot = [
+      el('e1', { x: 1 }),
+      el('e2', { x: 2 }),
+      el('evil', { type: 'image', ref: 'https://attacker/p.gif' } as Partial<CanvasElement>),
+    ];
+    collab.onFrame(roomState('owner', 1, enc.encode(JSON.stringify(snapshot))));
+    // The two legit elements land; the hostile image ref is dropped by sanitize —
+    // the SAME chokepoint as an el-op, so a poisoned snapshot can't reach the DOM.
+    expect(elements.map((e) => e.id).sort()).toEqual(['e1', 'e2']);
+    collab.dispose();
+  });
+
+  it('the responder posts room-state on sync-req; a guest never posts', () => {
+    const ownerSends: PresenceMsg[] = [];
+    let ownerEls: CanvasElement[] = [el('e1')];
+    const owner = makeCanvasCollab({
+      selfId: 'O',
+      canvasId: 'r',
+      send: (m) => ownerSends.push(m),
+      getElements: () => ownerEls,
+      setElements: (n) => (ownerEls = n),
+      isResponder: () => true,
+      reconcileMs: 0,
+    });
+    owner.onFrame({ t: 'sync-req', id: 'LATE' });
+    expect(ownerSends.some((m) => m.t === 'room-state')).toBe(true);
+
+    const guestSends: PresenceMsg[] = [];
+    const guest = makeCanvasCollab({
+      selfId: 'G',
+      canvasId: 'r',
+      send: (m) => guestSends.push(m),
+      getElements: () => [el('e1')],
+      setElements: () => {},
+      isResponder: () => false,
+      reconcileMs: 0,
+    });
+    guest.postRoomState();
+    expect(guestSends.some((m) => m.t === 'room-state')).toBe(false);
+    owner.dispose();
+    guest.dispose();
+  });
+
+  it('skips posting room-state when the scene exceeds one relay frame (chunked path covers it)', () => {
+    const sends: PresenceMsg[] = [];
+    const big: CanvasElement[] = [];
+    for (let i = 0; i < 4000; i++) big.push(el('e' + i, { x: i }));
+    const owner = makeCanvasCollab({
+      selfId: 'O',
+      canvasId: 'r',
+      send: (m) => sends.push(m),
+      getElements: () => big,
+      setElements: () => {},
+      isResponder: () => true,
+      reconcileMs: 0,
+    });
+    owner.postRoomState();
+    expect(sends.some((m) => m.t === 'room-state')).toBe(false);
+    owner.dispose();
+  });
+
+  it('periodically re-requests sync (loss recovery), and dispose() stops it', () => {
+    vi.useFakeTimers();
+    try {
+      const sends: PresenceMsg[] = [];
+      const collab = makeCanvasCollab({
+        selfId: 'G',
+        canvasId: 'r',
+        send: (m) => sends.push(m),
+        getElements: () => [],
+        setElements: () => {},
+        reconcileMs: 4000,
+        jitter: () => 0, // delay = 4000 * 0.75 = 3000
+      });
+      const syncReqs = () => sends.filter((m) => m.t === 'sync-req').length;
+      expect(syncReqs()).toBe(0);
+      vi.advanceTimersByTime(3001);
+      expect(syncReqs()).toBe(1);
+      vi.advanceTimersByTime(3001);
+      expect(syncReqs()).toBe(2);
+      collab.dispose();
+      vi.advanceTimersByTime(10000);
+      expect(syncReqs()).toBe(2); // no further reconciles after dispose
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

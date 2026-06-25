@@ -140,6 +140,20 @@ export function useShareCollab(noteId: string, editorRef?: React.RefObject<HTMLE
     });
     session.doc.on('update', seal.bump);
 
+    // Refresh the relay's stored catch-up snapshot as the doc settles (debounced),
+    // gated by the seal lease so exactly ONE owner tab posts — so a guest who joins
+    // while the owner is offline hydrates the latest note, not a blank one.
+    let roomStateTimer: ReturnType<typeof setTimeout> | null = null;
+    const postRoomStateSoon = (): void => {
+      if (!lease.isHeld()) return;
+      if (roomStateTimer) clearTimeout(roomStateTimer);
+      roomStateTimer = setTimeout(() => {
+        roomStateTimer = null;
+        session.postRoomState();
+      }, 1500);
+    };
+    session.doc.on('update', postRoomStateSoon);
+
     // Bind the in-app editor's contenteditable to the shared Y.Text (if provided),
     // so the owner types into the same CRDT as the guests.
     let unbind: (() => void) | null = null;
@@ -162,6 +176,9 @@ export function useShareCollab(noteId: string, editorRef?: React.RefObject<HTMLE
       sockSend({ t: 'hello', id: selfId, label: 'Owner', kind: 'human' });
       session.start();
       sockSend(syncReq(selfId));
+      // Seed the relay's catch-up snapshot with the saved note immediately, so a
+      // guest opening the link while we're offline hydrates it even with no edits.
+      session.postRoomState();
       setLive(true);
     };
     ws.onmessage = (e) => {
@@ -174,9 +191,11 @@ export function useShareCollab(noteId: string, editorRef?: React.RefObject<HTMLE
       // Share end: flush any un-settled edits BEFORE tearing down, so no burst is
       // stranded between the live seal and the manual Save.
       seal.flushNow();
+      if (roomStateTimer) clearTimeout(roomStateTimer);
       unbind?.();
       session.awareness.off('change', refreshGuests);
       session.doc.off('update', seal.bump);
+      session.doc.off('update', postRoomStateSoon);
       seal.dispose();
       lease.release();
       try {

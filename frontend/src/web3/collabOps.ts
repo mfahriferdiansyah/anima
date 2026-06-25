@@ -244,6 +244,15 @@ export const elChunk = (
 /** A selective re-request for the missing chunk seqs of one snapshot generation. */
 export const elNeed = (id: string, canvasId: string, gen: string, seqs: number[]): PresenceMsg => ({ t: 'el-need', id, canvasId, gen, seqs });
 
+/**
+ * The room's full snapshot, opaque base64 (a canvas element list, or a Yjs
+ * `encodeStateAsUpdate`). The relay keeps the newest one (by `seq`) and serves
+ * it to every joiner, so a guest hydrates even when the owner is offline. `seq`
+ * is the poster's monotonic counter (seeded from a wall-clock base so a reloaded
+ * owner's snapshot supersedes its pre-reload one).
+ */
+export const roomState = (id: string, seq: number, payload: Uint8Array): PresenceMsg => ({ t: 'room-state', id, seq, b: bytesToB64(payload) });
+
 // ---------------------------------------------------------------------------
 // 8. sanitizeElement — the canvas counterpart of sanitizeNoteHtml.
 //    An inbound el-op carries attacker-controllable fields that render straight

@@ -313,3 +313,120 @@ func TestGlobalRoomCeiling(t *testing.T) {
 		t.Fatalf("existing room should be unaffected by the ceiling: got=%q err=%v", got, err)
 	}
 }
+
+// 2026-06-24 — the relay stores the room's room-state snapshot and serves it to a
+// late joiner even when the original poster (the owner) has already left.
+func TestSnapshotServedToLateJoiner(t *testing.T) {
+	srv := httptest.NewServer(NewHub())
+	defer srv.Close()
+	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/presence?room=snap"
+
+	snap := `{"t":"room-state","id":"owner","seq":1,"b":"aGVsbG8="}`
+	owner := dial(t, url)
+	wctx, wcancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer wcancel()
+	if err := owner.Write(wctx, websocket.MessageText, []byte(snap)); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	// The owner leaves; the close frame is ordered after the snapshot, so the relay
+	// has stored it. The room stays alive (TTL) holding the snapshot.
+	owner.Close(websocket.StatusNormalClosure, "")
+
+	guest := dial(t, url)
+	defer guest.Close(websocket.StatusNormalClosure, "")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, got, err := guest.Read(ctx)
+	if err != nil || string(got) != snap {
+		t.Fatalf("late joiner should receive the stored snapshot with the owner gone: got=%q err=%v", got, err)
+	}
+}
+
+// 2026-06-24 — a lower-seq snapshot never replaces a higher-seq one (no regression
+// across owner reloads / two posters).
+func TestSnapshotSeqMonotonic(t *testing.T) {
+	srv := httptest.NewServer(NewHub())
+	defer srv.Close()
+	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/presence?room=mono"
+
+	hi := `{"t":"room-state","id":"o","seq":5,"b":"aGk="}` // newest
+	lo := `{"t":"room-state","id":"o","seq":3,"b":"bG8="}` // stale, must be ignored
+	owner := dial(t, url)
+	wctx, wcancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer wcancel()
+	if err := owner.Write(wctx, websocket.MessageText, []byte(hi)); err != nil {
+		t.Fatalf("write hi: %v", err)
+	}
+	if err := owner.Write(wctx, websocket.MessageText, []byte(lo)); err != nil {
+		t.Fatalf("write lo: %v", err)
+	}
+	owner.Close(websocket.StatusNormalClosure, "")
+
+	guest := dial(t, url)
+	defer guest.Close(websocket.StatusNormalClosure, "")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, got, err := guest.Read(ctx)
+	if err != nil || string(got) != hi {
+		t.Fatalf("joiner should get the highest-seq snapshot: got=%q err=%v", got, err)
+	}
+}
+
+// 2026-06-24 — room-state is STORED, not relayed: a present peer never receives it.
+func TestRoomStateNotBroadcastToPresentPeers(t *testing.T) {
+	srv := httptest.NewServer(NewHub())
+	defer srv.Close()
+	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/presence?room=nb"
+
+	a := dial(t, url)
+	defer a.Close(websocket.StatusNormalClosure, "")
+	b := dial(t, url)
+	defer b.Close(websocket.StatusNormalClosure, "")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	snap := `{"t":"room-state","id":"a","seq":1,"b":"eA=="}`
+	cur := `{"t":"cursor","id":"a","x":1,"y":1}`
+	if err := a.Write(ctx, websocket.MessageText, []byte(snap)); err != nil {
+		t.Fatalf("write snap: %v", err)
+	}
+	if err := a.Write(ctx, websocket.MessageText, []byte(cur)); err != nil {
+		t.Fatalf("write cur: %v", err)
+	}
+	// If the snapshot had been relayed it would arrive first; b must read the cursor.
+	_, got, err := b.Read(ctx)
+	if err != nil || string(got) != cur {
+		t.Fatalf("present peer should not receive room-state, only the cursor: got=%q err=%v", got, err)
+	}
+}
+
+// 2026-06-24 — a room empty past roomTTL is GC'd, freeing its snapshot; a fresh
+// joiner afterwards gets nothing.
+func TestRoomTTLEvictsSnapshot(t *testing.T) {
+	h := NewHub()
+	h.roomTTL = time.Millisecond
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/presence?room=ttl"
+
+	snap := `{"t":"room-state","id":"o","seq":1,"b":"eA=="}`
+	owner := dial(t, url)
+	wctx, wcancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer wcancel()
+	if err := owner.Write(wctx, websocket.MessageText, []byte(snap)); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	owner.Close(websocket.StatusNormalClosure, "")
+
+	// Let the server process the close (emptyAt set), then GC past the 1ms TTL.
+	time.Sleep(50 * time.Millisecond)
+	h.sweep()
+
+	guest := dial(t, url)
+	defer guest.Close(websocket.StatusNormalClosure, "")
+	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Millisecond)
+	defer cancel()
+	if _, _, err := guest.Read(ctx); err == nil {
+		t.Fatal("after TTL eviction a fresh joiner should receive no snapshot")
+	}
+}

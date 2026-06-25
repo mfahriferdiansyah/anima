@@ -33,6 +33,7 @@ import { randomShareId } from './collabOps';
 import { buildCanvasSnapshotNote } from './canvasSnapshot';
 import { runWithReceipt, objectProvenanceUrl, txProvenanceUrl, digestOf } from './onchainToast';
 import { publishNote, unpublishNote, listPublished } from '../../../chain/core/src/index.js';
+import { loadEditLinks, saveEditLinks } from './shareLinkCache';
 import type { Note } from '../../../chain/core/src/index.js';
 
 export type LinkAccess = 'edit' | 'view';
@@ -476,25 +477,59 @@ export async function reconcilePublished(): Promise<void> {
   if (additions.length) store.update((prev) => ({ links: [...additions, ...prev.links] }));
 }
 
+/**
+ * Rehydrate the device-local EDIT links for `vaultId` into the store. Local intent
+ * wins: only ADD a noteId not already present, so an in-session link is never
+ * clobbered (same dedup contract as `reconcilePublished`). This is what re-arms the
+ * owner's room responder/sealer after a reload.
+ */
+function rehydrateEditLinks(vaultId: string): void {
+  const cached = loadEditLinks(vaultId);
+  if (!cached.length) return;
+  const known = new Set(store.getSnapshot().links.map((l) => l.noteId));
+  const additions = cached.filter((l) => !known.has(l.noteId));
+  if (additions.length) store.update((prev) => ({ links: [...additions, ...prev.links] }));
+}
+
 // ── reconcile trigger ───────────────────────────────────────────────────────
 //
 // View links are chain-as-registry, so they must repopulate from `listPublished`
-// whenever the live vault index swaps (session rebuild / account switch). Without
-// this, a fresh load shows no link for a previously view-published note, and
-// opening its ShareDialog would auto-create an EDIT link while the old world-
-// readable `anima-pub` blob sits on-chain, un-seeable and un-revokable from the
-// UI. Subscribe at module scope (like the hooks) and fire once per index identity:
-//  - a non-null index reconciles view links in (local intent still wins);
-//  - a null index (disconnect / account switch) clears the store so a stale
-//    account's links never linger.
+// whenever the live vault index swaps (session rebuild / account switch). Edit
+// links carry no chain record, so they repopulate from the device-local cache
+// (`shareLinkCache`). Without either, a fresh load shows no link for a previously
+// shared note, and opening its ShareDialog would auto-create a duplicate. Subscribe
+// at module scope (like the hooks) and fire once per index identity:
+//  - a non-null index rehydrates edit links + reconciles view links (local wins);
+//  - a null index (disconnect / account switch) clears the in-memory store so a
+//    stale account's links never linger (the device cache is keyed by vault, so it
+//    stays put for the next reconnect to that same vault).
 let lastIndex: unknown = null;
+let activeShareVaultId: string | null = null;
 vaultData.subscribe(() => {
   const idx = vaultData.getSnapshot().index;
   if (idx === lastIndex) return; // same index object: no swap, nothing to do
   lastIndex = idx;
   if (!idx) {
+    activeShareVaultId = null; // stop persisting before the store is emptied
     store.update(() => ({ links: [] }));
     return;
   }
+  const vaultId = getQuiltDeps()?.vaultId ?? null;
+  activeShareVaultId = vaultId;
+  if (vaultId) rehydrateEditLinks(vaultId); // edit links first, so view reconcile dedups against them
   void reconcilePublished();
+});
+
+// Auto-persist the live EDIT links (debounced) on any store change — add, revoke,
+// access/password toggle — so the device cache always mirrors the current shares
+// without per-mutator plumbing (mirrors `indexCache`'s auto-save).
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+store.subscribe(() => {
+  const vaultId = activeShareVaultId;
+  if (!vaultId) return;
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    saveEditLinks(vaultId, store.getSnapshot().links);
+  }, 400);
 });

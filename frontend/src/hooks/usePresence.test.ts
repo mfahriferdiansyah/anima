@@ -33,6 +33,7 @@ describe('presence wire (de)serialization', () => {
     { t: 'writing', id: 'p1', on: true },
     { t: 'note-created', id: 'p1', noteId: 'n-xyz' },
     { t: 'bye', id: 'p1' },
+    { t: 'room-state', id: 'owner', seq: 1700000000000, b: 'W3siaWQiOiJlMSJ9XQ==' },
   ];
 
   it('round-trips every PresenceMsg variant', () => {
@@ -55,6 +56,8 @@ describe('presence wire (de)serialization', () => {
     expect(parseMsg(JSON.stringify({ t: 'hello', id: 'p1', label: 'x', kind: 'robot' }))).toBeNull();
     expect(parseMsg(JSON.stringify({ t: 'cursor', id: 'p1', x: 'NaN', y: 0 }))).toBeNull();
     expect(parseMsg(JSON.stringify({ t: 'writing', id: 'p1', on: 'yes' }))).toBeNull();
+    expect(parseMsg(JSON.stringify({ t: 'room-state', id: 'o', seq: 'x', b: 'AA==' }))).toBeNull(); // seq not a number
+    expect(parseMsg(JSON.stringify({ t: 'room-state', id: 'o', seq: 1 }))).toBeNull(); // missing payload
   });
 });
 

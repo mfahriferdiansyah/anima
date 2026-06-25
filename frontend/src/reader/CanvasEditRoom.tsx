@@ -53,6 +53,7 @@ export function CanvasEditRoom({ room }: { room: string }): ReactElement {
       if (msg) collab.onFrame(msg);
     };
     return () => {
+      collab.dispose();
       try {
         if (ws.readyState === WebSocket.OPEN) ws.send(serializeMsg({ t: 'bye', id }));
       } catch {

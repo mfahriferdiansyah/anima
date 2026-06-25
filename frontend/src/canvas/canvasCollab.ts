@@ -13,8 +13,8 @@
 import type { CanvasElement } from '../../../chain/core/src/elements.js';
 import type { PresenceMsg } from '../../../chain/core/src/index.js';
 import { reconcile } from './reconcile';
-import { elOp, elChunk, elNeed, sanitizeElement, b64ToBytes, randomShareId } from '../web3/collabOps';
-import { chunkSnapshot, SnapshotReceiver } from '../web3/collabSnapshotChunk';
+import { elOp, elChunk, elNeed, roomState, sanitizeElement, b64ToBytes, randomShareId } from '../web3/collabOps';
+import { chunkSnapshot, SnapshotReceiver, CHUNK_BYTES } from '../web3/collabSnapshotChunk';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -33,6 +33,10 @@ export interface CanvasCollabOpts {
    * only re-announces. Read each time so the caller can flip it on owner presence.
    */
   isResponder?: () => boolean;
+  /** Loss-recovery reconcile cadence (ms); 0 disables it (tests). Default 4000. */
+  reconcileMs?: number;
+  /** Deterministic jitter for tests (defaults to Math.random). */
+  jitter?: () => number;
 }
 
 export interface CanvasCollab {
@@ -42,8 +46,17 @@ export interface CanvasCollab {
   broadcastMany: (els: CanvasElement[]) => void;
   /** Ask the room for the current scene (broadcast on join). */
   requestSync: () => void;
-  /** Feed an inbound relay frame; applies el-op / chunk / re-request / sync-req. */
+  /**
+   * Push the current scene to the relay as the room's catch-up snapshot, so a
+   * future joiner hydrates it even with no peer present. No-op unless this peer is
+   * the responder (owner); skipped when the scene exceeds the single-frame cap (the
+   * chunked sync-req path is the backstop for huge boards).
+   */
+  postRoomState: () => void;
+  /** Feed an inbound relay frame; applies el-op / chunk / re-request / sync-req / room-state. */
   onFrame: (msg: PresenceMsg) => void;
+  /** Stop the periodic reconcile timer (call on teardown). */
+  dispose: () => void;
 }
 
 /**
@@ -56,12 +69,19 @@ export interface CanvasCollab {
 export function makeCanvasCollab(opts: CanvasCollabOpts): CanvasCollab {
   const { selfId, canvasId, send, getElements, setElements } = opts;
   const isResponder = opts.isResponder ?? (() => false);
+  const reconcileMs = opts.reconcileMs ?? 4000;
+  const jitter = opts.jitter ?? (() => Math.random());
 
   // Cache the chunks of the snapshot we last served, keyed by gen, so an `el-need`
   // re-request resends only the missing seqs (selective, not a full re-flood).
   let servedGen: string | null = null;
   let servedChunks: ReturnType<typeof chunkSnapshot> = [];
   const receiver = new SnapshotReceiver();
+
+  // Monotonic room-state seq, seeded from a wall-clock base so a reloaded owner's
+  // snapshot always supersedes its pre-reload one (the relay keeps the highest seq).
+  let roomStateSeq = Date.now();
+  let reconcileTimer: ReturnType<typeof setTimeout> | null = null;
 
   const broadcast = (el: CanvasElement): void => {
     send(elOp(selfId, canvasId, el));
@@ -82,6 +102,19 @@ export function makeCanvasCollab(opts: CanvasCollabOpts): CanvasCollab {
     servedGen = randomShareId(8);
     servedChunks = chunkSnapshot(bytes, servedGen);
     for (const c of servedChunks) send(elChunk(selfId, canvasId, c.gen, c.seq, c.total, c.payload));
+  };
+
+  /**
+   * Push the current scene to the relay as the room's stored catch-up snapshot
+   * (`room-state`). Responder-only (the owner is the snapshot authority). A scene
+   * that wouldn't fit one relay frame is left to the chunked sync-req backstop, so
+   * we never post an oversized frame (which the relay's read cap would drop).
+   */
+  const postRoomState = (): void => {
+    if (!isResponder()) return;
+    const bytes = enc.encode(JSON.stringify(getElements()));
+    if (bytes.length > CHUNK_BYTES) return; // too big for one frame — chunked path covers it
+    send(roomState(selfId, ++roomStateSeq, bytes));
   };
 
   const applyReceived = (bytes: Uint8Array): void => {
@@ -108,8 +141,20 @@ export function makeCanvasCollab(opts: CanvasCollabOpts): CanvasCollab {
       }
       case 'sync-req': {
         // Only the responder (owner / present-peer fallback) serves the full scene;
-        // a non-responder ignores it (avoids the N-peer state storm on a bus).
-        if (isResponder()) serveSnapshot();
+        // a non-responder ignores it (avoids the N-peer state storm on a bus). Also
+        // refresh the relay's stored snapshot so a later joiner gets current state.
+        if (isResponder()) {
+          serveSnapshot();
+          postRoomState();
+        }
+        return;
+      }
+      case 'room-state': {
+        // The relay's stored snapshot, handed to us on join (owner may be offline).
+        // Apply it through the SAME sanitize+reconcile path as a chunked snapshot, so
+        // a poison element can never reach the DOM and a stale scene can't clobber a
+        // newer local one (reconcile is version+nonce, tombstone-safe).
+        applyReceived(b64ToBytes(msg.b));
         return;
       }
       case 'el-chunk': {
@@ -136,5 +181,26 @@ export function makeCanvasCollab(opts: CanvasCollabOpts): CanvasCollab {
     }
   };
 
-  return { broadcast, broadcastMany, requestSync, onFrame };
+  // Loss-recovery reconcile: re-broadcast a `sync-req` on a jittered cadence so a
+  // dropped el-op / missed snapshot is back-filled by a present responder — the
+  // canvas counterpart of collabSession.scheduleReconcile.
+  const scheduleReconcile = (): void => {
+    if (reconcileMs <= 0) return;
+    const delay = reconcileMs * (0.75 + 0.5 * jitter());
+    reconcileTimer = setTimeout(() => {
+      requestSync();
+      scheduleReconcile();
+    }, delay);
+  };
+
+  const dispose = (): void => {
+    if (reconcileTimer) {
+      clearTimeout(reconcileTimer);
+      reconcileTimer = null;
+    }
+  };
+
+  scheduleReconcile();
+
+  return { broadcast, broadcastMany, requestSync, postRoomState, onFrame, dispose };
 }

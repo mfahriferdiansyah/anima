@@ -177,6 +177,13 @@ export function parseMsg(raw: string): PresenceMsg | null {
         return { t: 'el-need', id: m.id, canvasId: m.canvasId, gen: m.gen, seqs: m.seqs as number[] };
       }
       return null;
+    case 'room-state':
+      // the room's opaque full snapshot (canvas element list or a Yjs update),
+      // base64; the apply layer (canvasCollab / collabSession) validates the bytes.
+      if (typeof m.id === 'string' && typeof m.seq === 'number' && typeof m.b === 'string') {
+        return { t: 'room-state', id: m.id, seq: m.seq, b: m.b };
+      }
+      return null;
     default:
       return null;
   }
@@ -234,6 +241,7 @@ export function reducePeers(peers: Peer[], msg: PresenceMsg): Peer[] {
     case 'el-op':
     case 'el-chunk':
     case 'el-need':
+    case 'room-state':
       return peers;
   }
 }
@@ -355,7 +363,7 @@ export function presenceSelfId(): string {
   return SELF_ID;
 }
 
-const CANVAS_COLLAB_FRAMES = new Set(['el-op', 'el-chunk', 'el-need', 'sync-req']);
+const CANVAS_COLLAB_FRAMES = new Set(['el-op', 'el-chunk', 'el-need', 'sync-req', 'room-state']);
 
 /** Apply a received frame to the store (peers + materialize). */
 function onFrame(msg: PresenceMsg): void {

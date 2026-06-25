@@ -92,9 +92,15 @@ export async function syncNewQuilts(
  *  - `el-chunk`  — a chunk of a large board resync snapshot (`gen`-tagged so two
  *                  snapshot generations never interleave; `seq`/`total` order them).
  *  - `el-need`   — a selective re-request for missing chunk seqs of one `gen`.
+ *  - `room-state`— the room's current full snapshot (opaque base64): the canvas
+ *                  element list, or a Yjs `encodeStateAsUpdate`. The relay STORES
+ *                  the newest one (by `seq`) and hands it to every new joiner, so a
+ *                  guest hydrates the saved scene even when the owner is offline.
  *
- * All of these flow only while a share is active and are relayed opaquely; the
- * relay holds nothing. Binary payloads ride as base64 inside the JSON frame.
+ * All of these flow only while a share is active and are relayed opaquely. The
+ * relay parses nothing EXCEPT `room-state`, of which it keeps one bounded,
+ * TTL'd, in-memory copy per room (never on disk) — see `backend/.../hub.go`.
+ * Binary payloads ride as base64 inside the JSON frame.
  */
 export type PresenceMsg =
   | { t: 'hello'; id: string; label: string; kind: 'human' | 'agent' }
@@ -109,4 +115,5 @@ export type PresenceMsg =
   | { t: 'y-sync'; id: string; b: string }
   | { t: 'el-op'; id: string; canvasId: string; el: CanvasElement }
   | { t: 'el-chunk'; id: string; canvasId: string; gen: string; seq: number; total: number; b: string }
-  | { t: 'el-need'; id: string; canvasId: string; gen: string; seqs: number[] };
+  | { t: 'el-need'; id: string; canvasId: string; gen: string; seqs: number[] }
+  | { t: 'room-state'; id: string; seq: number; b: string };

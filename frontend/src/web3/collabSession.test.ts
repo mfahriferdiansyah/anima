@@ -93,6 +93,37 @@ describe('CollabSession — sync handshake + convergence', () => {
   });
 });
 
+describe('CollabSession — room-state catch-up (owner-offline)', () => {
+  it('a guest hydrates from a relay room-state snapshot with no peer present', () => {
+    // The owner builds the doc and the room-state frame it would post to the relay.
+    const ownerSent: PresenceMsg[] = [];
+    const owner = new CollabSession({ send: (m) => ownerSent.push(m), selfId: 'OWNER', reconcileMs: 0 });
+    owner.authoritative = true;
+    owner.doc.getText('body').insert(0, 'saved note body');
+    owner.postRoomState();
+    const frame = ownerSent.find((m) => m.t === 'room-state');
+    expect(frame).toBeDefined();
+
+    // A guest, alone (the owner has since gone offline), applies the stored frame —
+    // exactly the STEP2 apply path, so it converges with no authoritative peer up.
+    const guest = new CollabSession({ send: () => {}, selfId: 'GUEST', reconcileMs: 0 });
+    guest.onFrame(frame!);
+    expect(guest.doc.getText('body').toString()).toBe('saved note body');
+
+    owner.destroy();
+    guest.destroy();
+  });
+
+  it('only the authoritative peer posts room-state', () => {
+    const guestSent: PresenceMsg[] = [];
+    const guest = new CollabSession({ send: (m) => guestSent.push(m), selfId: 'G', reconcileMs: 0 });
+    guest.doc.getText('body').insert(0, 'x');
+    guest.postRoomState();
+    expect(guestSent.some((m) => m.t === 'room-state')).toBe(false);
+    guest.destroy();
+  });
+});
+
 describe('CollabSession — echo guard', () => {
   it('a remote-applied update is NOT re-broadcast (no amplification loop)', () => {
     // B builds a real Update frame; A applies it and must emit nothing in response.

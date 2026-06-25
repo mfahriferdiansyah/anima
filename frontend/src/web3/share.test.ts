@@ -38,6 +38,7 @@ import {
   resetShareStore,
   shareStore,
 } from './share';
+import { saveEditLinks, loadEditLinks } from './shareLinkCache';
 
 const DEPS = { suiClient: {}, agentSigner: {}, walletAddress: '0xowner', vaultId: '0xv' } as never;
 const links = () => shareStore.getSnapshot().links;
@@ -417,6 +418,58 @@ describe('absolute links — the browser origin is stamped so a copied link has 
       expect(link('n-1')!.url).toBe('https://anima.app/read.html?b=B');
     } finally {
       delete g.window;
+    }
+  });
+});
+
+describe('edit-link persistence — survives reload so the owner re-arms the room', () => {
+  // node-env has no localStorage; install a Map-backed stub for this group.
+  beforeEach(() => {
+    const m = new Map<string, string>();
+    (globalThis as unknown as { localStorage: Storage }).localStorage = {
+      getItem: (k: string) => (m.has(k) ? m.get(k)! : null),
+      setItem: (k: string, v: string) => void m.set(k, v),
+      removeItem: (k: string) => void m.delete(k),
+      clear: () => m.clear(),
+      key: (i: number) => [...m.keys()][i] ?? null,
+      get length() {
+        return m.size;
+      },
+    } as Storage;
+  });
+
+  it('caches only edit links, and only their capability fields', () => {
+    saveEditLinks('0xv', [
+      { noteId: 'e1', access: 'edit', kind: 'note', password: 'pw', url: 'u', salt: 's', title: 'T', phase: 'publishing', error: 'x', blobObjectId: '0xb' } as never,
+      { noteId: 'v1', access: 'view', kind: 'note', password: null, url: 'u2' } as never,
+    ]);
+    const got = loadEditLinks('0xv');
+    expect(got).toHaveLength(1); // the view link is excluded
+    expect(got[0].noteId).toBe('e1');
+    expect(got[0].salt).toBe('s');
+    expect((got[0] as Record<string, unknown>).phase).toBeUndefined(); // transient field dropped
+    expect((got[0] as Record<string, unknown>).blobObjectId).toBeUndefined();
+  });
+
+  it('rehydrates a persisted edit link when the vault index loads (local intent wins on dedup)', async () => {
+    saveEditLinks('0xv', [
+      { noteId: 'n-room', access: 'edit', kind: 'canvas', password: null, url: 'https://anima.app/read.html?room=R9&kind=canvas', roomId: 'R9' } as never,
+    ]);
+    seedNote('n-room'); // index swap to vault 0xv → the module-scope subscribe rehydrates
+    await new Promise((r) => setTimeout(r, 0));
+    expect(link('n-room')?.access).toBe('edit');
+    expect(link('n-room')?.roomId).toBe('R9');
+  });
+
+  it('persists a new edit link to localStorage as the store changes', async () => {
+    vi.useFakeTimers();
+    try {
+      seedNote('n-keep'); // sets the active vault so the persist subscription engages
+      await createShareLink('n-keep', 'edit');
+      vi.advanceTimersByTime(500); // past the 400ms persist debounce
+      expect(loadEditLinks('0xv').some((l) => l.noteId === 'n-keep')).toBe(true);
+    } finally {
+      vi.useRealTimers();
     }
   });
 });
