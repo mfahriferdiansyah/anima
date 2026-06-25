@@ -45,8 +45,6 @@ import {
 } from '../../../chain/core/src/index.js';
 import { getQuiltDeps } from '@/web3/session';
 import { objectProvenanceUrl } from '@/web3/onchainToast';
-import { makeSealController, type SealController } from '@/web3/sealOnIdle';
-import { acquireSealLease, type SealLease } from '@/web3/ownerLock';
 import { resolveCover } from '@/web3/covers';
 import { vaultData } from '@/web3/vaultData';
 import { hitTopElement, marqueeSelect } from '@/canvas/hittest';
@@ -343,13 +341,6 @@ export function Canvas() {
   const shareCollabRef = useRef<{ collab: CanvasCollab; roomId: string } | null>(null);
   // Debounce for refreshing the relay's stored room-state snapshot as edits settle.
   const roomStatePostRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Auto-seal-to-Walrus during an active share (parity with the note path): the
-  // controller debounces durable saves so a guest's edits persist even after the
-  // owner leaves; the lease elects a single sealer across the owner's tabs.
-  const shareSealRef = useRef<SealController | null>(null);
-  const shareLeaseRef = useRef<SealLease | null>(null);
-  // Re-entrancy guard so the manual save and the auto-seal never write concurrently.
-  const savingRef = useRef(false);
   const { links } = useShare();
   useEffect(() => {
     if (!isShared || !canvasId) return;
@@ -408,18 +399,6 @@ export function Canvas() {
         isResponder: () => true, // the owner serves the saved board to late joiners
       });
       shareCollabRef.current = { collab, roomId };
-      // Auto-seal the live board to Walrus on idle (parity with the note path), so a
-      // guest's edits survive even after the owner closes the board. One sealer
-      // across the owner's tabs (the Web Locks lease); the manual Save flushes it.
-      const lease = acquireSealLease(roomId);
-      shareLeaseRef.current = lease;
-      shareSealRef.current = makeSealController({
-        readBody: () => JSON.stringify(elementsForSave(elementsRef.current)),
-        seal: async () => {
-          if (!lease.isHeld()) return; // only the elected sealer writes
-          await persistCanvasRef.current(true); // silent — feedback is the Saving…/Saved button
-        },
-      });
       ws.onopen = () => {
         send({ t: 'hello', id: selfId, label: 'Owner', kind: 'human' });
         send(syncReq(selfId));
@@ -442,13 +421,6 @@ export function Canvas() {
 
     return () => {
       cancelled = true;
-      // Flush any un-settled edits to Walrus BEFORE tearing down, so the last burst
-      // of a session isn't stranded between the auto-seal and the manual Save.
-      shareSealRef.current?.flushNow();
-      shareSealRef.current?.dispose();
-      shareSealRef.current = null;
-      shareLeaseRef.current?.release();
-      shareLeaseRef.current = null;
       shareCollabRef.current?.collab.dispose();
       detach?.();
       ws?.close();
@@ -479,15 +451,14 @@ export function Canvas() {
     }
     // As the owner's edits settle, refresh the relay's stored snapshot (debounced),
     // so a guest who joins the share room later — even after we go offline — hydrates
-    // the latest scene, not just the board as it was when we connected. Also nudge
-    // the auto-seal so a guest's edits reach durable Walrus storage on idle.
+    // the latest scene. This is a RELAY post (ephemeral live-session state), NOT a
+    // Walrus write — durable saves happen only on the manual Save button.
     if (changed && shareCollab) {
       if (roomStatePostRef.current) clearTimeout(roomStatePostRef.current);
       roomStatePostRef.current = setTimeout(() => {
         roomStatePostRef.current = null;
         shareCollabRef.current?.collab.postRoomState();
       }, 1500);
-      shareSealRef.current?.bump();
     }
   }, [elements]);
 
@@ -679,83 +650,68 @@ export function Canvas() {
     placeNoteElement(createNote(), wx, wy);
   };
 
-  // Seal the scene to Walrus (owner-signed), mirroring the note Save. `silent`
-  // distinguishes the auto-seal during a live share (no per-burst toast — feedback
-  // is the Saving…/Saved button) from an explicit manual save (a "Saving canvas"
-  // receipt). The savingRef guard serializes the two so they never write at once.
-  const persistCanvas = (silent: boolean): Promise<void> => {
-    if (savingRef.current) return Promise.resolve();
-    savingRef.current = true;
+  // Manual seal of the scene to Walrus (owner-signed), mirroring the note Save.
+  // Walrus writes happen ONLY on this explicit click — never on a timer.
+  const save = () => {
+    if (saving) return;
     setSaving(true);
-    const eventId = vaultData.beginWriteEvent(
-      silent
-        ? { noteId: canvasContentTag(canvasId), noteTitle: boardTitle, state: { phase: 'certifying' }, silent: true }
-        : {
-            noteId: canvasContentTag(canvasId),
-            noteTitle: boardTitle,
-            state: { phase: 'certifying' },
-            labels: { pending: 'Saving canvas', success: 'Canvas saved' },
-          },
-    );
-    return (async () => {
+    // A NON-silent receipt appears the instant you click, so the click always has a
+    // visible response (the global "Saving canvas" toast), resolving to "Canvas
+    // saved" or a clear failure — no silent button flip. The receipt also keeps the
+    // bulk-forget quiesce awaiting this in-flight seal, like note/layout saves.
+    const eventId = vaultData.beginWriteEvent({
+      noteId: canvasContentTag(canvasId),
+      noteTitle: boardTitle,
+      state: { phase: 'certifying' },
+      labels: { pending: 'Saving canvas', success: 'Canvas saved' },
+    });
+    void (async () => {
+      const deps = getQuiltDeps();
+      const index = vaultData.getSnapshot().index;
+      if (!deps || !index) {
+        vaultData.updateWriteEvent(eventId, { phase: 'failed' });
+        setSaving(false);
+        return;
+      }
+      // Funding check first: surface the banner and skip a doomed seal rather than
+      // attempting a write that will fail. `dirty` stays true so a retry after a
+      // top-up re-seals.
       try {
-        const deps = getQuiltDeps();
-        const index = vaultData.getSnapshot().index;
-        if (!deps || !index) {
-          vaultData.updateWriteEvent(eventId, { phase: 'failed' });
-          return;
-        }
-        // Funding check first: surface the banner and skip a doomed seal rather than
-        // attempting a write that will fail. `dirty` stays true so a retry after a
-        // top-up re-seals.
-        try {
-          const pf = await preflight(deps.suiClient, deps.agentSigner.toSuiAddress());
-          if (!pf.ok) {
-            vaultData.updateWriteEvent(eventId, { phase: 'failed' });
-            triggerLowBalance();
-            return;
-          }
-          dismissLowBalance();
-        } catch {
-          /* RPC blip — fall through and let the write surface the real outcome */
-        }
-        // Persist a pending title edit (registry) as part of the save.
-        if (pendingTitleRef.current && pendingTitleRef.current !== boardTitle) {
-          updateCanvas(canvasId, { title: pendingTitleRef.current });
-          pendingTitleRef.current = null;
-        }
-        try {
-          const res = await saveCanvasContent(deps, index, canvasId, { elements: elementsForSave(elementsRef.current) });
-          // Link the receipt to the sealed blob on chain (same provenance link a note
-          // save shows), so "View provenance" appears on the canvas-saved toast.
-          vaultData.updateWriteEvent(eventId, {
-            phase: 'certified',
-            blobObjectId: res.blobObjectId,
-            provenanceUrl: objectProvenanceUrl(res.blobObjectId),
-          });
-          if (res.migrationTx) void runDestructiveTx(res.migrationTx).catch(() => {});
-          dismissLowBalance();
-          setDirty(false);
-        } catch {
+        const pf = await preflight(deps.suiClient, deps.agentSigner.toSuiAddress());
+        if (!pf.ok) {
           vaultData.updateWriteEvent(eventId, { phase: 'failed' });
           triggerLowBalance();
+          setSaving(false);
+          return;
         }
+        dismissLowBalance();
+      } catch {
+        /* RPC blip — fall through and let the write surface the real outcome */
+      }
+      // Persist a pending title edit (registry) as part of the manual save.
+      if (pendingTitleRef.current && pendingTitleRef.current !== boardTitle) {
+        updateCanvas(canvasId, { title: pendingTitleRef.current });
+        pendingTitleRef.current = null;
+      }
+      try {
+        const res = await saveCanvasContent(deps, index, canvasId, { elements: elementsForSave(elementsRef.current) });
+        // Link the receipt to the sealed blob on chain (same provenance link a note
+        // save shows), so "View provenance" appears on the canvas-saved toast.
+        vaultData.updateWriteEvent(eventId, {
+          phase: 'certified',
+          blobObjectId: res.blobObjectId,
+          provenanceUrl: objectProvenanceUrl(res.blobObjectId),
+        });
+        if (res.migrationTx) void runDestructiveTx(res.migrationTx).catch(() => {});
+        dismissLowBalance();
+        setDirty(false);
+      } catch {
+        vaultData.updateWriteEvent(eventId, { phase: 'failed' });
+        triggerLowBalance();
       } finally {
-        savingRef.current = false;
         setSaving(false);
       }
     })();
-  };
-  // Keep a stable handle to the latest persistCanvas so the share effect's seal
-  // controller (created once) always calls the current closure.
-  const persistCanvasRef = useRef(persistCanvas);
-  persistCanvasRef.current = persistCanvas;
-
-  // The Save button: during an active share, flush through the seal controller (one
-  // writer, idle-debounced, lease-elected); otherwise an explicit manual save.
-  const onSaveClick = (): void => {
-    if (shareSealRef.current) shareSealRef.current.flushNow();
-    else void persistCanvas(false);
   };
 
   // Resize/rotate a selection (U7). The viewport captures the pointer so the
@@ -1200,7 +1156,7 @@ export function Canvas() {
             Saving…
           </button>
         ) : dirty ? (
-          <button type="button" className="pgbtn primary" onClick={onSaveClick}>
+          <button type="button" className="pgbtn primary" onClick={save}>
             Save
           </button>
         ) : (
@@ -1476,7 +1432,7 @@ export function Canvas() {
             <Button
               variant="primary"
               onClick={() => {
-                onSaveClick();
+                save();
                 blocker.proceed?.();
               }}
             >

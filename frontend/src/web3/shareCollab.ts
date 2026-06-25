@@ -1,29 +1,28 @@
 /**
  * Owner-side note co-edit (plan 2026-06-24 U5) — the OWNER's counterpart to the
  * guest editor (reader/EditView, U4). While an `edit` share is active for the open
- * note, the owner joins the same relay room as the AUTHORITATIVE Yjs sync responder
- * and the SINGLE durable sealer.
+ * note, the owner joins the same relay room as the AUTHORITATIVE Yjs sync responder.
  *
- * It speaks the same CRDT as the guest (CollabSession / y-sync, U2) — the plan-008
- * whole-body LWW `makeOwnerCollab` is replaced, since a guest now speaks Yjs and the
- * two must interoperate. The owner's Y.Text is seeded from the durable note body and
- * its updates flatten-to-markdown and seal on room-wide idle (sealOnIdle, U5),
- * cross-tab single-sealer-elected via the Web Locks lease (ownerLock, U5). The seal
- * is a PURE read of the Y.Text → the existing sealed write path, so it cannot loop.
+ * It speaks the same CRDT as the guest (CollabSession / y-sync, U2). The owner's
+ * Y.Text is seeded from the durable note body and bound to the in-app editor, so
+ * the owner types into the same CRDT as the guests.
  *
- * Custody is unchanged: only the owner's device seals; guests are live-only.
+ * Durable saves are MANUAL: writing to Walrus happens ONLY when the owner clicks
+ * Save in the note editor (`NoteEditor.save` reads the live bound surface and calls
+ * `saveNote`), never on a timer. What this module keeps fresh is the relay's
+ * EPHEMERAL catch-up snapshot (`room-state`) — a single owner tab (Web Locks lease)
+ * posts it so a guest joining while the owner is offline still hydrates the latest
+ * live text. That snapshot is relay-only, never durable; Walrus stays the only
+ * durable store, written solely by the manual Save.
  */
 import { useEffect, useRef, useState } from 'react';
 import { useShare } from '../hooks/useShare';
-import { persistGuestSnapshot } from '../hooks/useVault';
 import { vaultData } from './vaultData';
 import { serializeMsg, parseMsg } from '../mocks/presenceStore';
 import { deriveRoomId, syncReq } from './collabOps';
 import { CollabSession } from './collabSession';
 import { bindYText, contentEditableSurface } from './collabTextBinding';
-import { makeSealController } from './sealOnIdle';
 import { acquireSealLease } from './ownerLock';
-import { isInsufficientFunds } from './session';
 import type { PresenceMsg } from '../../../chain/core/src/index.js';
 
 /** The relay URL for a share room (mirrors EditView): rooms key on an unguessable id. */
@@ -38,17 +37,14 @@ export interface ShareCollabState {
   guestCount: number;
   /** True while the owner is connected to the live room. */
   live: boolean;
-  /** True while a durable seal is in flight (drives the saving/saved UI). */
-  saving: boolean;
-  /** Set when the last seal failed because the agent is out of funds (drives the funds notice + the guest signal, U11). */
-  needsFunds: boolean;
 }
 
 /**
  * While an `edit` share is active for `noteId`, keep the owner connected as the
- * authoritative Yjs responder + single sealer. A no-op when there is no active
- * edit share. Optionally binds the editor's contenteditable surface to the live
- * Y.Text so the owner types into the same CRDT as the guests.
+ * authoritative Yjs responder. A no-op when there is no active edit share.
+ * Optionally binds the editor's contenteditable surface to the live Y.Text so the
+ * owner types into the same CRDT as the guests. Durable persistence is the manual
+ * Save in the note editor — this hook never writes to Walrus.
  *
  * @param noteId the open note
  * @param editorRef a ref to the in-app editor's source-mode contenteditable (optional;
@@ -64,10 +60,8 @@ export function useShareCollab(noteId: string, editorRef?: React.RefObject<HTMLE
   const [room, setRoom] = useState<string | null>(null);
   const [guestCount, setGuestCount] = useState(0);
   const [live, setLive] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [needsFunds, setNeedsFunds] = useState(false);
   // A stable owner id across reconnects (no ghost owners). Derived once per mount;
-  // the cross-tab single-sealer is the Web Locks lease, not this id.
+  // the single room-state poster across tabs is the Web Locks lease, not this id.
   const selfIdRef = useRef<string | null>(null);
   if (!selfIdRef.current) selfIdRef.current = `own-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -102,47 +96,14 @@ export function useShareCollab(noteId: string, editorRef?: React.RefObject<HTMLE
     const seedBody = seedNote?.body ?? '';
     if (seedBody) yText.insert(0, seedBody);
 
-    // Cross-tab single-sealer: exactly one owner tab seals (Web Locks; auto-released
-    // on tab death). A non-leader tab observes and never seals.
+    // Cross-tab single poster of the relay catch-up snapshot: exactly one owner tab
+    // posts room-state (Web Locks; auto-released on tab death) so two tabs don't race.
     const lease = acquireSealLease(room);
 
-    // Seal on room-wide idle: flatten the Y.Text to markdown and persist it via the
-    // existing sealed write path (attributed to the live session). A PURE read — it
-    // never mutates the doc, so it cannot loop.
-    // Broadcast the owner's seal-state over awareness so guests render an HONEST
-    // signal (saving / saved / can't-save). A guest can't fake this: it is on the
-    // verified-owner's awareness entry (the owner badge is signature-gated, U9).
-    const setSealState = (state: 'saving' | 'saved' | 'cant-save') => session.awareness.setLocalStateField('seal', state);
-
-    const seal = makeSealController({
-      readBody: () => yText.toString(),
-      seal: async (body) => {
-        if (!lease.isHeld()) return; // only the elected sealer writes
-        try {
-          await persistGuestSnapshot(noteId, body, 'Live edit');
-          setNeedsFunds(false);
-          setSealState('saved');
-        } catch (e) {
-          if (isInsufficientFunds(e)) {
-            setNeedsFunds(true);
-            setSealState('cant-save'); // the guest banner flips to "owner can't save right now"
-          }
-          throw e;
-        }
-      },
-      onSealingChange: (s) => {
-        setSaving(s);
-        if (s) setSealState('saving');
-      },
-      onError: () => {
-        /* surfaced via needsFunds + the seal-state awareness field */
-      },
-    });
-    session.doc.on('update', seal.bump);
-
     // Refresh the relay's stored catch-up snapshot as the doc settles (debounced),
-    // gated by the seal lease so exactly ONE owner tab posts — so a guest who joins
-    // while the owner is offline hydrates the latest note, not a blank one.
+    // gated by the lease so exactly ONE owner tab posts — so a guest who joins while
+    // the owner is offline hydrates the latest live text, not a blank one. This is a
+    // RELAY post (ephemeral), NOT a durable write — Walrus is only the manual Save.
     let roomStateTimer: ReturnType<typeof setTimeout> | null = null;
     const postRoomStateSoon = (): void => {
       if (!lease.isHeld()) return;
@@ -188,15 +149,10 @@ export function useShareCollab(noteId: string, editorRef?: React.RefObject<HTMLE
     ws.onclose = () => setLive(false);
 
     return () => {
-      // Share end: flush any un-settled edits BEFORE tearing down, so no burst is
-      // stranded between the live seal and the manual Save.
-      seal.flushNow();
       if (roomStateTimer) clearTimeout(roomStateTimer);
       unbind?.();
       session.awareness.off('change', refreshGuests);
-      session.doc.off('update', seal.bump);
       session.doc.off('update', postRoomStateSoon);
-      seal.dispose();
       lease.release();
       try {
         if (ws.readyState === WebSocket.OPEN) ws.send(serializeMsg({ t: 'bye', id: selfId }));
@@ -208,5 +164,5 @@ export function useShareCollab(noteId: string, editorRef?: React.RefObject<HTMLE
     };
   }, [room, noteId, editorRef]);
 
-  return { guestCount, live, saving, needsFunds };
+  return { guestCount, live };
 }

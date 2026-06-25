@@ -447,8 +447,8 @@ describe('edit-link persistence — survives reload so the owner re-arms the roo
     expect(got).toHaveLength(1); // the view link is excluded
     expect(got[0].noteId).toBe('e1');
     expect(got[0].salt).toBe('s');
-    expect((got[0] as Record<string, unknown>).phase).toBeUndefined(); // transient field dropped
-    expect((got[0] as Record<string, unknown>).blobObjectId).toBeUndefined();
+    expect((got[0] as unknown as Record<string, unknown>).phase).toBeUndefined(); // transient field dropped
+    expect((got[0] as unknown as Record<string, unknown>).blobObjectId).toBeUndefined();
   });
 
   it('rehydrates a persisted edit link when the vault index loads (local intent wins on dedup)', async () => {

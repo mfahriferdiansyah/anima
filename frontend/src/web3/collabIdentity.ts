@@ -114,13 +114,13 @@ export function guestSaveText(signal: GuestSaveSignal): string {
     case 'owner-saving':
       return 'Saving your changes…';
     case 'owner-saved':
-      return 'Edits are live. Changes save while the owner is here.';
+      return 'Edits are live — the owner saves them to keep them.';
     case 'owner-cant-save':
       return "The owner can't save right now — changes stay live but aren't saved yet.";
     case 'owner-absent':
-      return 'The owner stepped away — changes save when they return.';
+      return 'The owner stepped away — edits stay live until they return to save.';
     case 'not-started':
-      return "Waiting for the owner — changes save once they're here.";
+      return 'Waiting for the owner — edits are live but saved only when they save.';
   }
 }
 
