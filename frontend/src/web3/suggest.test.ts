@@ -69,7 +69,7 @@ describe('requestSuggestions', () => {
     }));
 
     const results = await requestSuggestions({
-      persona: 'You are Nova.',
+      name: 'Nova',
       context: [{ noteId: 'n-demo', title: 'Demo', body: 'Seven beats.', tags: ['work'] }],
     });
 
@@ -82,13 +82,13 @@ describe('requestSuggestions', () => {
 
   it('degrades to [] on a non-ok fetch response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 502 }));
-    const results = await requestSuggestions({ persona: 'Nova', context: [] });
+    const results = await requestSuggestions({ name: 'Nova', context: [] });
     expect(results).toEqual([]);
   });
 
   it('degrades to [] on a fetch rejection (network drop)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
-    const results = await requestSuggestions({ persona: 'Nova', context: [] });
+    const results = await requestSuggestions({ name: 'Nova', context: [] });
     expect(results).toEqual([]);
   });
 
@@ -99,7 +99,7 @@ describe('requestSuggestions', () => {
     // verified non-ok returns []. Verify the fetch is called with the JWT.
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ suggestions: [] }) });
     vi.stubGlobal('fetch', fetchMock);
-    const results = await requestSuggestions({ persona: 'Nova', context: [] });
+    const results = await requestSuggestions({ name: 'Nova', context: [] });
     expect(results).toEqual([]);
     // fetch should have been called (wired is set from beforeEach)
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -110,7 +110,7 @@ describe('requestSuggestions', () => {
       ok: true,
       json: async () => ({ suggestions: [{ title: 'T', body: 'B', tags: [], links: [] }] }),
     }));
-    const results = await requestSuggestions({ persona: 'Nova', context: [], targetNoteId: 'n-demo' });
+    const results = await requestSuggestions({ name: 'Nova', context: [], targetNoteId: 'n-demo' });
     expect(results[0].targetNoteId).toBe('n-demo');
   });
 
@@ -120,7 +120,7 @@ describe('requestSuggestions', () => {
       capturedHeaders = (init?.headers ?? {}) as Record<string, string>;
       return Promise.resolve({ ok: true, json: async () => ({ suggestions: [] }) });
     }));
-    await requestSuggestions({ persona: 'Nova', context: [] });
+    await requestSuggestions({ name: 'Nova', context: [] });
     expect(capturedHeaders['Authorization']).toBe('Bearer test-jwt');
   });
 });
@@ -209,7 +209,7 @@ describe('requestDraft → prep checklist', () => {
       }),
     }));
 
-    requestDraft({ persona: 'You are Nova.', context: [{ noteId: 'n1', title: 'T', body: 'B', tags: [] }] });
+    requestDraft({ name: 'Nova', context: [{ noteId: 'n1', title: 'T', body: 'B', tags: [] }] });
 
     // requestDraft is fire-and-forget; wait for the async /suggest to settle.
     await vi.waitFor(() => expect(agentTimeline.getSnapshot().prep).toHaveLength(1));
@@ -224,7 +224,7 @@ describe('requestDraft → prep checklist', () => {
   it('leaves prep empty when /suggest returns nothing (honest empty rail)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ suggestions: [] }) }));
 
-    requestDraft({ persona: 'You are Nova.', context: [] });
+    requestDraft({ name: 'Nova', context: [] });
 
     await vi.waitFor(() => expect(agentTimeline.getSnapshot().draftRequested).toBe(false));
     expect(agentTimeline.getSnapshot().prep).toEqual([]);

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createNote, saveNote, useVault } from '@/hooks/useVault';
 import { useVaultSession } from '@/hooks/useVaultSession';
-import { useAgentTimeline, requestDraft, clearSuggestion } from '@/hooks/useAgentTimeline';
+import { useAgentTimeline, requestDraft, clearSuggestion, draftPreparedNote } from '@/hooks/useAgentTimeline';
 import { acceptSuggestion } from '@/web3/suggest';
 import { useCalendar, connectCalendar, disconnectCalendar, listEvents, type CalendarEvent } from '@/web3/calendar';
 import './home.css';
@@ -381,10 +381,18 @@ function SuggestRail() {
   // is handled). The preview is non-interactive, so this only fires in the app.
   const [done, setDone] = useState<Record<string, boolean>>({});
 
-  // "Let Nova draft" → create a note seeded with the prep title and open it.
-  const draftPrep = (item: { id: string; title: string }) => {
+  // "Let Nova draft" → ask /draft for a full prepared note grounded in the prep
+  // item + vault + calendar, seal it, and open it. Falls back to a titled seed
+  // (never an empty note) if Nova has nothing prepared or the call fails.
+  const draftPrep = async (item: { id: string; title: string }) => {
+    const prepared = await draftPreparedNote(item.title);
     const id = createNote();
-    saveNote(id, { title: item.title, body: `${item.title}\n\nNova's draft — shape it as you like.` });
+    saveNote(
+      id,
+      prepared
+        ? { title: prepared.title, body: prepared.body }
+        : { title: item.title, body: `${item.title}\n\nNova has nothing prepared yet — shape this as you like.` },
+    );
     navigate(`/app/notes/${id}`);
   };
 

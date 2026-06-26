@@ -128,8 +128,9 @@ function appendEvent(type: AgentEventType, summary: string, noteIds: string[]): 
  * provided by the caller). Degrades to [] on any error — never throws to the UI.
  */
 export async function requestSuggestions(input: {
-  persona: string;
+  name: string;
   context: { noteId: string; title: string; body: string; tags: string[] }[];
+  canvas?: { title: string; body: string }[];
   targetNoteId?: string | null;
   calendar?: unknown[];
 }): Promise<Suggestion[]> {
@@ -142,8 +143,9 @@ export async function requestSuggestions(input: {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
       body: JSON.stringify({
-        persona: input.persona,
+        name: input.name,
         context: input.context.map((n) => ({ noteId: n.noteId, title: n.title, body: n.body, tags: n.tags })),
+        canvas: input.canvas ?? [],
         calendar: input.calendar ?? [],
       }),
     });
@@ -178,8 +180,9 @@ function suggestionMeta(s: Suggestion): string {
  * into the "Nova suggests" prep checklist (`setPrep`) and clear draftRequested.
  */
 export function requestDraft(opts: {
-  persona: string;
+  name: string;
   context: { noteId: string; title: string; body: string; tags: string[] }[];
+  canvas?: { title: string; body: string }[];
   calendar?: unknown[];
 }): void {
   store.update((prev) => ({ ...prev, draftRequested: true }));
@@ -200,6 +203,42 @@ export function requestDraft(opts: {
       appendEvent('suggestion', `Nova suggested ${prep.length} next step${prep.length === 1 ? '' : 's'}`, []);
     }
   });
+}
+
+/**
+ * "Let Nova draft": POST /draft for a full, structured prepared note grounded in
+ * the prep item + vault + calendar (+ canvas). Returns the draft when Nova
+ * prepared one, or null when there is nothing to prepare or the call fails. The
+ * caller seals it through the normal note path (so the funded-write gate is
+ * preserved) and never seals an empty body. Degrades silently — never throws.
+ */
+export async function requestPreparedDraft(input: {
+  name: string;
+  context: { noteId: string; title: string; body: string; tags: string[] }[];
+  canvas?: { title: string; body: string }[];
+  calendar?: unknown[];
+}): Promise<{ title: string; body: string } | null> {
+  if (!wired) return null;
+  const { owner, signPersonalMessage } = wired;
+  try {
+    const jwt = await ensureJwt({ backendUrl: backendUrl(), address: owner, signPersonalMessage });
+    const res = await fetch(`${backendUrl()}/draft`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+      body: JSON.stringify({
+        name: input.name,
+        context: input.context.map((n) => ({ noteId: n.noteId, title: n.title, body: n.body, tags: n.tags })),
+        canvas: input.canvas ?? [],
+        calendar: input.calendar ?? [],
+      }),
+    });
+    if (!res.ok) return null;
+    const d = (await res.json()) as { prepared: boolean; title?: string; body?: string };
+    if (!d.prepared || !d.body) return null;
+    return { title: d.title || 'Prepared note', body: d.body };
+  } catch {
+    return null;
+  }
 }
 
 /**

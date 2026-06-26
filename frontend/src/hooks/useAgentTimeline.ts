@@ -6,6 +6,7 @@ import {
   agentTimeline,
   configureSuggest,
   requestDraft as _requestDraft,
+  requestPreparedDraft as _requestPreparedDraft,
   notesMounted as _notesMounted,
   clearSuggestion as _clearSuggestion,
   scheduleAgentNote as _scheduleAgentNote,
@@ -13,6 +14,7 @@ import {
 } from '../web3/suggest';
 import { vaultData } from '../web3/vaultData';
 import { getCalendarContext } from '../web3/calendar';
+import { buildGrounding } from '../../../chain/core/src/index.js';
 
 /**
  * Landing-preview override (mirrors useVaultSession's PreviewSessionContext).
@@ -43,18 +45,26 @@ export function useAgentTimeline(): TimelineState {
   return preview ?? live;
 }
 
-/** Home quick-start: ask Nova for a draft, using live vault notes + calendar as context. */
+/** Home quick-start: ask Nova for next-step suggestions, grounded in the live
+ * vault + calendar (name is the on-chain companion name; the backend owns the
+ * persona now). */
 export function requestDraft(): void {
   const session = sessionStore.getSnapshot();
-  const persona = `You are ${session.phase === 'ready' ? session.agent.name : 'Nova'}, a warm, attentive companion.`;
-  const notes = vaultData.getSnapshot().notes;
-  const context = notes.slice(0, 8).map((n) => ({
-    noteId: n.noteId,
-    title: n.title,
-    body: n.body,
-    tags: n.tags,
-  }));
-  _requestDraft({ persona, context, calendar: getCalendarContext() });
+  const name = session.phase === 'ready' ? session.agent.name : 'Nova';
+  const index = vaultData.getSnapshot().index;
+  const g = index ? buildGrounding({ index, query: '', calendar: getCalendarContext() }) : null;
+  _requestDraft({ name, context: g?.context ?? [], canvas: g?.canvas ?? [], calendar: g?.calendar ?? [] });
+}
+
+/** "Let Nova draft" on a prep item → ask /draft for a full prepared note grounded
+ * in that item + vault + calendar. Returns {title, body} or null (nothing to
+ * prepare / failure); the caller seals it through the normal note path. */
+export async function draftPreparedNote(prepTitle: string): Promise<{ title: string; body: string } | null> {
+  const session = sessionStore.getSnapshot();
+  const name = session.phase === 'ready' ? session.agent.name : 'Nova';
+  const index = vaultData.getSnapshot().index;
+  const g = index ? buildGrounding({ index, query: prepTitle, calendar: getCalendarContext() }) : null;
+  return _requestPreparedDraft({ name, context: g?.context ?? [], canvas: g?.canvas ?? [], calendar: g?.calendar ?? [] });
 }
 
 /** Notes page calls this on mount; a pending draft request is handled async in requestDraft. */

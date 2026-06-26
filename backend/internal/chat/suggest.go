@@ -1,7 +1,8 @@
 package chat
 
-// TRUST BOUNDARY: decrypted note bodies cross to OpenRouter for inference
-// during this request. The backend stores nothing — see package doc.
+// TRUST BOUNDARY: decrypted note bodies, serialized canvas content, and calendar
+// events cross to OpenRouter for inference during this request. The backend
+// stores nothing — see package doc.
 
 import (
 	"encoding/json"
