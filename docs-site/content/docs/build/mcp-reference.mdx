@@ -3,7 +3,7 @@ title: MCP tool reference
 description: The tools your agent can call over anima-mcp.
 ---
 
-Once your agent is [paired and connected](/build/quickstart), it has four tools against your vault. Every write is signed with your agent key and attributed by `ANIMA_AGENT_NAME`.
+Once your agent is [paired and connected](/build/quickstart), it has six tools against your vault. Every write is signed with your agent key and attributed by `ANIMA_AGENT_NAME`.
 
 ## recall
 
@@ -18,21 +18,41 @@ Search the vault and return the most relevant notes, decrypted from Walrus.
 Write a new note into the vault. It is encrypted, stored on Walrus, and attributed to this agent. The first write takes ten to twenty seconds.
 
 - **Input:** `title` (string), `body` (markdown string), `tags` (optional string array).
-- **Returns:** a confirmation with the new note id, the author, and the Walrus blob ids.
+- **Returns:** a confirmation with the new note id, the author, and the Walrus blob ids (quilt and blob object).
+- **On failure:** a readable error if the agent key is unpaired or cannot afford the write (testnet SUI/WAL), never a stack trace.
+
+## edit_note
+
+Write a new version of an existing note. This is durable, correctable memory: the new version is encrypted on Walrus and attributed to this agent. Use it to correct or extend what you know about the owner. Takes ten to twenty seconds.
+
+- **Input:** `noteId` (string). A ULID from `recall` or `list_notes`. Plus any of `title` (string), `body` (markdown string), `tags` (string array), `links` (string array). Omit a field to keep the current value; `tags` and `links` replace the current set.
+- **Returns:** a confirmation with the note id, the new version number, the author, and the new Walrus blob ids.
+- **Unknown id:** `Note <id> not found in the vault: list_notes to see valid ids, or use remember to create one.`
 
 ## list_notes
 
-List every note in the vault: id, title, tags, last update, and author. Takes no input.
+List every note in the vault: id, title, tags, last update, and author.
 
-- **Returns:** one line per note. An empty vault returns `The vault is empty.`
+- **Input:** none.
+- **Returns:** one line per note.
+- **Empty vault:** `The vault is empty.`
 
 ## read_note
 
 Return the full markdown of a single note, including its frontmatter.
 
 - **Input:** `noteId` (string). A ULID from `recall` or `list_notes`.
-- **Unknown id:** an error that points you back to `list_notes` or `recall`.
+- **Returns:** the full markdown of the note, including its frontmatter.
+- **Unknown id:** `No note with id <id>: use list_notes or recall to find valid ids.`
+
+## place_note
+
+Position a note on the multiplayer canvas at (x, y). This updates the durable canvas layout, which is a Walrus write.
+
+- **Input:** `noteId` (string, a ULID from `recall` or `list_notes`), `x` (number), `y` (number), `canvasId` (optional string; defaults to the shared board).
+- **Returns:** a confirmation that the note was placed at (x, y), with the number of notes the canvas layout now covers.
+- **Unknown id:** `Note <id> not found in the vault: list_notes to see valid ids.`
 
 <Callout type="info">
-The canvas placement tool is not part of this reference yet. The multiplayer canvas is on the roadmap, so the four tools above are the ones you can rely on today.
+`place_note` is shipped, but it does not yet carry the same end-to-end live verification as `recall`, `remember`, and `read_note`. One edge case: the first time an agent writes the shared board, the save can hand back an owner-signed delete for the legacy layout blob. The agent key cannot sign that wallet-owned delete, so it is dropped, and the layout self-heals on the owner's next board write from the frontend.
 </Callout>
