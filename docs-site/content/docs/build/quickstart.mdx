@@ -7,12 +7,20 @@ Connect an agent you already use (Claude Code, Cursor, or any MCP client) to an 
 
 ## What you need
 
-- A Sui wallet that owns an Anima vault.
-- The anima repo checked out, with pnpm and Node. The pairing command and anima-mcp run from the repo (they are not a published package yet), so an external agent connects through your local checkout.
+- A Sui wallet that owns an Anima vault, with the Anima app open.
+- The anima repo checked out, with pnpm and Node. anima-mcp runs from the repo (it is not a published package yet), so an external agent connects through your local checkout.
 
 ## 1. Pair an agent
 
-The pairing command authorizes a fresh agent on your vault and funds it so it can write. Adding an agent is owner-only, so it needs your owner key. Pass it as an environment variable, never as a command argument:
+Open the Anima app and go to Settings, then Connect external agent. The wizard generates a fresh agent key, registers it on your vault, and funds it so it can write. Every step is wallet-signed, so your owner key never leaves the app and there is nothing to export. When it finishes, the wizard shows a copy-paste MCP config snippet that already carries the values your agent needs: the agent key, your vault id, your owner address, and an optional agent name.
+
+<Callout type="warn">
+`ANIMA_AGENT_KEY` grants full read and write of the whole vault. Treat it like a password: keep it in your environment or a secret store, never commit it, never paste it into a chat. You can revoke it any time (see below).
+</Callout>
+
+### Alternative: owner-run (CLI)
+
+If you would rather script pairing, or pair without opening the app, you can run it yourself from the repo. This path needs your vault owner secret key in the environment (`ANIMA_OWNER_KEY`, or a `.spike-keys.json` in the repo), since adding an agent is owner-only. Pass the key as an environment variable, never as a command argument:
 
 ```bash
 export ANIMA_OWNER_KEY=suiprivkey…   # your vault owner key; signs the registration
@@ -20,7 +28,7 @@ export ANIMA_VAULT_ID=0x…            # optional; auto-discovered from the owne
 pnpm pair
 ```
 
-This registers and funds a new agent, then writes the four values your agent needs to `.anima-agent.env` (gitignored):
+This registers and funds a new agent, then writes the same values to `.anima-agent.env` (gitignored) instead of showing them in the app:
 
 ```
 ANIMA_AGENT_KEY=suiprivkey…   # the agent's own key, the one secret here
@@ -29,13 +37,11 @@ ANIMA_OWNER_ADDRESS=0x…       # public
 ANIMA_AGENT_NAME=mcp-agent    # how this agent's writes are attributed
 ```
 
-<Callout type="warn">
-`ANIMA_AGENT_KEY` grants full read and write of the whole vault. Treat it like a password: keep it in your environment or a secret store, never commit it, never paste it into a chat. You can revoke it any time (see below).
-</Callout>
+Copy those into your MCP config the same way as step 2.
 
 ## 2. Add anima to your agent's MCP config
 
-Point your MCP client at the local anima-mcp server with the four values from step 1. For Claude Code that is `.mcp.json`; for Cursor, `~/.cursor/mcp.json`:
+Paste the snippet from the wizard into your MCP client, which points it at the local anima-mcp server. For Claude Code that is `.mcp.json`; for Cursor, `~/.cursor/mcp.json`:
 
 ```json
 {
@@ -54,7 +60,7 @@ Point your MCP client at the local anima-mcp server with the four values from st
 }
 ```
 
-`ANIMA_OWNER_ADDRESS` and `ANIMA_VAULT_ID` are public on-chain identifiers. Only `ANIMA_AGENT_KEY` is secret.
+`ANIMA_OWNER_ADDRESS` and `ANIMA_VAULT_ID` are public on-chain identifiers, and `ANIMA_AGENT_NAME` is optional (it labels this agent's writes). Only `ANIMA_AGENT_KEY` is secret.
 
 ## 3. Read and write
 
@@ -67,13 +73,13 @@ If a tool returns an error, the message is actionable. The [FAQ](/build/faq) cov
 
 ## Revoke an agent
 
-An agent key is a standing credential. To cut it off:
+An agent key is a standing credential. To cut it off, open the Anima app, go to Settings, then Connect external agent, find the agent in the list, and revoke it. The owner-run CLI does the same thing:
 
 ```bash
 pnpm pair revoke 0x<agent-address>
 ```
 
-The agent is denied on its next session.
+Either way, the agent is denied on its next session.
 
 ## Point your agent at these docs
 
