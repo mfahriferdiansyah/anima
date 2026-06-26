@@ -160,7 +160,7 @@ describe('chat: runDistill driver', () => {
 
   it('distills → writeTurn → upsert and returns the created note ids', async () => {
     const { deps, upsert, writeTurn } = makeDeps();
-    const res = await runDistill(deps, false);
+    const res = await runDistill(deps);
 
     expect(res.createdNoteIds).toEqual(['note-1']);
     expect(writeTurn).toHaveBeenCalledOnce();
@@ -174,7 +174,7 @@ describe('chat: runDistill driver', () => {
     const { deps, writeTurn, onLowBalance } = makeDeps({
       preflight: (async () => ({ ...okPreflight, ok: false, needsWal: true })) as never,
     });
-    const res = await runDistill(deps, false);
+    const res = await runDistill(deps);
 
     expect(onLowBalance).toHaveBeenCalledOnce();
     expect(writeTurn).not.toHaveBeenCalled();
@@ -183,18 +183,10 @@ describe('chat: runDistill driver', () => {
 
   it('no candidates + not forced: writes nothing (chit-chat is disposable)', async () => {
     const { deps, writeTurn } = makeDeps({ distill: async () => [] });
-    const res = await runDistill(deps, false);
+    const res = await runDistill(deps);
 
     expect(writeTurn).not.toHaveBeenCalled();
     expect(res.createdNoteIds).toEqual([]);
-  });
-
-  it("draft intent forces a sealed note even when the distiller returns nothing", async () => {
-    const { deps, writeTurn } = makeDeps({ distill: async () => [] });
-    const res = await runDistill(deps, true);
-
-    expect(writeTurn).toHaveBeenCalledOnce();
-    expect(res.createdNoteIds).toEqual(['note-1']);
   });
 
   it('routes the seal write through sealReceipt (the provenance toast) when wired', async () => {
@@ -204,7 +196,7 @@ describe('chat: runDistill driver', () => {
       return run(); // pass through, so the write still lands
     });
     const { deps, writeTurn, upsert } = makeDeps({ sealReceipt: sealReceipt as never });
-    const res = await runDistill(deps, false);
+    const res = await runDistill(deps);
 
     expect(sealReceipt).toHaveBeenCalledOnce();
     expect(seenCount).toBe(1); // one candidate → one note in the batch
@@ -215,7 +207,7 @@ describe('chat: runDistill driver', () => {
 
   it('no live vault (getDeps null): no-op', async () => {
     const { deps, writeTurn } = makeDeps({ getDeps: (() => null) as never });
-    const res = await runDistill(deps, true);
+    const res = await runDistill(deps);
 
     expect(writeTurn).not.toHaveBeenCalled();
     expect(res.createdNoteIds).toEqual([]);

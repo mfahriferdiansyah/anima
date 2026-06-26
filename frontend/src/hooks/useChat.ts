@@ -22,9 +22,10 @@
  */
 import { useEffect, useSyncExternalStore } from 'react';
 import { useCurrentAccount, useSignPersonalMessage } from '@mysten/dapp-kit';
-import { newNote, writeTurn, preflight, type Note } from '../../../chain/core/src/index.js';
+import { newNote, writeTurn, preflight, buildGrounding, type Note } from '../../../chain/core/src/index.js';
 import { createStore } from '../mocks/store';
 import { vaultData } from '../web3/vaultData';
+import { loadCanvases } from '../web3/canvasRegistry';
 import { getQuiltDeps, sessionStore } from '../web3/session';
 import { ensureJwt } from '../web3/auth';
 import { getCalendarContext } from '../web3/calendar';
@@ -72,14 +73,6 @@ export const chatStore = {
 
 export type ChatIntent = 'default' | 'draft' | 'status';
 
-/**
- * The persona block sent to the backend (ported from scripts/e2e-chat.ts): a
- * warm, concise companion that cites provided memories inline as `[[noteId]]`
- * and never invents them. `name` is the on-chain vault/companion name.
- */
-function buildPersona(name: string): string {
-  return `You are ${name}, a warm, attentive companion. Be concise and human. When you use a provided memory, cite it inline as [[noteId]]. Never invent memories.`;
-}
 
 // ── Pure cores (node-testable, DOM-free, no fetch / no import.meta.env) ──────
 
@@ -219,20 +212,16 @@ export interface DistillWriteResult {
  * The distill→write driver (the e2e-chat distill leg, made pure). Distills the
  * exchange into candidates, gates the write on funding `preflight` (low balance →
  * `onLowBalance`, skip the write, no created ids), then `writeTurn`s the
- * candidates as one quilt and `upsert`s each into the live index. `force` makes a
- * 'draft' intent persist even when the distiller returns nothing — a draft must
- * leave a sealed note.
+ * candidates as one quilt and `upsert`s each into the live index. When the
+ * distiller returns nothing (common for chit-chat, and the right outcome for a
+ * draft with no real facts), it writes nothing — a note is never sealed empty.
  */
-export async function runDistill(deps: DistillDeps, force: boolean): Promise<DistillWriteResult> {
+export async function runDistill(deps: DistillDeps): Promise<DistillWriteResult> {
   const chainDeps = deps.getDeps();
   if (!chainDeps) return { createdNoteIds: [] };
 
-  let candidates = await deps.distill();
-  if (candidates.length === 0) {
-    if (!force) return { createdNoteIds: [] };
-    // 'draft' intent forces a note even on chit-chat: seal a minimal draft.
-    candidates = [{ title: 'Draft', body: '', tags: [], links: [] }];
-  }
+  const candidates = await deps.distill();
+  if (candidates.length === 0) return { createdNoteIds: [] };
 
   // Funding gate FIRST: a low balance surfaces the banner and skips the write,
   // so we never claim a sealed note we could not afford to write.
@@ -307,7 +296,6 @@ export async function send(text: string): Promise<void> {
 
   streamToken += 1;
   const token = streamToken;
-  const intent = pickIntent(trimmed);
 
   // 1) append the user turn + go thinking.
   store.update((prev) => ({
@@ -316,14 +304,18 @@ export async function send(text: string): Promise<void> {
     messages: [...prev.messages, { id: nextId(), role: 'user', text: trimmed, at: nowIso() }],
   }));
 
-  // 2) instant client-side recall over the DECRYPTED index (no network).
-  const recall = vaultData.search(trimmed, 6);
-  const context = recall.map((h) => ({
-    noteId: h.note.noteId,
-    title: h.note.title,
-    body: h.note.body,
-    tags: h.note.tags,
-  }));
+  // 2) assemble grounding over the DECRYPTED index (no network): relevance-ranked
+  // notes + any canvas board the message names by title + calendar, bounded by the
+  // safety ceiling. The client is the librarian; the backend owns composition.
+  const index = vaultData.getSnapshot().index;
+  const referenced = index
+    ? loadCanvases(index)
+        .filter((c) => trimmed.toLowerCase().includes(c.title.toLowerCase()))
+        .map((c) => ({ id: c.canvasId, title: c.title }))
+    : [];
+  const grounding = index
+    ? buildGrounding({ index, query: trimmed, canvases: referenced, calendar: getCalendarContext() })
+    : { context: [], canvas: [], calendar: getCalendarContext(), trimmed: 0 };
 
   // the transcript the model sees (excludes the placeholder agent reply below).
   const transcript = toLlmTranscript(store.getSnapshot().messages);
@@ -347,9 +339,9 @@ export async function send(text: string): Promise<void> {
     const res = await fetch(`${backendUrl()}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
-      // calendar: live Google Calendar context (empty unless connected), so the
-      // agent can answer schedule questions — never cited as a vault note.
-      body: JSON.stringify({ persona: buildPersona(name), transcript, context, calendar: getCalendarContext() }),
+      // name: the on-chain companion name (the backend owns the persona now);
+      // canvas + calendar are read-only grounding the backend composes in.
+      body: JSON.stringify({ name, transcript, context: grounding.context, canvas: grounding.canvas, calendar: grounding.calendar }),
     });
     if (!res.ok || !res.body) throw new Error(`chat failed: HTTP ${res.status}`);
 
@@ -399,7 +391,6 @@ export async function send(text: string): Promise<void> {
             () => run().then((r) => ({ result: r, provenanceUrl: objectProvenanceUrl(r.blobObjectId) })),
           ),
       },
-      intent === 'draft',
     );
 
     if (isCurrent() && createdNoteIds.length > 0) {
