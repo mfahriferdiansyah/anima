@@ -23,9 +23,10 @@ type Handler struct {
 
 type chatRequest struct {
 	Model      string          `json:"model,omitempty"`
-	Persona    string          `json:"persona"`
+	Name       string          `json:"name"`
 	Transcript []llm.Message   `json:"transcript"`
 	Context    []ContextNote   `json:"context"`
+	Canvas     []CanvasContext `json:"canvas,omitempty"`
 	Calendar   []CalendarEvent `json:"calendar,omitempty"`
 }
 
@@ -49,7 +50,7 @@ func (h *Handler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	msgs := make([]llm.Message, 0, len(req.Transcript)+1)
-	msgs = append(msgs, llm.Message{Role: "system", Content: chatSystemPrompt(req.Persona, req.Context, req.Calendar)})
+	msgs = append(msgs, llm.Message{Role: "system", Content: composeSystemPrompt(capChat, req.Name, req.Context, req.Canvas, req.Calendar)})
 	msgs = append(msgs, req.Transcript...)
 
 	chunks, err := h.LLM.StreamChat(r.Context(), model, msgs)

@@ -19,8 +19,9 @@ type CalendarEvent struct {
 }
 
 type suggestRequest struct {
-	Persona  string          `json:"persona"`
+	Name     string          `json:"name"`
 	Context  []ContextNote   `json:"context"`
+	Canvas   []CanvasContext `json:"canvas,omitempty"`
 	Calendar []CalendarEvent `json:"calendar,omitempty"`
 }
 
@@ -36,7 +37,7 @@ func (h *Handler) HandleSuggest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msgs := suggestMessages(req.Persona, req.Context, req.Calendar)
+	msgs := suggestMessages(req.Name, req.Context, req.Canvas, req.Calendar)
 	raw, err := h.LLM.Complete(r.Context(), h.DefaultModel, msgs)
 	if err != nil {
 		http.Error(w, "upstream unavailable", http.StatusBadGateway)

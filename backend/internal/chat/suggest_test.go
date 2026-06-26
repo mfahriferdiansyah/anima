@@ -26,7 +26,7 @@ func postSuggest(t *testing.T, upstreamURL string, body string) (int, string) {
 	return resp.StatusCode, readAll(t, resp)
 }
 
-const validSuggestBody = `{"persona":"You are Nova.","context":[{"noteId":"n-demo","title":"Demo script","body":"Seven minutes, three beats.","tags":["work"]}]}`
+const validSuggestBody = `{"name":"Nova","context":[{"noteId":"n-demo","title":"Demo script","body":"Seven minutes, three beats.","tags":["work"]}]}`
 
 func TestHandleSuggest_ParsesWellFormedSuggestions(t *testing.T) {
 	suggestJSON := `{"suggestions":[{"title":"Draft the demo day slides","body":"Open your demo script and draft the slide deck now — seven minutes needs visuals.","tags":["work"],"links":["n-demo"]}]}`
@@ -132,7 +132,7 @@ func TestHandleSuggest_EmptyBodyRejected(t *testing.T) {
 func TestHandleSuggest_EmptyContextIsValid(t *testing.T) {
 	// An empty context is legal — the vault may be new.
 	upstream, _ := fakeCompletions(t, []string{`{"suggestions":[]}`})
-	status, _ := postSuggest(t, upstream.URL, `{"persona":"Nova","context":[]}`)
+	status, _ := postSuggest(t, upstream.URL, `{"name":"Nova","context":[]}`)
 	if status != http.StatusOK {
 		t.Fatalf("status %d, want 200", status)
 	}
@@ -142,7 +142,7 @@ func TestHandleSuggest_WithCalendarEvents(t *testing.T) {
 	suggestJSON := `{"suggestions":[{"title":"Prep for Lisbon call","body":"Review your trip plan before the call.","tags":["trips"],"links":["n-lisbon"]}]}`
 	upstream, _ := fakeCompletions(t, []string{suggestJSON})
 
-	body := `{"persona":"Nova","context":[],"calendar":[{"title":"Lisbon planning call","start":"2026-06-12T15:00:00Z","end":"2026-06-12T16:00:00Z"}]}`
+	body := `{"name":"Nova","context":[],"calendar":[{"title":"Lisbon planning call","start":"2026-06-12T15:00:00Z","end":"2026-06-12T16:00:00Z"}]}`
 	status, respBody := postSuggest(t, upstream.URL, body)
 	if status != http.StatusOK {
 		t.Fatalf("status %d: %s", status, respBody)

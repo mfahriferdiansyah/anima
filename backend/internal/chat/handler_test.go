@@ -62,7 +62,7 @@ func TestHandleChat_StreamsDeltasInOrderThenDone(t *testing.T) {
 
 	srv := chatServer(t, upstream.URL)
 	reqBody := `{
-		"persona": "You are Anima, a warm companion.",
+		"name": "Aria",
 		"transcript": [{"role": "user", "content": "hi"}],
 		"context": [{"noteId": "note-1", "title": "Sister's wedding", "body": "The wedding was in May."}]
 	}`
@@ -98,8 +98,8 @@ func TestHandleChat_StreamsDeltasInOrderThenDone(t *testing.T) {
 		t.Fatalf("last event = %#v, want event: done", events[3])
 	}
 
-	// The system prompt must carry the persona, the context note, and the
-	// [[noteId]] citation instruction.
+	// The system prompt must carry the backend-owned identity (named for the
+	// owner), the context note, and the [[noteId]] citation instruction.
 	var upstreamReq struct {
 		Messages []struct {
 			Role    string `json:"role"`
@@ -113,7 +113,7 @@ func TestHandleChat_StreamsDeltasInOrderThenDone(t *testing.T) {
 	if system.Role != "system" {
 		t.Fatalf("first message role = %q, want system", system.Role)
 	}
-	for _, want := range []string{"warm companion", "[[note-1]]", "The wedding was in May.", "cite"} {
+	for _, want := range []string{"Aria", "[[note-1]]", "The wedding was in May.", "cite"} {
 		if !strings.Contains(system.Content, want) {
 			t.Fatalf("system prompt missing %q:\n%s", want, system.Content)
 		}
@@ -128,7 +128,7 @@ func TestHandleChat_UpstreamFailureEmitsErrorEvent(t *testing.T) {
 
 	srv := chatServer(t, upstream.URL)
 	resp, err := http.Post(srv.URL, "application/json",
-		strings.NewReader(`{"persona":"p","transcript":[{"role":"user","content":"hi"}]}`))
+		strings.NewReader(`{"name":"n","transcript":[{"role":"user","content":"hi"}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestHandleChat_UpstreamFailureEmitsErrorEvent(t *testing.T) {
 
 func TestHandleChat_EmptyTranscriptRejected(t *testing.T) {
 	srv := chatServer(t, "http://127.0.0.1:0")
-	resp, err := http.Post(srv.URL, "application/json", strings.NewReader(`{"persona":"p","transcript":[]}`))
+	resp, err := http.Post(srv.URL, "application/json", strings.NewReader(`{"name":"n","transcript":[]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestHandleChat_ClientDisconnectCancelsUpstream(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, srv.URL,
-		bytes.NewReader([]byte(`{"persona":"p","transcript":[{"role":"user","content":"hi"}]}`)))
+		bytes.NewReader([]byte(`{"name":"n","transcript":[{"role":"user","content":"hi"}]}`)))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
