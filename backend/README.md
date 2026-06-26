@@ -89,3 +89,5 @@ curl -X POST http://localhost:8080/distill \
 The request logger emits method/path/status/latency — nothing else. Request
 bodies, query strings, `Authorization` headers, and message content are never
 logged, on any path including errors. See `internal/middleware/logger.go`.
+
+<!-- deploy: backend watch-path redeploy check (2026-06-26) -->

@@ -90,3 +90,5 @@ features) preserves that path.
   rewrite-based approach from the Fumadocs default recipe.
 - **`images.unoptimized: true`** is set because the Next image optimizer cannot
   run at request time in a static export.
+
+<!-- deploy: docs-site watch-path redeploy check (2026-06-26) -->
