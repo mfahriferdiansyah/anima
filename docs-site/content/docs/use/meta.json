@@ -1,5 +1,5 @@
 {
   "title": "Use Anima",
   "defaultOpen": true,
-  "pages": ["getting-started", "notes", "publishing-and-export", "companion"]
+  "pages": ["getting-started", "notes", "companion", "publishing-and-export"]
 }
