@@ -23,5 +23,10 @@ export {
   elementBounds, commonBounds, normalizeLinear, NOTE_W, NOTE_H,
   elementsFromLegacy, layoutFromElements, mergeLayoutIntoElements,
 } from './elements.js';
+export {
+  serializeCanvas, buildGrounding,
+  type CalendarEvent, type GroundingNote, type GroundingCanvas,
+  type CanvasRef, type BuildGroundingInput, type GroundingResult,
+} from './grounding.js';
 export * from './share.js';
 export { uploadCover, parseCoverRef, readCoverBytes, listVaultCovers } from './covers.js';
