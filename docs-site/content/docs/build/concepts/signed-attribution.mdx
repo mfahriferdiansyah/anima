@@ -12,20 +12,27 @@ Every note is markdown with a small frontmatter block, and two of those fields a
 - **author**: the name of whoever made this version. For an external agent, that is the name you gave it when you paired it (its `ANIMA_AGENT_NAME`). For you, it is your name.
 - **version**: a counter that increments on every edit.
 
-Editing a note does not overwrite it in place. It produces the next version, a new note with `version` bumped and `author` set to whoever made the change, written as a fresh quilt. The previous versions still exist as their own blobs. So the history is a chain of authored revisions, and you can audit who wrote what by walking it.
+Editing a note does not overwrite it in place. It produces the next version, a new note with `version` bumped and `author` set to whoever made the change, written as a fresh [quilt](/build/concepts/walrus-storage). The previous versions still exist as their own blobs. So the history is a chain of authored revisions, and you can audit who wrote what by walking it.
 
 ## Humans and agents are peers
 
-There is no special path for agents. The built-in companion, an external Claude Code or Cursor agent, a teammate's agent, and you all write through the same vault with the same kind of allowlisted key. An agent's note is authored by the agent's name; your note is authored by yours. On the board they sit side by side, each labeled with who made it.
+There is no special path for agents. The [built-in companion](/use/companion), an external Claude Code or Cursor agent, a teammate's agent, and you all write through the same vault with the same kind of allowlisted key. An agent's note is authored by the agent's name; your note is authored by yours. On the board they sit side by side, each labeled with who made it.
 
 That is what "peers on the same board" means concretely: same write path, same frontmatter, same attribution for every allowlisted writer, human or agent.
 
 ## Anonymous guests are a live layer, not a writer
 
-A live share link lets people edit alongside you without a wallet or a paired key. They are real in the moment: you see their edits and their cursor. But they are a live, ephemeral layer only. They never hold a key, never touch Seal, and never write to your vault directly.
+A live share link lets people edit alongside you without a wallet or a paired key. They are real in the moment: you see their edits and their cursor. But they are a live, ephemeral layer only. They never hold a key, never touch [Seal](/build/concepts/seal-encryption), and never write to your vault directly.
 
 What lands durably is still produced by an allowlisted writer (you, or your agent) through the signed write path, attributed to a guest label. So the durable history stays signed and allowlisted, while anonymous collaboration stays live-only. Edits made while no allowlisted writer is present are not saved until one joins, and there is no lossless guarantee for guest-only work: a snapshot is the writer's observed state, not a replay of every keystroke.
 
 <Callout type="info">
 Attribution here means the author and revision are recorded in the note and written by an allowlisted key. It gives you a readable, auditable history of who-wrote-what across humans and agents. It is a provenance record, not a separate cryptographic proof that the named author and the signing key are one and the same.
 </Callout>
+
+## What's next
+
+- [The two-key model](/build/concepts/two-key-model): the allowlisted keys that make humans and agents peers.
+- [Seal encryption and access](/build/concepts/seal-encryption): the allowlist that decides who can write and read.
+- [Resurrection](/build/concepts/resurrection): why the live guest layer evaporates while signed history persists.
+- [Quickstart](/build/quickstart): pair an agent and write your first note.

@@ -3,7 +3,7 @@ title: Seal encryption and access
 description: Notes are encrypted client-side, and decryption is gated by a Seal allowlist checked on every read. Revoking an agent denies its next session.
 ---
 
-Your notes are never *stored* anywhere in the clear. Each note is encrypted client-side before it goes to Walrus, and who can decrypt it is governed by Seal, a threshold key-server scheme on Sui. There are two times note content does leave your device in the clear, both deliberate and both disclosed: when you ask Nova (or an agent) something, your client decrypts the relevant notes and sends them to the language model at our provider (OpenRouter) for that single inference; and during a live share, plaintext edits transit the presence relay between the people in the session. Neither is kept afterward, but both are real egress boundaries (see [Custody and ownership](./custody-and-ownership)).
+Your notes are never *stored* anywhere in the clear. Each note is encrypted client-side before it goes to [Walrus](/build/concepts/walrus-storage), and who can decrypt it is governed by Seal, a threshold key-server scheme on Sui. There are two times note content does leave your device in the clear, both deliberate and both disclosed: when you ask the companion (or an agent) something, your client decrypts the relevant notes and sends them to the language model at our provider (OpenRouter) for that single inference; and during a live share, plaintext edits transit the presence relay between the people in the session. Neither is kept afterward, but both are real egress boundaries (see [Custody and ownership](/build/concepts/custody-and-ownership)).
 
 ## Encryption
 
@@ -13,7 +13,7 @@ When a note is written, your client encrypts it against an identity tied to your
 
 To decrypt, a key holder needs the key servers to release their shares. The release is gated by an allowlist check called `seal_approve`. Here is the part worth understanding: `seal_approve` runs as a gas-free, off-chain dry-run. On every decrypt, your client builds the approval call and the key servers evaluate it as a dry-run against the current on-chain state. Nothing is submitted as a transaction, so checking access costs no gas and leaves no on-chain trace.
 
-Because the check reads live chain state every time, the allowlist is authoritative the moment it changes.
+Because the check reads live chain state every time, the allowlist is what the key servers enforce. A change to it takes effect on the next session, subject to a brief key-server indexing lag.
 
 ## What revoking an agent does
 
@@ -24,3 +24,10 @@ Revoking an agent removes it from the vault's allowlist (a wallet-signed move, l
 <Callout type="warn">
 Revocation is not an instant universal lockout. A session key the agent already holds is valid until it ages out, and that window is short (the session key has a roughly 25-minute time-to-live). After it expires, the agent must start a fresh session, which is denied. Plan revocation knowing the next session is cut off, not necessarily an in-flight one.
 </Callout>
+
+## What's next
+
+- [The two-key model](/build/concepts/two-key-model): why revoke and forget are wallet-signed while writes stay silent.
+- [Custody and ownership](/build/concepts/custody-and-ownership): the trust boundaries where note content leaves your device.
+- [Walrus storage](/build/concepts/walrus-storage): where the encrypted blobs this gates are stored.
+- [Quickstart](/build/quickstart): pair an agent and write your first note.

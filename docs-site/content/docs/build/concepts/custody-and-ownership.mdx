@@ -7,7 +7,7 @@ This is the answer to "why does a notes app need a chain." The honest answer is 
 
 ## What your wallet owns
 
-Every note in Anima is a markdown file, encrypted client-side and stored on Walrus. Small notes are batched together into a quilt (one quilt per chat turn), and the resulting blob is owned by your Sui wallet on-chain.
+Every note in Anima is a markdown file, encrypted client-side and stored on [Walrus](/build/concepts/walrus-storage). Small notes are batched together into a quilt (one quilt per chat turn), and the resulting blob is owned by your Sui wallet on-chain.
 
 The agent key writes the quilt, then the blob object is transferred to your wallet in a follow-up transaction. So once a note lands, the on-chain record is plain: your wallet holds the blob. Only your wallet can delete it. That is the custody asymmetry that runs through the whole product. Routine writes are silent, but anything destructive needs your signature.
 
@@ -15,17 +15,17 @@ The vault itself is a shared on-chain object that tracks its name, owner, and th
 
 ## What the backend holds
 
-Nothing durable. The Anima backend holds no keys and stores no notes: there is no database, no note ever lands on disk. It is keyless and holds nothing load-bearing. Your note keys live only on your devices, in browser storage or in an agent's environment.
+The backend stores no note content and runs no database, so nothing of yours lands on its disk. It holds no key that can read your vault. The only secrets it carries are its own JWT signing secret and its LLM provider key (OpenRouter), and neither can touch [Seal](/build/concepts/seal-encryption)-sealed note content. Your note keys live only on your devices, in browser storage or in an agent's environment.
 
 There are two places where note content leaves your device, and both are honest trust boundaries worth naming.
 
 ### The model sees decrypted notes during inference
 
-When you ask Nova (or an agent) something, your client decrypts the relevant notes and sends them to the language model so it can answer. This happens for a chat reply (`/chat`), a distilled note (`/distill`), and a Nova suggestion (`/suggest`). The model runs at our provider (OpenRouter), so decrypted note bodies, and any connected calendar events, cross to that provider for that single inference. Nobody keeps them: they are not stored, logged, or trained on by us. But it is a real egress boundary, so we say it plainly. If a note is sensitive enough that you would not paste it into a chat box, do not ask the model about it.
+When you ask the companion (or an agent) something, your client decrypts the relevant notes and sends them to the language model so it can answer. This happens for a chat reply (`/chat`), a distilled note (`/distill`), and a companion suggestion (`/suggest`). The model runs at our provider (OpenRouter), so decrypted note bodies, and any connected calendar events, cross to that provider for that single inference. Nobody keeps them: they are not stored, logged, or trained on by us. But it is a real egress boundary, so we say it plainly. If a note is sensitive enough that you would not paste it into a chat box, do not ask the model about it.
 
 ### The relay carries plaintext during a live share
 
-When you open a live share (a view or edit link), the presence relay also fans out plaintext note and canvas edits between the people in that session, so everyone sees the same document as it changes. This is authorized by the share you opened, and the relay never persists, logs, or parses any of it: rooms exist in memory only while people are connected. The durable copy of that session is still sealed and wallet-owned (only an allowlisted writer can produce it). But during the session the relay does see the content in the clear, so it is not a confidentiality boundary for shared content. Private, unshared editing sends no content through the relay at all.
+When you open a live share (a view or edit link), the presence relay also fans out plaintext note and canvas edits between the people in that session, so everyone sees the same document as it changes. This is authorized by the share you opened. The relay is never written to disk or logged, and it is not the durable copy of your work. It does keep one bounded, in-RAM, TTL'd snapshot of room state briefly after a room empties, so an offline owner or a late joiner can still catch up: it parses only that one frame and relays everything else untouched. The durable copy of the session is still sealed and wallet-owned (only an allowlisted writer can produce it). But during the session the relay does see the content in the clear, so it is not a confidentiality boundary for shared content. Private, unshared editing sends no content through the relay at all.
 
 ## Why this beats "your data on our servers"
 
@@ -34,5 +34,12 @@ On a normal SaaS, your data lives in the company's database under the company's 
 In Anima, the blobs are wallet-owned and the markdown is sealed under your keys. The app can disappear and the data is still yours: you can read it, decrypt it, export it, or delete it without us. That is what "survives the app" means, and it is a property of where the data sits, not a promise we make.
 
 <Callout type="success">
-Want proof? Every memory blob has an explorer link. The provenance is on-chain, not in our logs.
+The provenance is on-chain, not in our logs: every note blob has an explorer link.
 </Callout>
+
+## What's next
+
+- [The two-key model](/build/concepts/two-key-model): how silent writes and signed destruction split across keys.
+- [Walrus storage](/build/concepts/walrus-storage): where the note blobs actually live.
+- [Resurrection](/build/concepts/resurrection): the test that proves the data outlives the app.
+- [Quickstart](/build/quickstart): pair an agent and write your first note.
