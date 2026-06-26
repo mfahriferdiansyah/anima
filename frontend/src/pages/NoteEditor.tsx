@@ -8,6 +8,7 @@ import { ToastStack } from '@/components/ToastStack';
 import type { ToastItem } from '@/components/ToastStack';
 import { createNote, saveNote, useVault } from '@/hooks/useVault';
 import type { Note } from '@/hooks/useVault';
+import { vaultData } from '@/web3/vaultData';
 import { clearSuggestion, useAgentTimeline } from '@/hooks/useAgentTimeline';
 import { CoverPicker } from '@/components/CoverPicker';
 import { ShareDialog } from './ShareDialog';
@@ -607,7 +608,17 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
             <Button variant="quiet" onClick={() => blocker.reset?.()}>
               Keep editing
             </Button>
-            <Button variant="danger" onClick={() => blocker.proceed?.()}>
+            <Button
+              variant="danger"
+              onClick={() => {
+                // A never-sealed draft (no chain location) only lives in the local
+                // index — discarding must remove it, or it lingers in the sidebar
+                // until a hard refresh. A sealed note is left untouched.
+                const entry = vaultData.getSnapshot().index?.get(note.noteId);
+                if (!entry || entry.location.blobObjectId === '') vaultData.remove(note.noteId);
+                blocker.proceed?.();
+              }}
+            >
               Discard
             </Button>
             <Button
