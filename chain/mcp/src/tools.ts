@@ -26,7 +26,7 @@ function errorResult(e: unknown, client: VaultClient): ToolResult {
 }
 
 const noteLine = (e: IndexedNote) =>
-  `- ${e.note.title} (${e.note.noteId}) · tags: ${e.note.tags.join(', ') || '—'} · updated ${e.note.updatedAt} · by ${e.note.author}`;
+  `- ${e.note.title} (${e.note.noteId}) · tags: ${e.note.tags.join(', ') || '-'} · updated ${e.note.updatedAt} · by ${e.note.author}`;
 
 export async function recallTool(client: VaultClient, args: { query: string }): Promise<ToolResult> {
   try {
@@ -35,7 +35,7 @@ export async function recallTool(client: VaultClient, args: { query: string }): 
     const blocks = hits.map(
       (e) =>
         `## ${e.note.title}\n` +
-        `noteId: ${e.note.noteId} · tags: ${e.note.tags.join(', ') || '—'} · updated ${e.note.updatedAt}\n\n` +
+        `noteId: ${e.note.noteId} · tags: ${e.note.tags.join(', ') || '-'} · updated ${e.note.updatedAt}\n\n` +
         e.note.body,
     );
     return {
@@ -129,7 +129,7 @@ export async function readNoteTool(client: VaultClient, args: { noteId: string }
   try {
     const entry = await client.read(args.noteId);
     if (!entry) {
-      return { ...text(`No note with id ${args.noteId} — use list_notes or recall to find valid ids.`), isError: true };
+      return { ...text(`No note with id ${args.noteId}: use list_notes or recall to find valid ids.`), isError: true };
     }
     return text(serializeNote(entry.note));
   } catch (e) {

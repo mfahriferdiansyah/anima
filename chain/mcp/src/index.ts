@@ -32,7 +32,7 @@ server.registerTool(
     title: 'Recall memories',
     description:
       "Search the owner's ANIMA memory vault and return the most relevant notes (decrypted from Walrus).",
-    inputSchema: { query: z.string().describe('What to look for — keywords, a topic, or a question') },
+    inputSchema: { query: z.string().describe('What to look for: keywords, a topic, or a question') },
     outputSchema: {
       notes: z.array(
         z.object({
@@ -68,7 +68,7 @@ server.registerTool(
   {
     title: 'Edit a note',
     description:
-      "Write a new version of an existing note in the owner's vault (encrypted on Walrus, attributed to this agent). Use this to correct or extend what you know about the owner — durable, visible, correctable memory, not a hidden profile. Takes 10-20 seconds.",
+      "Write a new version of an existing note in the owner's vault (encrypted on Walrus, attributed to this agent). Use this to correct or extend what you know about the owner: durable, visible, correctable memory, not a hidden profile. Takes 10-20 seconds.",
     inputSchema: {
       noteId: z.string().describe('The note id (ULID) from recall or list_notes'),
       title: z.string().optional().describe('New title (omit to keep the current one)'),
@@ -85,7 +85,7 @@ server.registerTool(
   {
     title: 'Place a note on the canvas',
     description:
-      "Position a note on the owner's multiplayer memory canvas at (x, y). Updates the durable canvas layout (a Walrus write — takes 10-20 seconds).",
+      "Position a note on the owner's multiplayer memory canvas at (x, y). Updates the durable canvas layout (a Walrus write that takes 10-20 seconds).",
     inputSchema: {
       noteId: z.string().describe('The note id (ULID) from recall or list_notes'),
       x: z.number().describe('Canvas x coordinate'),
@@ -117,4 +117,4 @@ server.registerTool(
 );
 
 await server.connect(new StdioServerTransport());
-console.error(`[anima-mcp] ready — vault ${process.env.ANIMA_VAULT_ID}, agent ${client.agentAddress}`);
+console.error(`[anima-mcp] ready: vault ${process.env.ANIMA_VAULT_ID}, agent ${client.agentAddress}`);
