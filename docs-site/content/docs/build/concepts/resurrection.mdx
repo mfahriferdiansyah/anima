@@ -3,7 +3,7 @@ title: Resurrection
 description: Kill the app, open a different client with a different model, connect your wallet, and your full notes and canvas layout come back.
 ---
 
-Resurrection is the test that proves the custody story is real. If the data truly outlives the app, then a brand-new client should be able to wake your full memory with nothing but your wallet. It can.
+Resurrection is the test that proves the [custody story](/build/concepts/custody-and-ownership) is real. If the data truly outlives the app, then a brand-new client should be able to wake your full notes with nothing but your wallet. It can.
 
 ## What comes back
 
@@ -11,7 +11,7 @@ Open a different client, with a different model behind it, and connect the same 
 
 1. The client discovers your vault from the chain (it scans for the vault your wallet created).
 2. You approve one pairing transaction so this new client is an allowlisted agent that can decrypt.
-3. It pulls your quilts from Walrus and rebuilds, decrypting as it goes. You see it work through them, quilt by quilt.
+3. It pulls your quilts from [Walrus](/build/concepts/walrus-storage) and rebuilds, decrypting as it goes. You see it work through them, quilt by quilt.
 
 When it finishes, your notes are all there. So is your canvas layout: the arrangement of note cards on the board is itself stored as a durable note, so the constellation comes back intact too. Nothing about this depends on Anima being alive. It depends only on the chain and your wallet.
 
@@ -24,6 +24,13 @@ When it finishes, your notes are all there. So is your canvas layout: the arrang
 Resurrection restores what was meant to persist, and only that. Two things are ephemeral by design:
 
 - **Live presence** (cursors, who is on the board, "X is writing") is never durable. It transits the relay and is forgotten, so there is nothing to resurrect. The same is true of the live edits in a shared session: they pass through the relay live, and only the sealed snapshot an allowlisted writer persists comes back.
-- **Chat transcripts** do not persist. Only the notes distilled from a conversation are written to your vault. The raw back-and-forth is gone; the distilled memory is what survives.
+- **Chat transcripts** do not persist. Only the notes distilled from a conversation are written to your vault. The raw back-and-forth is gone; the distilled note is what survives.
 
 This is not a limitation so much as the point. The durable layer (your notes and your layout) is wallet-owned and resurrectable. The transient layer (presence and chat) is deliberately left to evaporate.
+
+## What's next
+
+- [Custody and ownership](/build/concepts/custody-and-ownership): why the durable layer outlives any app.
+- [Walrus storage](/build/concepts/walrus-storage): the quilts a fresh client pulls and rebuilds from.
+- [The two-key model](/build/concepts/two-key-model): the one pairing signature a fresh client needs.
+- [Quickstart](/build/quickstart): pair an agent and write your first note.

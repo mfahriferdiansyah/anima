@@ -28,7 +28,7 @@ export function pairingMessage(agentAddress: string, vaultId: string): string {
   return (
     `Agent key not paired: ${agentAddress} is not an allowlisted agent of vault ${vaultId}. ` +
     'Register it in the ANIMA app (Settings → Connect external agent), then retry. ' +
-    'If it was paired before, the key may have been revoked — generate and pair a fresh one.'
+    'If it was paired before, the key may have been revoked: generate and pair a fresh one.'
   );
 }
 
@@ -47,7 +47,7 @@ export class VaultClient {
       this.#agent = Ed25519Keypair.fromSecretKey(cfg.agentKey);
     } catch {
       throw new Error(
-        'ANIMA_AGENT_KEY is not a valid suiprivkey — copy it exactly from the ANIMA app pairing screen.',
+        'ANIMA_AGENT_KEY is not a valid suiprivkey: copy it exactly from the ANIMA app pairing screen.',
       );
     }
     this.agentAddress = this.#agent.toSuiAddress();
@@ -75,7 +75,7 @@ export class VaultClient {
     const pf = await preflight(deps.suiClient, this.agentAddress);
     if (!pf.ok) {
       throw new FundingError(
-        `Agent address ${this.agentAddress} cannot afford this write — ` +
+        `Agent address ${this.agentAddress} cannot afford this write, ` +
           `SUI: ${pf.sui} MIST${pf.needsSui ? ' (needs ≥ 0.1 SUI)' : ''}, ` +
           `WAL: ${pf.wal} FROST${pf.needsWal ? ' (needs ≥ 0.02 WAL)' : ''}. ` +
           `Fund it with testnet SUI (faucet) and exchange some for WAL, then retry.`,
@@ -102,14 +102,14 @@ export class VaultClient {
     const index = await this.#freshIndex(); // also connects + verifies pairing
     const existing = index.get(noteId);
     if (!existing) {
-      throw new Error(`Note ${noteId} not found in the vault — list_notes to see valid ids, or use remember to create one.`);
+      throw new Error(`Note ${noteId} not found in the vault: list_notes to see valid ids, or use remember to create one.`);
     }
     const deps = this.#deps!;
 
     const pf = await preflight(deps.suiClient, this.agentAddress);
     if (!pf.ok) {
       throw new FundingError(
-        `Agent address ${this.agentAddress} cannot afford this edit — ` +
+        `Agent address ${this.agentAddress} cannot afford this edit, ` +
           `SUI: ${pf.sui} MIST${pf.needsSui ? ' (needs ≥ 0.1 SUI)' : ''}, ` +
           `WAL: ${pf.wal} FROST${pf.needsWal ? ' (needs ≥ 0.02 WAL)' : ''}. ` +
           `Fund it with testnet SUI (faucet) and exchange some for WAL, then retry.`,
@@ -136,12 +136,12 @@ export class VaultClient {
    */
   async place(noteId: string, x: number, y: number, canvasId = 'shared'): Promise<CanvasLayout> {
     const index = await this.#freshIndex();
-    if (!index.get(noteId)) throw new Error(`Note ${noteId} not found in the vault — list_notes to see valid ids.`);
+    if (!index.get(noteId)) throw new Error(`Note ${noteId} not found in the vault: list_notes to see valid ids.`);
 
     const pf = await preflight((await this.#connect()).suiClient, this.agentAddress);
     if (!pf.ok) {
       throw new FundingError(
-        `Agent address ${this.agentAddress} cannot afford the layout write — fund it with testnet SUI/WAL and retry.`,
+        `Agent address ${this.agentAddress} cannot afford the layout write: fund it with testnet SUI/WAL and retry.`,
       );
     }
     // read-merge-write the content note: keep this board's drawings + the other
@@ -184,7 +184,7 @@ export class VaultClient {
     try {
       vault = await readVault(deps.suiClient, this.#cfg.vaultId);
     } catch {
-      throw new Error(`Vault ${this.#cfg.vaultId} not found on testnet — check ANIMA_VAULT_ID.`);
+      throw new Error(`Vault ${this.#cfg.vaultId} not found on testnet: check ANIMA_VAULT_ID.`);
     }
     if (vault.owner !== this.agentAddress && !vault.agents.includes(this.agentAddress)) {
       throw new PairingError(pairingMessage(this.agentAddress, this.#cfg.vaultId));

@@ -7,9 +7,11 @@ This page maps the messages anima-mcp prints back to a fix. Each entry is a
 trigger (what you see) and the step that clears it. The messages are reproduced
 verbatim so an agent can pattern-match on them.
 
-If you have not paired yet, start with the [quickstart](/build/quickstart). The
-short version: the Anima app gives the agent its own keypair, you register that
-key on your vault, and the app fills the four env values below.
+If you have not paired yet, start with the [quickstart](/build/quickstart): the
+Anima app generates the agent's own key, registers it on your vault, and hands
+back a config snippet that fills the env values below. There is one pairing path,
+the in-app wizard, so this page does not re-describe it; it just maps each
+message to its fix.
 
 ## Configuration
 
@@ -18,7 +20,7 @@ key on your vault, and the app fills the four env values below.
 **Trigger.** The process exits at startup with:
 
 ```
-anima-mcp is not paired — missing or invalid env: ANIMA_AGENT_KEY (suiprivkey…), ANIMA_VAULT_ID (0x… vault object id), ANIMA_OWNER_ADDRESS (0x… wallet address).
+anima-mcp is not paired: missing or invalid env: ANIMA_AGENT_KEY (suiprivkey…), ANIMA_VAULT_ID (0x… vault object id), ANIMA_OWNER_ADDRESS (0x… wallet address).
 Open the ANIMA app → Settings → Connect external agent to generate the agent key,
 register it on your vault, and copy the config snippet (it fills these values).
 ```
@@ -42,7 +44,7 @@ the values into your agent's MCP config exactly as given.
 **Trigger.** The key is present but cannot be parsed:
 
 ```
-ANIMA_AGENT_KEY is not a valid suiprivkey — copy it exactly from the ANIMA app pairing screen.
+ANIMA_AGENT_KEY is not a valid suiprivkey: copy it exactly from the ANIMA app pairing screen.
 ```
 
 This is distinct from the missing-env message above. The value starts with
@@ -63,7 +65,7 @@ it is generated for you and lives only in your local config.
 **Trigger.** The key parses but is not on the vault's allowlist:
 
 ```
-Agent key not paired: 0x<agent-address> is not an allowlisted agent of vault 0x<vault-id>. Register it in the ANIMA app (Settings → Connect external agent), then retry. If it was paired before, the key may have been revoked — generate and pair a fresh one.
+Agent key not paired: 0x<agent-address> is not an allowlisted agent of vault 0x<vault-id>. Register it in the ANIMA app (Settings → Connect external agent), then retry. If it was paired before, the key may have been revoked: generate and pair a fresh one.
 ```
 
 The check runs against the vault's on-chain allowlist when the process first
@@ -91,7 +93,7 @@ running agent on its next call; see
 **Trigger.** The vault id does not resolve on chain:
 
 ```
-Vault 0x<vault-id> not found on testnet — check ANIMA_VAULT_ID.
+Vault 0x<vault-id> not found on testnet: check ANIMA_VAULT_ID.
 ```
 
 **Fix.** Confirm `ANIMA_VAULT_ID` matches the vault you mean. Re-copy it from the
@@ -110,7 +112,7 @@ than failing partway through.
 **Trigger.** The preflight fails before the write:
 
 ```
-Agent address 0x<agent-address> cannot afford this write — SUI: <n> MIST (needs ≥ 0.1 SUI), WAL: <n> FROST (needs ≥ 0.02 WAL). Fund it with testnet SUI (faucet) and exchange some for WAL, then retry.
+Agent address 0x<agent-address> cannot afford this write, SUI: <n> MIST (needs ≥ 0.1 SUI), WAL: <n> FROST (needs ≥ 0.02 WAL). Fund it with testnet SUI (faucet) and exchange some for WAL, then retry.
 ```
 
 The two thresholds the preflight enforces:

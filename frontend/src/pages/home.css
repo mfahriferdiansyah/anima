@@ -32,6 +32,26 @@
 @keyframes anima-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .pghpaper .pgcal-nav.refresh.refreshing svg { animation: none; } }
 
+/* "Let Nova draft" loading modal — centered, reuses the kit .spin star + modal chrome. */
+.dialog .dh.pgdraft { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 30px 28px 26px; }
+.dialog .dh.pgdraft .spin { margin-bottom: 4px; }
+
+/* A shimmering branded border that loops while drafting — the same "actively
+   working" language as the loading toast, as a perimeter sweep. The gradient is
+   masked to a 2px ring and its position animates, so the hues flow around the
+   card forever. Scoped to the drafting modal via :has() (no Modal API change). */
+.dialog:has(.dh.pgdraft) { position: relative; }
+.dialog:has(.dh.pgdraft)::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 2px; pointer-events: none;
+  background: linear-gradient(110deg, var(--orange-500), var(--pink-500), var(--blue-600), var(--teal-500), var(--orange-500));
+  background-size: 300% 100%;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: pgdraft-shimmer 2.6s linear infinite;
+}
+@keyframes pgdraft-shimmer { to { background-position: 300% 0; } }
+@media (prefers-reduced-motion: reduce) { .dialog:has(.dh.pgdraft)::before { animation: none; } }
+
 /* Nova-suggests panel header: keep the .railt text block, but lay it out as a row
    so the refresh button sits top-right. Scoped to .railt-hdr so the "Recent notes"
    railt (text only) is untouched. */

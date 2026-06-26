@@ -7,18 +7,25 @@ Anima's notes live on Walrus, Sui's decentralized blob storage. The shape of the
 
 ## Notes are markdown
 
-Every memory is a markdown file with a small frontmatter block (note id, version, author, tags, links) followed by a title and body. There is no proprietary format and no database row to decode. If you decrypt a note, you get a `.md` file you could open in any editor. That is the file-over-app receipt: the data is portable by construction, and exporting your whole vault is just zipping up those files.
+Every note is a markdown file with a small frontmatter block (note id, version, author, tags, links) followed by a title and body. There is no proprietary format and no database row to decode. If you decrypt a note, you get a `.md` file you could open in any editor. That is the file-over-app receipt: the data is portable by construction, and exporting your whole vault is just zipping up those files.
 
 ## Quilts
 
-Writing one tiny blob per note would be wasteful, so small notes are batched together. Anima writes one quilt per chat turn: a single Walrus blob holding the notes from that turn, each as its own encrypted patch inside it. Reading a quilt pulls every note back out and decrypts them.
+Writing one tiny blob per note would be wasteful, so small notes are batched together. Anima writes one quilt per chat turn: a single Walrus blob holding the notes from that turn, each as its own [encrypted](/build/concepts/seal-encryption) patch inside it. Reading a quilt pulls every note back out and decrypts them.
 
 ## Ownership and durability
 
-Each quilt's blob object is owned by your wallet on-chain. Storage on Walrus is paid ahead for a span of epochs and is renewable, so durability is real but not magic: it is storage you have paid for and can keep paying for, not an unconditional "forever."
+Each quilt's blob object is [owned by your wallet](/build/concepts/custody-and-ownership) on-chain. Storage on Walrus is paid ahead for a span of epochs and is renewable, so durability is real but not magic: it is storage you have paid for and can keep paying for, not an unconditional "forever."
 
 Because you own the blob, you also control its end. Walrus blobs here are deletable, and only your wallet can delete them. That single property powers two features at once: **forget** (delete note blobs you own) and **unpublish** (take down a share link by deleting the published blob behind it).
 
 ## Why this enables resurrection
 
 Since the notes and the canvas layout all sit on Walrus as wallet-owned blobs, your full state is reconstructable from the chain alone. Open a fresh client, connect your wallet, and it can find your vault, pull the quilts, and rebuild. The app's local index is just a cache. The source of truth is on Walrus.
+
+## What's next
+
+- [Resurrection](/build/concepts/resurrection): rebuilding your full vault in a fresh client from the chain alone.
+- [Seal encryption and access](/build/concepts/seal-encryption): how each quilt patch is encrypted and who can decrypt it.
+- [Custody and ownership](/build/concepts/custody-and-ownership): why wallet-owned blobs survive any app.
+- [Quickstart](/build/quickstart): pair an agent and write your first note.

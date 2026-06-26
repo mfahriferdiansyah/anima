@@ -28,7 +28,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   if (!ownerAddress || !HEX_ID.test(ownerAddress)) missing.push('ANIMA_OWNER_ADDRESS (0x… wallet address)');
   if (missing.length > 0) {
     throw new Error(
-      `anima-mcp is not paired — missing or invalid env: ${missing.join(', ')}.\n` +
+      `anima-mcp is not paired: missing or invalid env: ${missing.join(', ')}.\n` +
         'Open the ANIMA app → Settings → Connect external agent to generate the agent key,\n' +
         'register it on your vault, and copy the config snippet (it fills these values).',
     );

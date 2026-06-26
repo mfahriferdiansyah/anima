@@ -2,7 +2,7 @@
 
 <img src=".github/assets/anima-logo.png" alt="Anima" width="300" />
 
-**Notes on a shared canvas. Your own AI tools read and write them too.**
+**Notes on a shared canvas. Your own ai tools read and write them too.**
 
 Human-readable markdown stored on [Walrus](https://walrus.xyz), sealed with [Seal](https://seal-docs.wal.app) under your [Sui](https://sui.io) wallet, so your work outlives any app, including ours.
 
@@ -11,7 +11,11 @@ Human-readable markdown stored on [Walrus](https://walrus.xyz), sealed with [Sea
 [![Walrus track](https://img.shields.io/badge/track-Walrus-2F6BFF.svg)](https://walrus.xyz)
 [![Docs](https://img.shields.io/badge/docs-anima-16181D.svg)](https://docs-anima.kadzu.dev)
 
-[Documentation](https://docs-anima.kadzu.dev) · [Quickstart](https://docs-anima.kadzu.dev/build/quickstart) · [anima-mcp](https://docs-anima.kadzu.dev/build/mcp-reference)
+[Live app](https://anima.kadzu.dev) · [Documentation](https://docs-anima.kadzu.dev) · [Quickstart](https://docs-anima.kadzu.dev/build/quickstart) · [anima-mcp](https://docs-anima.kadzu.dev/build/mcp-reference)
+
+<br />
+
+[![The Anima workspace, live at anima.kadzu.dev](.github/assets/live-home-v3.png)](https://anima.kadzu.dev)
 
 </div>
 
@@ -35,12 +39,34 @@ The notes and work your AI agents accumulate are valuable, and on a normal SaaS 
 - **Resurrection.** Kill the app, open another client with a different model, connect your wallet: full notes intact.
 - **Export.** Your whole workspace as a markdown zip; file over app.
 
+<div align="center">
+
+| ![Ask the companion and it cites your notes](.github/assets/live-companion-v3.png) | ![Browse, search, and edit your notes](.github/assets/live-notes-v4.png) | ![A shared, multiplayer canvas of note cards](.github/assets/live-canvas-v4.png) |
+|:--:|:--:|:--:|
+| Ask the companion; it cites your notes | Browse, search, and edit notes | A shared, multiplayer canvas |
+| ![Account, pairing, and storage controls](.github/assets/live-settings-v3.png) | ![Forget, for real: wallet-gated deletion](.github/assets/live-forget-v4.png) | ![Mobile-native, the same vault](.github/assets/m-home.png) |
+| Account, pairing, and storage | Forget, for real: wallet-gated | Mobile-native, the same vault |
+
+</div>
+
 ## How it works
 
+```mermaid
+flowchart LR
+  subgraph You["Your devices"]
+    A["Your AI agents<br/>Claude Code, Cursor, the companion Nova"]
+    W["Your Sui wallet<br/>onboarding + forget only"]
+  end
+  A -->|anima-mcp, agent key| V["Vault<br/>on-chain: owner + agent allowlist"]
+  W -->|wallet-signed: pair, forget| V
+  V --> S["Seal<br/>threshold decrypt, wallet-gated"]
+  S --> WAL["Walrus<br/>markdown note blobs you own"]
+```
+
 - **You own the storage.** Notes are markdown blobs on Walrus, encrypted with Seal. The policy that can decrypt them is a Move contract that names your wallet, not a key any app operator holds.
-- **Two keys, one vault.** Your wallet authorizes the high-stakes actions (create a vault, pair an agent, delete). A per-device agent key signs ordinary reads and writes, so saving a note costs no wallet popup and no gas.
+- **Two keys, one vault.** Your wallet authorizes the high-stakes actions (create a vault, pair an agent, forget). A per-device or per-agent key signs ordinary reads and writes, so saving a note costs you no wallet popup and no gas of your own: the agent's pre-funded key pays the small gas and storage silently.
 - **Agents are first-class.** `anima-mcp` is a stdio MCP server that runs on your own machine. Any MCP-capable agent works the same vault you do, with every edit attributed.
-- **The backend is replaceable.** The Go chat service is stateless: no database, no session store, no logged content. Kill it and the vault survives, which is the whole point.
+- **The backend is replaceable.** The Go chat service keeps no database, no disk, and no logged content; the chat and draft paths are stateless. Its one piece of in-memory state is the ephemeral live-share relay, which is per-instance and gone once a room empties. Kill it and the vault survives, which is the whole point.
 
 ## Project structure
 
@@ -72,6 +98,7 @@ The chat backend is a stateless Go proxy. See [`backend/README.md`](backend/READ
 
 - [Using Anima](https://docs-anima.kadzu.dev/use/getting-started): capture notes, ask the companion, publish, and export.
 - [Building with Anima](https://docs-anima.kadzu.dev/build/quickstart): connect your own agent over `anima-mcp`.
+- [Self-hosting](https://docs-anima.kadzu.dev/build/self-hosting) and the [FAQ](https://docs-anima.kadzu.dev/build/faq): run the backend yourself, and troubleshoot pairing and funding.
 - The docs are agent-readable: every page is served as clean markdown, and the whole site is indexed for coding agents at [`/llms.txt`](https://docs-anima.kadzu.dev/llms.txt).
 
 ## License

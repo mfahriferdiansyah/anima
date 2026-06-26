@@ -23,6 +23,7 @@ import { useWalletExecTx } from '@/web3/walletExecTx';
 import { vaultData } from '@/web3/vaultData';
 import { exportVaultZip } from '../../../chain/core/src/index.js';
 import { useCalendar, connectCalendar, disconnectCalendar } from '@/web3/calendar';
+import { buildAgentEnv } from './agentEnv';
 import './settings.css';
 
 const WAL_LOW_THRESHOLD = 1;
@@ -70,6 +71,8 @@ interface ConnectAgentDialogProps {
   open: boolean;
   onClose: () => void;
   vaultId: string;
+  /** The connected vault's on-chain owner address (the Seal access-policy identity). */
+  ownerAddress: string;
   /** The key this dialog issued earlier in the session, if it still exists. */
   issuedKey: KeyEntry | null;
   onIssued: (key: KeyEntry) => void;
@@ -80,7 +83,7 @@ interface ConnectAgentDialogProps {
  * (the store never keeps it), then only offer a wallet-gated regenerate on
  * reopen. The env block is what an MCP config pastes verbatim.
  */
-function ConnectAgentDialog({ open, onClose, vaultId, issuedKey, onIssued }: ConnectAgentDialogProps) {
+function ConnectAgentDialog({ open, onClose, vaultId, ownerAddress, issuedKey, onIssued }: ConnectAgentDialogProps) {
   const [step, setStep] = useState<ConnectStep>('generate');
   const [agentName, setAgentName] = useState('');
   const [secret, setSecret] = useState('');
@@ -133,7 +136,7 @@ function ConnectAgentDialog({ open, onClose, vaultId, issuedKey, onIssued }: Con
     }
   };
 
-  const envBlock = `ANIMA_VAULT_ID=${vaultId}\nANIMA_AGENT_KEY=${secret}`;
+  const envBlock = buildAgentEnv({ vaultId, ownerAddress, agentKey: secret, agentName });
 
   return (
     <Modal open={open} onClose={onClose}>
@@ -475,6 +478,7 @@ export function Settings() {
         open={connectOpen}
         onClose={() => setConnectOpen(false)}
         vaultId={ready.vault.vaultId}
+        ownerAddress={ready.vault.owner}
         issuedKey={issuedKey}
         onIssued={(key) => setIssuedKeyId(key.id)}
       />

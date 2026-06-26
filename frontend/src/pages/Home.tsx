@@ -5,6 +5,7 @@ import { createNote, useVault } from '@/hooks/useVault';
 import { useVaultSession } from '@/hooks/useVaultSession';
 import { useAgentTimeline, requestDraft, clearSuggestion, draftPreparedNote } from '@/hooks/useAgentTimeline';
 import { acceptSuggestion } from '@/web3/suggest';
+import { Modal } from '@/components/Modal';
 import { useCalendar, connectCalendar, disconnectCalendar, listEvents, type CalendarEvent } from '@/web3/calendar';
 import './home.css';
 
@@ -402,6 +403,7 @@ function SuggestRail() {
   // "Recent notes" rail: the live vault notes (already recency-sorted), newest
   // first, each row opens its source note. Real data, never fabricated.
   const recent = notes.slice(0, 6);
+  const draftingItem = draftingId ? prep.find((p) => p.id === draftingId) ?? null : null;
 
   const handleAccept = () => {
     if (!suggestion) return;
@@ -416,6 +418,15 @@ function SuggestRail() {
 
   return (
     <aside className="pgh6-rail">
+      <Modal open={draftingId !== null} onClose={() => {}}>
+        <div className="dh pgdraft">
+          <div className="spin" aria-hidden="true">✦</div>
+          <div className="dt">Nova is drafting{draftingItem ? ` “${draftingItem.title}”` : ''}</div>
+          <div className="dd2">
+            Pulling your notes, canvas and calendar into a prepared note. It opens in a moment.
+          </div>
+        </div>
+      </Modal>
       <div className="pgh6-sugg">
         {prep.length > 0 ? (
           <>
