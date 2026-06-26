@@ -3,7 +3,6 @@ package chat
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/mfahriferdiansyah/anima/backend/internal/llm"
 )
@@ -57,31 +56,14 @@ func (h *Handler) HandleDistill(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string][]Note{"notes": notes})
 }
 
-// parseNotes extracts the {"notes":[...]} object from an LLM response,
-// tolerating markdown code fences around the JSON.
+// parseNotes extracts and validates the {"notes":[...]} object from an LLM
+// response (see validate.go for fence-stripping and note validation).
 func parseNotes(raw string) ([]Note, bool) {
-	s := strings.TrimSpace(raw)
-	s = strings.TrimPrefix(s, "```json")
-	s = strings.TrimPrefix(s, "```")
-	s = strings.TrimSuffix(s, "```")
-	s = strings.TrimSpace(s)
-
 	var out struct {
 		Notes []Note `json:"notes"`
 	}
-	if err := json.Unmarshal([]byte(s), &out); err != nil {
+	if err := json.Unmarshal([]byte(stripFences(raw)), &out); err != nil {
 		return nil, false
 	}
-	if out.Notes == nil {
-		out.Notes = []Note{}
-	}
-	for i := range out.Notes {
-		if out.Notes[i].Tags == nil {
-			out.Notes[i].Tags = []string{}
-		}
-		if out.Notes[i].Links == nil {
-			out.Notes[i].Links = []string{}
-		}
-	}
-	return out.Notes, true
+	return validateNotes(out.Notes), true
 }

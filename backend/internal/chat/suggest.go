@@ -6,7 +6,6 @@ package chat
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 )
 
 // CalendarEvent is an optional calendar entry the client may attach to a
@@ -59,32 +58,15 @@ func (h *Handler) HandleSuggest(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string][]Note{"suggestions": suggestions})
 }
 
-// parseSuggestions extracts the {"suggestions":[...]} object from an LLM
-// response, tolerating markdown code fences around the JSON. The Note type
-// is reused — title/body/tags/links match the suggestion shape exactly.
+// parseSuggestions extracts and validates the {"suggestions":[...]} object
+// from an LLM response. The Note type is reused — title/body/tags/links match
+// the suggestion shape exactly (see validate.go for the shared helpers).
 func parseSuggestions(raw string) ([]Note, bool) {
-	s := strings.TrimSpace(raw)
-	s = strings.TrimPrefix(s, "```json")
-	s = strings.TrimPrefix(s, "```")
-	s = strings.TrimSuffix(s, "```")
-	s = strings.TrimSpace(s)
-
 	var out struct {
 		Suggestions []Note `json:"suggestions"`
 	}
-	if err := json.Unmarshal([]byte(s), &out); err != nil {
+	if err := json.Unmarshal([]byte(stripFences(raw)), &out); err != nil {
 		return nil, false
 	}
-	if out.Suggestions == nil {
-		out.Suggestions = []Note{}
-	}
-	for i := range out.Suggestions {
-		if out.Suggestions[i].Tags == nil {
-			out.Suggestions[i].Tags = []string{}
-		}
-		if out.Suggestions[i].Links == nil {
-			out.Suggestions[i].Links = []string{}
-		}
-	}
-	return out.Suggestions, true
+	return validateNotes(out.Suggestions), true
 }
