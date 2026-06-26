@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
-import { useBlocker } from 'react-router-dom';
+import { useBlocker, useLocation } from 'react-router-dom';
 import { Button } from '@/components/Button';
 import { Modal } from '@/components/Modal';
 import { FundsBanner } from '@/components/FundsBanner';
@@ -148,11 +148,18 @@ export function NoteEditor({ note, agentName }: { note: Note; agentName: string 
   // in-progress edit. A fresh, empty note gets focus so writing starts immediately;
   // an existing note is left unfocused so a click lands the caret exactly where the
   // reader wants to edit.
+  const opened = useLocation();
   useLayoutEffect(() => {
     const el = typeRef.current;
     if (!el) return;
     el.textContent = note.body;
     if (note.body.trim().length === 0) el.focus();
+    // A note opened from "Let Nova draft" arrives pre-filled but UNSAVED. Mark it
+    // dirty on open so Save is enabled and the navigation guard protects it — the
+    // user reviews and seals it manually; a drafted note is never auto-sealed.
+    if ((opened.state as { novaDraft?: boolean } | null)?.novaDraft && note.body.trim().length > 0) {
+      setDirty(true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note.noteId]);
 

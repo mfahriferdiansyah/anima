@@ -108,9 +108,19 @@ export function useWriteEvents(): WriteEvent[] {
   return useSyncExternalStore(vaultData.subscribe, vaultData.getSnapshot).writeEvents;
 }
 
-/** Mint a new draft note in the index (no chain write yet); returns its id so routing can open it. */
-export function createNote(author: string = OWNER_AUTHOR): string {
-  const note = newNote({ title: '', body: '', author });
+/** Mint a new draft note in the index (no chain write yet); returns its id so
+ * routing can open it. Optional `initial` pre-fills title/body/tags for a seeded
+ * draft (e.g. "Let Nova draft") — still UNSAVED, the caller's user seals it. */
+export function createNote(
+  author: string = OWNER_AUTHOR,
+  initial?: { title?: string; body?: string; tags?: string[] },
+): string {
+  const note = newNote({
+    title: initial?.title ?? '',
+    body: initial?.body ?? '',
+    tags: initial?.tags ?? [],
+    author,
+  });
   vaultData.upsert(note, DRAFT_LOCATION);
   return note.noteId;
 }

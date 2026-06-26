@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createNote, saveNote, useVault } from '@/hooks/useVault';
+import { createNote, useVault } from '@/hooks/useVault';
 import { useVaultSession } from '@/hooks/useVaultSession';
 import { useAgentTimeline, requestDraft, clearSuggestion, draftPreparedNote } from '@/hooks/useAgentTimeline';
 import { acceptSuggestion } from '@/web3/suggest';
@@ -377,23 +377,26 @@ function SuggestRail() {
   const { events, draftRequested, suggestion, prep } = useAgentTimeline();
   const { notes } = useVault();
   const [accepting, setAccepting] = useState(false);
+  const [draftingId, setDraftingId] = useState<string | null>(null);
   // Local "ticked" state for the prep checklist (cleared on refresh — the item
   // is handled). The preview is non-interactive, so this only fires in the app.
   const [done, setDone] = useState<Record<string, boolean>>({});
 
   // "Let Nova draft" → ask /draft for a full prepared note grounded in the prep
-  // item + vault + calendar, seal it, and open it. Falls back to a titled seed
-  // (never an empty note) if Nova has nothing prepared or the call fails.
+  // item + vault + calendar, then open it as an UNSAVED draft for the owner to
+  // review and save manually (never auto-sealed). Guarded so rapid clicks can't
+  // spawn duplicate notes, with a per-item loading state.
   const draftPrep = async (item: { id: string; title: string }) => {
-    const prepared = await draftPreparedNote(item.title);
-    const id = createNote();
-    saveNote(
-      id,
-      prepared
-        ? { title: prepared.title, body: prepared.body }
-        : { title: item.title, body: `${item.title}\n\nNova has nothing prepared yet — shape this as you like.` },
-    );
-    navigate(`/app/notes/${id}`);
+    if (draftingId) return;
+    setDraftingId(item.id);
+    let prepared: { title: string; body: string } | null = null;
+    try {
+      prepared = await draftPreparedNote(item.title);
+    } finally {
+      setDraftingId(null);
+    }
+    const id = createNote(undefined, prepared ?? { title: item.title, body: `# ${item.title}\n\n` });
+    navigate(`/app/notes/${id}`, { state: { novaDraft: true } });
   };
 
   // "Recent notes" rail: the live vault notes (already recency-sorted), newest
@@ -416,9 +419,21 @@ function SuggestRail() {
       <div className="pgh6-sugg">
         {prep.length > 0 ? (
           <>
-            <div className="railt">
-              <b>Nova suggests</b>
-              <span>Preparation she thinks you will thank yourself for. Tick it done, or let her draft it.</span>
+            <div className="railt railt-hdr">
+              <div className="railt-txt">
+                <b>Nova suggests</b>
+                <span>Preparation she thinks you will thank yourself for. Tick it done, or let her draft it.</span>
+              </div>
+              <button
+                type="button"
+                className={`pgcal-nav refresh${draftRequested ? ' refreshing' : ''}`}
+                aria-label="Refresh Nova's suggestions"
+                title="Ask Nova for fresh suggestions"
+                onClick={() => requestDraft()}
+                disabled={draftRequested}
+              >
+                <RefreshIcon />
+              </button>
             </div>
             {prep.map((p) => (
               <div key={p.id} className={done[p.id] ? 'sg done' : 'sg'}>
@@ -433,8 +448,13 @@ function SuggestRail() {
                   <b>{p.title}</b>
                   <span>{p.meta}</span>
                   {p.draft ? (
-                    <button type="button" className="pgbtn sgd" onClick={() => draftPrep(p)}>
-                      ✧ Let Nova draft
+                    <button
+                      type="button"
+                      className="pgbtn sgd"
+                      onClick={() => draftPrep(p)}
+                      disabled={draftingId !== null}
+                    >
+                      {draftingId === p.id ? '✧ Drafting…' : '✧ Let Nova draft'}
                     </button>
                   ) : null}
                 </div>
