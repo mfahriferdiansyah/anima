@@ -97,6 +97,7 @@ func main() {
 		r.Post("/chat", chatHandler.HandleChat)
 		r.Post("/distill", chatHandler.HandleDistill)
 		r.Post("/suggest", chatHandler.HandleSuggest)
+		r.Post("/draft", chatHandler.HandleDraft)
 	})
 
 	srv := &http.Server{
